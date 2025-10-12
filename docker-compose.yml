@@ -1,0 +1,83 @@
+version: '3.8'
+
+# ========================================
+# SERVICES
+# ========================================
+
+services:
+  # Telegram Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram_repair_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Database
+      - DATABASE_PATH=/app/data/bot_database.db
+      # Redis (если используется)
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # Монтируем базу данных
+      - ./data:/app/data
+      # Монтируем логи
+      - ./logs:/app/logs
+      # Монтируем backups
+      - ./backups:/app/backups
+    depends_on:
+      - redis
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/data/bot_database.db') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis для FSM storage (опционально, для production)
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_bot_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ========================================
+# NETWORKS
+# ========================================
+
+networks:
+  bot_network:
+    driver: bridge
+
+# ========================================
+# VOLUMES
+# ========================================
+
+volumes:
+  redis_data:
+    driver: local
+

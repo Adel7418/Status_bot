@@ -1,0 +1,290 @@
+[project]
+name = "telegram-repair-bot"
+version = "1.1.0"
+description = "Telegram бот для управления заявками на ремонт техники"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["telegram", "bot", "aiogram", "repair", "management"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: AsyncIO",
+    "Topic :: Communications :: Chat",
+]
+
+dependencies = [
+    "aiogram>=3.14.0,<4.0.0",
+    "aiosqlite>=0.20.0,<1.0.0",
+    "APScheduler>=3.11.0,<4.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "openpyxl>=3.1.5,<4.0.0",
+    "pydantic>=2.10.0,<3.0.0",
+    "python-dateutil>=2.9.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "black>=24.10.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+]
+redis = [
+    "redis>=5.2.0",
+    "aiogram[redis]>=3.14.0",
+]
+monitoring = [
+    "sentry-sdk>=2.18.0",
+    "prometheus-client>=0.21.0",
+]
+alembic = [
+    "alembic>=1.14.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/telegram-repair-bot"
+Documentation = "https://github.com/yourusername/telegram-repair-bot/blob/main/README.md"
+Repository = "https://github.com/yourusername/telegram-repair-bot"
+Issues = "https://github.com/yourusername/telegram-repair-bot/issues"
+
+[project.scripts]
+bot = "bot:main"
+
+# ========================================
+# BUILD SYSTEM
+# ========================================
+
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ========================================
+# BLACK (Code Formatter)
+# ========================================
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+# ========================================
+# RUFF (Linter)
+# ========================================
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "migrations",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "C",      # flake8-comprehensions
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "N",      # pep8-naming
+    "YTT",    # flake8-2020
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit
+    "FBT",    # flake8-boolean-trap
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "G",      # flake8-logging-format
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SIM",    # flake8-simplify
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",    # line too long (handled by black)
+    "S101",    # use of assert (needed for tests)
+    "PLR0913", # too many arguments
+    "COM812",  # trailing comma missing
+    "ISC001",  # single line implicit string concatenation
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # use of assert
+    "ARG",     # unused arguments
+    "FBT",     # boolean trap
+    "PLR2004", # magic value comparison
+]
+"__init__.py" = ["F401"]  # unused imports
+
+[tool.ruff.lint.isort]
+force-single-line = false
+force-sort-within-sections = false
+lines-after-imports = 2
+
+# ========================================
+# MYPY (Type Checker)
+# ========================================
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "normal"
+ignore_missing_imports = true
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+show_error_context = true
+
+[[tool.mypy.overrides]]
+module = [
+    "aiogram.*",
+    "aiosqlite.*",
+    "apscheduler.*",
+    "openpyxl.*",
+]
+ignore_missing_imports = true
+
+# ========================================
+# PYTEST
+# ========================================
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "--tb=short",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ========================================
+# COVERAGE
+# ========================================
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+branch = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ========================================
+# SETUPTOOLS
+# ========================================
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.setuptools.package-data]
+app = ["py.typed"]
+
