@@ -2,6 +2,7 @@
 Обработчики для диспетчеров (и администраторов)
 """
 import logging
+from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -95,7 +96,7 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await callback.answer()
 
 
-@router.message(CreateOrderStates.description)
+@router.message(CreateOrderStates.description, F.text != "❌ Отмена")
 @handle_errors
 async def process_description(message: Message, state: FSMContext, user_role: str):
     """
@@ -134,7 +135,7 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     )
 
 
-@router.message(CreateOrderStates.client_name)
+@router.message(CreateOrderStates.client_name, F.text != "❌ Отмена")
 @handle_errors
 async def process_client_name(message: Message, state: FSMContext, user_role: str):
     """
@@ -177,7 +178,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     )
 
 
-@router.message(CreateOrderStates.client_address)
+@router.message(CreateOrderStates.client_address, F.text != "❌ Отмена")
 @handle_errors
 async def process_client_address(message: Message, state: FSMContext, user_role: str):
     """
@@ -211,7 +212,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     )
 
 
-@router.message(CreateOrderStates.client_phone)
+@router.message(CreateOrderStates.client_phone, F.text != "❌ Отмена")
 @handle_errors
 async def process_client_phone(message: Message, state: FSMContext, user_role: str):
     """
@@ -267,7 +268,7 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
     await show_order_confirmation(message, state)
 
 
-@router.message(CreateOrderStates.notes)
+@router.message(CreateOrderStates.notes, F.text != "❌ Отмена")
 @handle_errors
 async def process_notes(message: Message, state: FSMContext, user_role: str):
     """
@@ -385,13 +386,6 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             details=f"Created order #{order.id}"
         )
         
-        await message.answer(
-            f"✅ <b>Заявка #{order.id} успешно создана!</b>\n\n"
-            f"Статус: 🆕 Новая\n\n"
-            f"Теперь вы можете назначить на нее мастера.",
-            parse_mode="HTML"
-        )
-        
         log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
         
     finally:
@@ -399,8 +393,35 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
     
     await state.clear()
     
-    # Возвращаем главное меню
+    # Создаем inline кнопки для назначения мастера
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
     from app.keyboards.reply import get_main_menu_keyboard
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="👨‍🔧 Назначить мастера",
+            callback_data=f"assign_master:{order.id}"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📋 Просмотреть заявку",
+            callback_data=f"view_order:{order.id}"
+        )
+    )
+    
+    # Отправляем сообщение с inline кнопками
+    await message.answer(
+        f"✅ <b>Заявка #{order.id} успешно создана!</b>\n\n"
+        f"Статус: 🆕 Новая\n\n"
+        f"Теперь вы можете назначить на нее мастера или просмотреть детали заявки.",
+        parse_mode="HTML",
+        reply_markup=builder.as_markup()
+    )
+    
+    # Обновляем reply клавиатуру главного меню коротким сообщением
     await message.answer(
         "Главное меню:",
         reply_markup=get_main_menu_keyboard(user_role)
@@ -654,34 +675,71 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             # Если есть work_chat_id - отправляем в рабочую группу
             # Иначе - в личные сообщения мастеру
             target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
-            notification_text = (
-                f"🔔 <b>Новая заявка!</b>\n\n"
-                f"📋 Заявка #{order.id}\n"
-                f"🔧 {order.equipment_type}\n"
-                f"📝 {order.description}\n\n"
-            )
             
-            # Если отправляем в группу, добавляем упоминание мастера
+            logger.info(f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}")
+            
+            # Если отправляем в группу, создаем полное сообщение с клавиатурой
             if master.work_chat_id:
+                from app.keyboards.inline import get_group_order_keyboard
+                
+                notification_text = (
+                    f"🔔 <b>Новая заявка назначена!</b>\n\n"
+                    f"📋 <b>Заявка #{order.id}</b>\n"
+                    f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                    f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                    f"📝 <b>Описание:</b> {order.description}\n\n"
+                    f"👤 <b>Клиент:</b> {order.client_name}\n"
+                    f"📍 <b>Адрес:</b> {order.client_address}\n"
+                    f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+                )
+                
+                if order.notes:
+                    notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+                
                 # Упоминаем мастера в группе
                 if master.username:
-                    notification_text += f"👨‍🔧 Мастер: @{master.username}\n\n"
+                    notification_text += f"👨‍🔧 <b>Мастер:</b> @{master.username}\n\n"
                 else:
-                    notification_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
-                notification_text += "Используйте /start в личных сообщениях бота для просмотра деталей."
+                    notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
+                
+                notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+                notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
+                
+                keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
+                
+                logger.info(f"Notification text prepared: {len(notification_text)} chars")
+                
+                await callback.bot.send_message(
+                    target_chat_id,
+                    notification_text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard
+                )
+                
+                logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
             else:
-                notification_text += "Используйте /start и 'Мои заявки' для просмотра деталей."
-            
-            await callback.bot.send_message(
-                target_chat_id,
-                notification_text,
-                parse_mode="HTML"
-            )
-            
-            logger.info(f"Notification sent to {'group' if master.work_chat_id else 'DM'} {target_chat_id}")
+                # Отправляем в личные сообщения (старая логика)
+                notification_text = (
+                    f"🔔 <b>Новая заявка!</b>\n\n"
+                    f"📋 Заявка #{order.id}\n"
+                    f"🔧 {order.equipment_type}\n"
+                    f"📝 {order.description}\n\n"
+                    f"Используйте /start и 'Мои заявки' для просмотра деталей."
+                )
+                
+                await callback.bot.send_message(
+                    target_chat_id,
+                    notification_text,
+                    parse_mode="HTML"
+                )
+                
+                logger.info(f"SUCCESS: Notification sent to DM {target_chat_id}")
             
         except Exception as e:
-            logger.error(f"Failed to notify master: {e}")
+            logger.error(f"CRITICAL: Failed to notify master: {e}")
+            logger.error(f"Exception type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
         
         await callback.message.edit_text(
             f"✅ <b>Мастер назначен!</b>\n\n"
@@ -697,6 +755,285 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
         await db.disconnect()
     
     await callback.answer("Мастер назначен!")
+
+
+# ==================== ПЕРЕНАЗНАЧЕНИЕ МАСТЕРА ====================
+
+@router.callback_query(F.data.startswith("reassign_master:"))
+async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """
+    Переназначение мастера на заявку
+    
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+    
+    order_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Получаем информацию о заявке
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+        
+        # Получаем список активных и одобренных мастеров
+        masters = await db.get_all_masters(only_approved=True, only_active=True)
+        
+        if not masters:
+            await callback.answer(
+                "❌ Нет доступных мастеров",
+                show_alert=True
+            )
+            return
+        
+        # Фильтруем текущего мастера из списка
+        available_masters = [m for m in masters if m.id != order.assigned_master_id]
+        
+        if not available_masters:
+            await callback.answer(
+                "❌ Нет других доступных мастеров для переназначения",
+                show_alert=True
+            )
+            return
+        
+        keyboard = get_masters_list_keyboard(
+            available_masters,
+            order_id=order_id,
+            action="select_new_master_for_order"
+        )
+        
+        current_master_name = order.master_name if order.master_name else "Неизвестен"
+        
+        await callback.message.edit_text(
+            f"🔄 <b>Переназначение мастера</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"👨‍🔧 Текущий мастер: {current_master_name}\n\n"
+            f"Выберите нового мастера:",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("select_new_master_for_order:"))
+async def callback_select_new_master_for_order(callback: CallbackQuery, user_role: str):
+    """
+    Назначение нового мастера на заявку (переназначение)
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+    
+    parts = callback.data.split(":")
+    order_id = int(parts[1])
+    new_master_id = int(parts[2])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Получаем информацию о заявке и старом мастере
+        order = await db.get_order_by_id(order_id)
+        old_master_id = order.assigned_master_id
+        old_master = await db.get_master_by_id(old_master_id) if old_master_id else None
+        
+        # Переназначаем мастера
+        await db.assign_master_to_order(order_id, new_master_id)
+        
+        # Получаем информацию о новом мастере
+        new_master = await db.get_master_by_id(new_master_id)
+        
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="REASSIGN_MASTER",
+            details=f"Reassigned order #{order_id} from master {old_master_id} to master {new_master_id}"
+        )
+        
+        # Уведомляем старого мастера о снятии заявки
+        if old_master:
+            try:
+                target_chat_id = old_master.work_chat_id if old_master.work_chat_id else old_master.telegram_id
+                await callback.bot.send_message(
+                    target_chat_id,
+                    f"ℹ️ <b>Заявка переназначена</b>\n\n"
+                    f"📋 Заявка #{order_id} была переназначена на другого мастера.\n"
+                    f"🔧 {order.equipment_type}\n"
+                    f"📝 {order.description}",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify old master {old_master.telegram_id}: {e}")
+        
+        # Уведомляем нового мастера
+        try:
+            # Определяем, куда отправлять уведомление
+            target_chat_id = new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
+            
+            # Если отправляем в группу, создаем полное сообщение с клавиатурой
+            if new_master.work_chat_id:
+                from app.keyboards.inline import get_group_order_keyboard
+                
+                notification_text = (
+                    f"🔔 <b>Новая заявка назначена!</b>\n\n"
+                    f"📋 <b>Заявка #{order.id}</b>\n"
+                    f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                    f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                    f"📝 <b>Описание:</b> {order.description}\n\n"
+                    f"👤 <b>Клиент:</b> {order.client_name}\n"
+                    f"📍 <b>Адрес:</b> {order.client_address}\n"
+                    f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+                )
+                
+                if order.notes:
+                    notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+                
+                # Упоминаем мастера в группе
+                if new_master.username:
+                    notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master.username}\n\n"
+                else:
+                    notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
+                
+                notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+                notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(datetime.now())}"
+                
+                keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
+                
+                await callback.bot.send_message(
+                    target_chat_id,
+                    notification_text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard
+                )
+            else:
+                # Отправляем в личные сообщения
+                notification_text = (
+                    f"🔔 <b>Новая заявка!</b>\n\n"
+                    f"📋 Заявка #{order.id}\n"
+                    f"🔧 {order.equipment_type}\n"
+                    f"📝 {order.description}\n\n"
+                    f"Используйте /start и 'Мои заявки' для просмотра деталей."
+                )
+                
+                await callback.bot.send_message(
+                    target_chat_id,
+                    notification_text,
+                    parse_mode="HTML"
+                )
+            
+            logger.info(f"Notification sent to new master {'group' if new_master.work_chat_id else 'DM'} {target_chat_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to notify new master: {e}")
+        
+        old_master_name = old_master.get_display_name() if old_master else "Неизвестен"
+        
+        await callback.message.edit_text(
+            f"✅ <b>Мастер переназначен!</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"👨‍🔧 Старый мастер: {old_master_name}\n"
+            f"👨‍🔧 Новый мастер: {new_master.get_display_name()}\n\n"
+            f"Оба мастера получили уведомления.",
+            parse_mode="HTML"
+        )
+        
+        log_action(callback.from_user.id, "REASSIGN_MASTER", f"Order #{order_id}, Old Master {old_master_id}, New Master {new_master_id}")
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer("Мастер переназначен!")
+
+
+@router.callback_query(F.data.startswith("unassign_master:"))
+async def callback_unassign_master(callback: CallbackQuery, user_role: str):
+    """
+    Снятие мастера с заявки (возврат в статус NEW)
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+    
+    order_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Получаем информацию о заявке и мастере
+        order = await db.get_order_by_id(order_id)
+        
+        if not order or not order.assigned_master_id:
+            await callback.answer("Заявка не найдена или мастер не назначен", show_alert=True)
+            return
+        
+        master = await db.get_master_by_id(order.assigned_master_id)
+        
+        # Снимаем мастера и возвращаем статус в NEW
+        await db.connection.execute(
+            "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
+            (OrderStatus.NEW, order_id)
+        )
+        await db.connection.commit()
+        
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="UNASSIGN_MASTER",
+            details=f"Unassigned master {order.assigned_master_id} from order #{order_id}"
+        )
+        
+        # Уведомляем мастера
+        if master:
+            try:
+                target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+                await callback.bot.send_message(
+                    target_chat_id,
+                    f"ℹ️ <b>Заявка снята</b>\n\n"
+                    f"📋 Заявка #{order_id} была снята с вас диспетчером.\n"
+                    f"🔧 {order.equipment_type}\n"
+                    f"📝 {order.description}",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+        
+        master_name = master.get_display_name() if master else "Неизвестен"
+        
+        await callback.message.edit_text(
+            f"✅ <b>Мастер снят с заявки!</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"👨‍🔧 Мастер: {master_name}\n\n"
+            f"Заявка возвращена в статус 🆕 Новая.\n"
+            f"Теперь можно назначить другого мастера.",
+            parse_mode="HTML"
+        )
+        
+        log_action(callback.from_user.id, "UNASSIGN_MASTER", f"Order #{order_id}, Master {order.assigned_master_id}")
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer("Мастер снят с заявки")
 
 
 # ==================== УПРАВЛЕНИЕ СТАТУСАМИ ====================

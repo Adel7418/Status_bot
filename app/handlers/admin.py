@@ -312,7 +312,7 @@ async def callback_add_master(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(AddMasterStates.enter_telegram_id)
+@router.message(AddMasterStates.enter_telegram_id, F.text != "❌ Отмена")
 async def process_master_telegram_id(message: Message, state: FSMContext):
     """
     Обработка ввода Telegram ID мастера
@@ -369,7 +369,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
         await db.disconnect()
 
 
-@router.message(AddMasterStates.enter_phone)
+@router.message(AddMasterStates.enter_phone, F.text != "❌ Отмена")
 async def process_master_phone(message: Message, state: FSMContext):
     """
     Обработка ввода телефона мастера
@@ -401,7 +401,7 @@ async def process_master_phone(message: Message, state: FSMContext):
     )
 
 
-@router.message(AddMasterStates.enter_specialization)
+@router.message(AddMasterStates.enter_specialization, F.text != "❌ Отмена")
 async def process_master_specialization(message: Message, state: FSMContext):
     """
     Обработка ввода специализации мастера

@@ -9,6 +9,52 @@ from app.database.models import Master, Order
 from app.utils import create_callback_data
 
 
+def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для взаимодействия с заказом в группе
+    
+    Args:
+        order: Заявка
+        status: Текущий статус заявки
+        
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+    
+    if status == OrderStatus.ASSIGNED:
+        builder.row(
+            InlineKeyboardButton(
+                text="✅ Принять заявку",
+                callback_data=create_callback_data("group_accept_order", order.id)
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=create_callback_data("group_refuse_order", order.id)
+            )
+        )
+    elif status == OrderStatus.ACCEPTED:
+        builder.row(
+            InlineKeyboardButton(
+                text="🏠 Я на объекте",
+                callback_data=create_callback_data("group_onsite_order", order.id)
+            )
+        )
+    elif status == OrderStatus.ONSITE:
+        builder.row(
+            InlineKeyboardButton(
+                text="💰 Завершить",
+                callback_data=create_callback_data("group_complete_order", order.id)
+            ),
+            InlineKeyboardButton(
+                text="⏳ Длительный ремонт",
+                callback_data=create_callback_data("group_dr_order", order.id)
+            )
+        )
+    
+    return builder.as_markup()
+
+
 def get_equipment_types_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура выбора типа техники
@@ -58,6 +104,19 @@ def get_order_actions_keyboard(
                 InlineKeyboardButton(
                     text="👨‍🔧 Назначить мастера",
                     callback_data=create_callback_data("assign_master", order.id)
+                )
+            )
+        
+        # Кнопка переназначения мастера для заявок с уже назначенным мастером
+        if order.assigned_master_id and order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
+            builder.row(
+                InlineKeyboardButton(
+                    text="🔄 Переназначить мастера",
+                    callback_data=create_callback_data("reassign_master", order.id)
+                ),
+                InlineKeyboardButton(
+                    text="🚫 Снять мастера",
+                    callback_data=create_callback_data("unassign_master", order.id)
                 )
             )
         

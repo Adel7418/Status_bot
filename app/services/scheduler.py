@@ -49,10 +49,10 @@ class TaskScheduler:
             replace_existing=True
         )
         
-        # Напоминание о непринятых заявках (каждый час)
+        # Напоминание о непринятых заявках (каждые 5 минут)
         self.scheduler.add_job(
             self.remind_assigned_orders,
-            trigger=IntervalTrigger(hours=1),
+            trigger=IntervalTrigger(minutes=5),
             id="remind_assigned_orders",
             name="Напоминание о непринятых заявках",
             replace_existing=True
@@ -77,7 +77,7 @@ class TaskScheduler:
             # Получаем все активные заявки
             orders = await self.db.get_all_orders()
             
-            now = datetime.now()
+            now = datetime.utcnow()
             alerts = []
             
             for order in orders:
@@ -149,7 +149,7 @@ class TaskScheduler:
             
             # Получаем заявки за последние 24 часа
             all_orders = await self.db.get_all_orders()
-            yesterday = datetime.now() - timedelta(days=1)
+            yesterday = datetime.utcnow() - timedelta(days=1)
             
             new_orders = [
                 o for o in all_orders
@@ -216,11 +216,11 @@ class TaskScheduler:
         Напоминание мастерам о непринятых заявках
         """
         try:
-            # Получаем заявки со статусом ASSIGNED старше 2 часов
+            # Получаем заявки со статусом ASSIGNED старше 15 минут
             orders = await self.db.get_all_orders(status=OrderStatus.ASSIGNED)
             
-            now = datetime.now()
-            remind_threshold = timedelta(hours=2)
+            now = datetime.utcnow()
+            remind_threshold = timedelta(minutes=15)
             
             for order in orders:
                 if not order.updated_at:
@@ -228,26 +228,64 @@ class TaskScheduler:
                 
                 time_assigned = now - order.updated_at
                 
+                logger.debug(f"Order #{order.id}: updated_at={order.updated_at}, now={now}, time_assigned={time_assigned}")
+                
                 if time_assigned > remind_threshold and order.assigned_master_id:
                     master = await self.db.get_master_by_id(order.assigned_master_id)
                     
                     if master:
                         try:
-                            hours = int(time_assigned.total_seconds() / 3600)
+                            minutes = int(time_assigned.total_seconds() / 60)
                             
-                            await self.bot.send_message(
-                                master.telegram_id,
-                                f"⏰ <b>Напоминание</b>\n\n"
-                                f"У вас есть непринятая заявка #{order.id}\n"
-                                f"🔧 {order.equipment_type}\n"
-                                f"⏱ Назначена {hours} ч. назад\n\n"
-                                f"Пожалуйста, примите или отклоните заявку.",
-                                parse_mode="HTML"
-                            )
+                            logger.info(f"Sending reminder for order #{order.id}: assigned {minutes} minutes ago")
+                            
+                            # Определяем, куда отправлять напоминание
+                            # Если есть work_chat_id - отправляем в рабочую группу
+                            # Иначе - в личные сообщения мастеру
+                            target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+                            
+                            if master.work_chat_id:
+                                # Отправляем в группу с упоминанием мастера
+                                reminder_text = (
+                                    f"⏰ <b>Напоминание</b>\n\n"
+                                    f"У вас есть непринятая заявка #{order.id}\n"
+                                    f"🔧 {order.equipment_type}\n"
+                                    f"⏱ Назначена {minutes} мин. назад\n\n"
+                                )
+                                
+                                # Упоминаем мастера в группе
+                                if master.username:
+                                    reminder_text += f"👨‍🔧 Мастер: @{master.username}\n\n"
+                                else:
+                                    reminder_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
+                                
+                                reminder_text += "Пожалуйста, примите или отклоните заявку."
+                                
+                                await self.bot.send_message(
+                                    target_chat_id,
+                                    reminder_text,
+                                    parse_mode="HTML"
+                                )
+                                
+                                logger.info(f"Reminder sent to group {target_chat_id} for master {master.telegram_id}")
+                            else:
+                                # Отправляем в личные сообщения
+                                await self.bot.send_message(
+                                    target_chat_id,
+                                    f"⏰ <b>Напоминание</b>\n\n"
+                                    f"У вас есть непринятая заявка #{order.id}\n"
+                                    f"🔧 {order.equipment_type}\n"
+                                    f"⏱ Назначена {minutes} мин. назад\n\n"
+                                    f"Пожалуйста, примите или отклоните заявку.",
+                                    parse_mode="HTML"
+                                )
+                                
+                                logger.info(f"Reminder sent to DM {target_chat_id} for master {master.telegram_id}")
+                                
                         except Exception as e:
                             logger.error(f"Failed to send reminder to master {master.telegram_id}: {e}")
             
-            logger.info(f"Reminders sent for {len(orders)} assigned orders")
+            logger.info(f"Reminders check completed. Found {len(orders)} assigned orders, threshold: 15 minutes")
             
         except Exception as e:
             logger.error(f"Error in remind_assigned_orders: {e}")
