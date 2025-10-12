@@ -58,25 +58,25 @@ sync-roles:  ## Синхронизировать роли из .env
 	python sync_roles_from_env.py
 
 docker-build:  ## Собрать Docker образ
-	docker build -t telegram-repair-bot:latest .
+	docker build -f docker/Dockerfile -t telegram-repair-bot:latest .
 
 docker-up:  ## Запустить через Docker Compose
-	docker-compose up -d
+	docker-compose -f docker/docker-compose.yml up -d
 
 docker-up-dev:  ## Запустить в dev режиме
-	docker-compose -f docker-compose.dev.yml up
+	docker-compose -f docker/docker-compose.dev.yml up
 
 docker-down:  ## Остановить Docker контейнеры
-	docker-compose down
+	docker-compose -f docker/docker-compose.yml down
 
 docker-logs:  ## Показать логи Docker
-	docker-compose logs -f bot
+	docker-compose -f docker/docker-compose.yml logs -f bot
 
 docker-restart:  ## Перезапустить Docker контейнеры
-	docker-compose restart
+	docker-compose -f docker/docker-compose.yml restart
 
 docker-clean:  ## Очистить Docker (удалить контейнеры и volumes)
-	docker-compose down -v
+	docker-compose -f docker/docker-compose.yml down -v
 	docker system prune -f
 
 venv:  ## Создать виртуальное окружение

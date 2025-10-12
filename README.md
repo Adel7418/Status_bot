@@ -47,7 +47,7 @@ docker-compose up -d
 docker-compose logs -f bot
 ```
 
-📖 Подробнее: [DOCKER_USAGE.md](DOCKER_USAGE.md)
+📖 Подробнее: [DOCKER_USAGE.md](docs/DOCKER_USAGE.md)
 
 ### Вариант 2: Локальная установка
 
@@ -293,19 +293,36 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-📖 Подробнее: [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
+📖 Подробнее: [MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)
 
 ## 🤝 Contributing
 
-Мы приветствуем ваш вклад! См. [CONTRIBUTING.md](CONTRIBUTING.md)
+Мы приветствуем ваш вклад! См. [CONTRIBUTING.md](docs/CONTRIBUTING.md)
 
 ## 📝 Changelog
 
-См. [CHANGELOG.md](CHANGELOG.md) для истории изменений.
+См. [CHANGELOG.md](docs/CHANGELOG.md) для истории изменений.
 
 ---
 
-**Версия:** 1.2.0 (Production Ready)  
+**Версия:** 1.2.1 (Clean Structure)  
 **Дата создания:** 11.10.2024  
 **Последнее обновление:** 12.12.2024
+
+---
+
+## 📁 Структура проекта
+
+```
+telegram_repair_bot/
+├── docker/                    # Docker конфигурации
+├── docs/                      # Документация
+├── app/                       # Основной код бота
+├── tests/                     # Тесты
+├── migrations/                # Миграции БД (Alembic)
+├── .github/                   # CI/CD workflows
+└── README.md                  # Этот файл
+```
+
+**Примечание:** После рефакторинга структура стала чище! См. [REFACTORING_REPORT.md](docs/REFACTORING_REPORT.md)
 
