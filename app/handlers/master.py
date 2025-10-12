@@ -132,12 +132,18 @@ async def callback_view_order_master(callback: CallbackQuery):
             f"📝 <b>Описание:</b> {order.description}\n\n"
         )
         
-        # Показываем контактную информацию клиента только при определенных статусах
-        if order.status in [OrderStatus.ACCEPTED, OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
+        # Показываем контактную информацию клиента только после прибытия на объект
+        if order.status in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
             text += (
                 f"👤 <b>Клиент:</b> {order.client_name}\n"
                 f"📍 <b>Адрес:</b> {order.client_address}\n"
                 f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+            )
+        elif order.status == OrderStatus.ACCEPTED:
+            text += (
+                f"👤 <b>Клиент:</b> {order.client_name}\n"
+                f"📍 <b>Адрес:</b> {order.client_address}\n"
+                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
             )
         else:
             text += (

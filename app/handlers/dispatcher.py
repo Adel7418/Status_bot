@@ -690,7 +690,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
                     f"📝 <b>Описание:</b> {order.description}\n\n"
                     f"👤 <b>Клиент:</b> {order.client_name}\n"
                     f"📍 <b>Адрес:</b> {order.client_address}\n"
-                    f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+                    f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
                 )
                 
                 if order.notes:
@@ -898,7 +898,7 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
                     f"📝 <b>Описание:</b> {order.description}\n\n"
                     f"👤 <b>Клиент:</b> {order.client_name}\n"
                     f"📍 <b>Адрес:</b> {order.client_address}\n"
-                    f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+                    f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
                 )
                 
                 if order.notes:

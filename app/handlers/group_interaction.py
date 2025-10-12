@@ -62,7 +62,7 @@ async def callback_group_accept_order(callback: CallbackQuery):
             f"📝 Описание: {order.description}\n"
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n"
-            f"📞 Телефон: {order.client_phone}\n\n"
+            f"📞 Телефон: <i>Будет доступен после прибытия на объект</i>\n\n"
             f"Когда будете на объекте, нажмите кнопку ниже.",
             parse_mode="HTML",
             reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED)
@@ -123,7 +123,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
             details=f"Master refused order #{order_id} in group"
         )
         
-        # Обновляем сообщение в группе
+        # Обновляем сообщение в группе (номер телефона скрыт, т.к. заявка отклонена до прибытия на объект)
         await callback.message.edit_text(
             f"❌ <b>Заявка #{order_id} отклонена</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
@@ -133,8 +133,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
             f"👤 Клиент: {order.client_name}\n"
-            f"📍 Адрес: {order.client_address}\n"
-            f"📞 Телефон: {order.client_phone}\n\n"
+            f"📍 Адрес: {order.client_address}\n\n"
             f"Диспетчер получил уведомление для назначения другого мастера.",
             parse_mode="HTML"
         )
@@ -406,7 +405,14 @@ async def cmd_order_in_group(message: Message):
         text += f"📝 <b>Описание:</b> {order.description}\n\n"
         text += f"👤 <b>Клиент:</b> {order.client_name}\n"
         text += f"📍 <b>Адрес:</b> {order.client_address}\n"
-        text += f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+        
+        # Показываем номер телефона только после прибытия на объект
+        if order.status in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
+            text += f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+        elif order.status == OrderStatus.ACCEPTED:
+            text += f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+        else:
+            text += f"📞 <b>Телефон:</b> <i>Недоступно</i>\n\n"
         
         if order.notes:
             text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
