@@ -5,6 +5,10 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '.github/dependabot.yml'
+  # Skip dependabot PRs to avoid unnecessary red runs
+  workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1'  # Каждый понедельник в полночь
 
@@ -12,6 +16,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]' && github.actor != 'dependabot'
     permissions:
       actions: read
       contents: read
