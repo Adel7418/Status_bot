@@ -61,7 +61,7 @@ class RoleCheckMiddleware(BaseMiddleware):
             data["user_role"] = db_user.get_primary_role()  # Основная роль для обратной совместимости
             data["user_roles"] = db_user.get_roles()  # Список всех ролей
 
-            logger.debug(f"User {user.id} with roles {db_user.get_roles()} processed")
+            logger.debug("User %s with roles %s processed", user.id, db_user.get_roles())
 
         # Вызываем следующий handler
         return await handler(event, data)

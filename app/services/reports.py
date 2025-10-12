@@ -2,7 +2,7 @@
 Сервис генерации отчетов
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 
 from aiogram.types import BufferedInputFile
@@ -216,7 +216,7 @@ class ReportsService:
         wb.save(excel_file)
         excel_file.seek(0)
 
-        filename = f"report_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"report_{report_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return BufferedInputFile(excel_file.read(), filename=filename)
 
@@ -259,7 +259,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except:
+                except Exception:
                     pass
             adjusted_width = (max_length + 2)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -295,7 +295,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except:
+                except Exception:
                     pass
             adjusted_width = (max_length + 2)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -330,7 +330,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except:
+                except Exception:
                     pass
             adjusted_width = (max_length + 2)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -381,7 +381,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except:
+                except Exception:
                     pass
             adjusted_width = min((max_length + 2), 50)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width

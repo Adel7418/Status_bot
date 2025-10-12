@@ -55,7 +55,7 @@ async def on_startup(bot: Bot, db: Database, scheduler: TaskScheduler):
     #             parse_mode="HTML"
     #         )
     #     except Exception as e:
-    #         logger.error(f"Failed to notify admin {admin_id}: {e}")
+    #         logger.error("Failed to notify admin %s: %s", admin_id, e)
 
     logger.info("Бот успешно запущен!")
 
@@ -87,7 +87,7 @@ async def on_shutdown(bot: Bot, db: Database, scheduler: TaskScheduler):
                 parse_mode="HTML"
             )
         except Exception as e:
-            logger.error(f"Failed to notify admin {admin_id}: {e}")
+            logger.error("Failed to notify admin %s: %s", admin_id, e)
 
     logger.info("Бот остановлен")
 
@@ -99,7 +99,7 @@ async def main():
     try:
         Config.validate()
     except ValueError as e:
-        logger.error(f"Ошибка конфигурации: {e}")
+        logger.error("Ошибка конфигурации: %s", e)
         sys.exit(1)
 
     # Инициализация бота
@@ -137,7 +137,7 @@ async def main():
     for router in routers:
         dp.include_router(router)
 
-    logger.info(f"Подключено {len(routers)} роутеров")
+    logger.info("Подключено %s роутеров", len(routers))
 
     # Вызов startup функции перед запуском
     await on_startup(bot, db, scheduler)
@@ -150,7 +150,7 @@ async def main():
             allowed_updates=dp.resolve_used_update_types()
         )
     except Exception as e:
-        logger.error(f"Критическая ошибка: {e}")
+        logger.error("Критическая ошибка: %s", e)
     finally:
         # Вызов shutdown функции при завершении
         await on_shutdown(bot, db, scheduler)
@@ -163,6 +163,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Бот остановлен пользователем")
     except Exception as e:
-        logger.critical(f"Неожиданная ошибка: {e}")
+        logger.critical("Неожиданная ошибка: %s", e)
         sys.exit(1)
 
