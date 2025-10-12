@@ -228,12 +228,13 @@ async def callback_group_onsite_order(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("group_complete_order:"), IsGroupOrderCallback())
-async def callback_group_complete_order(callback: CallbackQuery):
+async def callback_group_complete_order(callback: CallbackQuery, state: FSMContext):
     """
-    Завершение заявки мастером в группе
+    Начало процесса завершения заявки мастером в группе
     
     Args:
         callback: Callback query
+        state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
     
@@ -249,49 +250,32 @@ async def callback_group_complete_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
         
-        # Обновляем статус
-        await db.update_order_status(order_id, OrderStatus.CLOSED)
-        
-        # Добавляем в лог
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="COMPLETE_ORDER_GROUP",
-            details=f"Completed order #{order_id} in group"
+        # Сохраняем ID заказа и ID сообщения в группе для обновления позже
+        await state.update_data(
+            order_id=order_id,
+            group_chat_id=callback.message.chat.id,
+            group_message_id=callback.message.message_id
         )
         
-        # Обновляем сообщение в группе
-        await callback.message.edit_text(
-            f"✅ <b>Заявка #{order_id} завершена!</b>\n\n"
-            f"👨‍🔧 Мастер: {master.get_display_name()}\n"
-            f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.CLOSED)}\n"
-            f"⏰ Время завершения: {format_datetime(datetime.now())}\n\n"
-            f"🔧 <b>Детали заявки:</b>\n"
-            f"📱 Тип техники: {order.equipment_type}\n"
-            f"📝 Описание: {order.description}\n"
-            f"👤 Клиент: {order.client_name}\n"
-            f"📍 Адрес: {order.client_address}\n"
-            f"📞 Телефон: {order.client_phone}\n\n"
-            f"🎉 Работа успешно выполнена!",
+        # Переходим в состояние запроса общей суммы
+        from app.states import CompleteOrderStates
+        await state.set_state(CompleteOrderStates.enter_total_amount)
+        
+        # Запрашиваем сумму прямо в группе
+        await callback.message.reply(
+            f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
+            f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
+            f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
+            f"Например: 5000 или 5000.50",
             parse_mode="HTML"
         )
         
-        # Уведомляем диспетчера
-        if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"✅ Мастер {master.get_display_name()} завершил заявку #{order_id}",
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+        await callback.answer("Введите общую сумму заказа")
         
-        log_action(callback.from_user.id, "COMPLETE_ORDER_GROUP", f"Order #{order_id}")
+        log_action(callback.from_user.id, "START_COMPLETE_ORDER_GROUP", f"Order #{order_id}")
         
     finally:
         await db.disconnect()
-    
-    await callback.answer("Заявка завершена!")
 
 
 @router.callback_query(F.data.startswith("group_dr_order:"), IsGroupOrderCallback())

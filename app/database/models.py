@@ -61,6 +61,11 @@ class Order:
     assigned_master_id: Optional[int] = None
     dispatcher_id: Optional[int] = None
     notes: Optional[str] = None
+    total_amount: Optional[float] = None  # Общая сумма заказа
+    materials_cost: Optional[float] = None  # Сумма расходного материала
+    master_profit: Optional[float] = None  # Прибыль мастера
+    company_profit: Optional[float] = None  # Прибыль компании
+    has_review: Optional[bool] = None  # Взял ли мастер отзыв у клиента
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     

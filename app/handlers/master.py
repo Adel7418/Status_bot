@@ -2,6 +2,7 @@
 Обработчики для мастеров
 """
 import logging
+from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -10,8 +11,9 @@ from app.config import OrderStatus, UserRole
 from app.filters import IsMaster
 from app.database import Database
 from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard
-from app.utils import log_action, format_datetime
+from app.utils import log_action, format_datetime, calculate_profit_split
 from app.decorators import require_role
+from app.states import CompleteOrderStates
 
 logger = logging.getLogger(__name__)
 
@@ -350,12 +352,13 @@ async def callback_onsite_order(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("complete_order:"))
-async def callback_complete_order(callback: CallbackQuery):
+async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
     """
-    Завершение заявки мастером
+    Начало процесса завершения заявки мастером
     
     Args:
         callback: Callback query
+        state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
     
@@ -371,39 +374,26 @@ async def callback_complete_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
         
-        # Обновляем статус
-        await db.update_order_status(order_id, OrderStatus.CLOSED)
+        # Сохраняем ID заказа в состоянии FSM
+        await state.update_data(order_id=order_id)
         
-        # Добавляем в лог
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="COMPLETE_ORDER",
-            details=f"Completed order #{order_id}"
-        )
-        
-        # Уведомляем диспетчера
-        if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"💰 Мастер {master.get_display_name()} завершил заявку #{order_id}",
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+        # Переходим в состояние запроса общей суммы
+        from app.states import CompleteOrderStates
+        await state.set_state(CompleteOrderStates.enter_total_amount)
         
         await callback.message.edit_text(
-            f"✅ <b>Заявка #{order_id} завершена!</b>\n\n"
-            f"Отличная работа! 🎉",
+            f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
+            f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
+            f"Например: 5000 или 5000.50",
             parse_mode="HTML"
         )
         
-        log_action(callback.from_user.id, "COMPLETE_ORDER", f"Order #{order_id}")
+        log_action(callback.from_user.id, "START_COMPLETE_ORDER", f"Order #{order_id}")
         
     finally:
         await db.disconnect()
     
-    await callback.answer("Заявка завершена!")
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("dr_order:"))
@@ -518,6 +508,238 @@ async def btn_my_stats(message: Message):
         
     finally:
         await db.disconnect()
+
+
+@router.message(CompleteOrderStates.enter_total_amount)
+async def process_total_amount(message: Message, state: FSMContext):
+    """
+    Обработка ввода общей суммы заказа (работает и в личке, и в группе)
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем, что введена корректная сумма
+    try:
+        total_amount = float(message.text.replace(",", ".").strip())
+        if total_amount <= 0:
+            await message.reply(
+                "❌ Сумма должна быть положительным числом.\n"
+                "Попробуйте еще раз:"
+            )
+            return
+    except ValueError:
+        await message.reply(
+            "❌ Неверный формат суммы.\n"
+            "Пожалуйста, введите число (например: 5000 или 5000.50):"
+        )
+        return
+    
+    # Сохраняем общую сумму
+    await state.update_data(total_amount=total_amount)
+    
+    # Переходим к запросу суммы расходного материала
+    await state.set_state(CompleteOrderStates.enter_materials_cost)
+    
+    await message.reply(
+        f"✅ Общая сумма заказа: <b>{total_amount:.2f} ₽</b>\n\n"
+        f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
+        f"Например: 1500 или 1500.50\n\n"
+        f"Если расходного материала не было, введите: 0",
+        parse_mode="HTML"
+    )
+
+
+@router.message(CompleteOrderStates.enter_materials_cost)
+async def process_materials_cost(message: Message, state: FSMContext):
+    """
+    Обработка ввода суммы расходного материала и запрос об отзыве (работает и в личке, и в группе)
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем, что введена корректная сумма
+    try:
+        materials_cost = float(message.text.replace(",", ".").strip())
+        if materials_cost < 0:
+            await message.reply(
+                "❌ Сумма не может быть отрицательной.\n"
+                "Попробуйте еще раз (или введите 0, если расходов не было):"
+            )
+            return
+    except ValueError:
+        await message.reply(
+            "❌ Неверный формат суммы.\n"
+            "Пожалуйста, введите число (например: 1500 или 0):"
+        )
+        return
+    
+    # Сохраняем сумму расходного материала
+    await state.update_data(materials_cost=materials_cost)
+    
+    # Переходим к запросу об отзыве
+    await state.set_state(CompleteOrderStates.confirm_review)
+    
+    await message.reply(
+        f"✅ Сумма расходного материала: <b>{materials_cost:.2f} ₽</b>\n\n"
+        f"❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
+        f"(За отзыв вы получите дополнительно +10% к прибыли)\n\n"
+        f"Ответьте:\n"
+        f"• <b>Да</b> - если взяли отзыв\n"
+        f"• <b>Нет</b> - если не взяли",
+        parse_mode="HTML"
+    )
+
+
+@router.message(CompleteOrderStates.confirm_review)
+async def process_review_confirmation(message: Message, state: FSMContext):
+    """
+    Обработка подтверждения наличия отзыва и завершение заказа (работает и в личке, и в группе)
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем ответ
+    answer = message.text.strip().lower()
+    
+    if answer in ['да', 'yes', 'lf', '+']:
+        has_review = True
+    elif answer in ['нет', 'no', 'ytn', '-']:
+        has_review = False
+    else:
+        await message.reply(
+            "❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Получаем данные из состояния
+    data = await state.get_data()
+    order_id = data.get('order_id')
+    total_amount = data.get('total_amount')
+    materials_cost = data.get('materials_cost')
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(message.from_user.id)
+        
+        if not master or not order or order.assigned_master_id != master.id:
+            await message.answer("❌ Ошибка: заявка не найдена или не принадлежит вам.")
+            await state.clear()
+            return
+        
+        # Рассчитываем распределение прибыли с учетом отзыва
+        master_profit, company_profit = calculate_profit_split(total_amount, materials_cost, has_review)
+        net_profit = total_amount - materials_cost
+        
+        # Определяем процентную ставку для отображения
+        profit_rate = "50/50" if net_profit >= 7000 else "40/60"
+        review_bonus_text = " + бонус за отзыв" if has_review else ""
+        
+        # Обновляем суммы в базе данных
+        await db.update_order_amounts(
+            order_id=order_id,
+            total_amount=total_amount,
+            materials_cost=materials_cost,
+            master_profit=master_profit,
+            company_profit=company_profit,
+            has_review=has_review
+        )
+        
+        # Обновляем статус на CLOSED
+        await db.update_order_status(order_id, OrderStatus.CLOSED)
+        
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="COMPLETE_ORDER",
+            details=f"Completed order #{order_id}, total: {total_amount}, materials: {materials_cost}"
+        )
+        
+        # Обновляем сообщение в группе, если заказ был завершен оттуда
+        group_chat_id = data.get('group_chat_id')
+        group_message_id = data.get('group_message_id')
+        
+        if group_chat_id and group_message_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=group_chat_id,
+                    message_id=group_message_id,
+                    text=(
+                        f"✅ <b>Заявка #{order_id} завершена!</b>\n\n"
+                        f"👨‍🔧 Мастер: {master.get_display_name()}\n"
+                        f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.CLOSED)}\n"
+                        f"⏰ Время завершения: {format_datetime(datetime.now())}\n\n"
+                        f"🔧 <b>Детали заявки:</b>\n"
+                        f"📱 Тип техники: {order.equipment_type}\n"
+                        f"📝 Описание: {order.description}\n"
+                        f"👤 Клиент: {order.client_name}\n"
+                        f"📍 Адрес: {order.client_address}\n"
+                        f"📞 Телефон: {order.client_phone}\n\n"
+                        f"💰 <b>Финансовая информация:</b>\n"
+                        f"• Общая сумма: <b>{total_amount:.2f} ₽</b>\n"
+                        f"• Расходный материал: <b>{materials_cost:.2f} ₽</b>\n"
+                        f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
+                        f"• Отзыв: {'✅ Взят (+10%)' if has_review else '❌ Не взят'}\n\n"
+                        f"📊 <b>Распределение прибыли ({profit_rate}{review_bonus_text}):</b>\n"
+                        f"• Мастер: <b>{master_profit:.2f} ₽</b>\n"
+                        f"• Компания: <b>{company_profit:.2f} ₽</b>\n\n"
+                        f"🎉 Работа успешно выполнена!"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to update group message: {e}")
+        
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            try:
+                await message.bot.send_message(
+                    order.dispatcher_id,
+                    f"💰 <b>Заявка #{order_id} завершена!</b>\n\n"
+                    f"👨‍🔧 Мастер: {master.get_display_name()}\n"
+                    f"💵 Общая сумма: <b>{total_amount:.2f} ₽</b>\n"
+                    f"🔧 Расходный материал: <b>{materials_cost:.2f} ₽</b>\n"
+                    f"💎 Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
+                    f"⭐ Отзыв: {'✅ Взят (+10%)' if has_review else '❌ Не взят'}\n\n"
+                    f"📊 <b>Распределение ({profit_rate}{review_bonus_text}):</b>\n"
+                    f"👨‍🔧 Мастер: <b>{master_profit:.2f} ₽</b>\n"
+                    f"🏢 Компания: <b>{company_profit:.2f} ₽</b>",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+        
+        # Отправляем итоговое сообщение (reply для групп, answer для личных чатов)
+        review_text = "⭐ <b>Отзыв взят!</b> Вы получили дополнительные +10%\n" if has_review else ""
+        completion_message = (
+            f"✅ <b>Заявка #{order_id} успешно завершена!</b>\n\n"
+            f"{review_text}"
+            f"💰 <b>Финансовая информация:</b>\n"
+            f"• Общая сумма: <b>{total_amount:.2f} ₽</b>\n"
+            f"• Расходный материал: <b>{materials_cost:.2f} ₽</b>\n"
+            f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n\n"
+            f"📊 <b>Распределение прибыли ({profit_rate}{review_bonus_text}):</b>\n"
+            f"👨‍🔧 Ваша доля: <b>{master_profit:.2f} ₽</b>\n"
+            f"🏢 Доля компании: <b>{company_profit:.2f} ₽</b>\n\n"
+            f"Отличная работа! 🎉"
+        )
+        
+        if message.chat.type in ['group', 'supergroup']:
+            await message.reply(completion_message, parse_mode="HTML")
+        else:
+            await message.answer(completion_message, parse_mode="HTML")
+        
+        log_action(message.from_user.id, "COMPLETE_ORDER", f"Order #{order_id}")
+        
+    finally:
+        await db.disconnect()
+        await state.clear()
 
 
 @router.message(F.text == "⚙️ Настройки")

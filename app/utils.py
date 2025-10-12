@@ -194,3 +194,42 @@ def log_action(user_id: int, action: str, details: Optional[str] = None):
         log_msg += f" - {details}"
     logger.info(log_msg)
 
+
+def calculate_profit_split(total_amount: float, materials_cost: float, has_review: bool = False) -> tuple[float, float]:
+    """
+    Расчет распределения прибыли между мастером и компанией
+    
+    Правила:
+    - Чистая прибыль >= 7000: 50% мастеру, 50% компании
+    - Чистая прибыль < 7000: 40% мастеру, 60% компании
+    - Если взят отзыв: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
+    
+    Args:
+        total_amount: Общая сумма заказа
+        materials_cost: Сумма расходного материала
+        has_review: Взял ли мастер отзыв у клиента
+        
+    Returns:
+        Кортеж (прибыль мастера, прибыль компании)
+    """
+    # Чистая прибыль
+    net_profit = total_amount - materials_cost
+    
+    # Определяем процент в зависимости от суммы
+    if net_profit >= 7000:
+        # 50/50
+        master_profit = net_profit * 0.5
+        company_profit = net_profit * 0.5
+    else:
+        # 40/60
+        master_profit = net_profit * 0.4
+        company_profit = net_profit * 0.6
+    
+    # Если взят отзыв - добавляем 10% к прибыли мастера
+    if has_review:
+        review_bonus = net_profit * 0.1
+        master_profit += review_bonus
+        company_profit -= review_bonus
+    
+    return (master_profit, company_profit)
+

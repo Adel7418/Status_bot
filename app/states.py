@@ -49,3 +49,10 @@ class NotesStates(StatesGroup):
 class SetWorkChatStates(StatesGroup):
     """Состояния для установки рабочей группы мастера"""
     enter_chat_id = State()   # Ввод ID группы или пересылка сообщения
+
+
+class CompleteOrderStates(StatesGroup):
+    """Состояния для завершения заказа"""
+    enter_total_amount = State()      # Ввод общей суммы заказа
+    enter_materials_cost = State()    # Ввод суммы расходного материала
+    confirm_review = State()          # Подтверждение наличия отзыва

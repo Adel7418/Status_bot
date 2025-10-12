@@ -80,6 +80,57 @@ class Database:
             # Поле уже существует, игнорируем ошибку
             pass
         
+        # Добавление полей для сумм в таблицу orders (если их нет)
+        try:
+            await self.connection.execute("""
+                ALTER TABLE orders ADD COLUMN total_amount REAL
+            """)
+            await self.connection.commit()
+            logger.info("Добавлено поле total_amount в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+        
+        try:
+            await self.connection.execute("""
+                ALTER TABLE orders ADD COLUMN materials_cost REAL
+            """)
+            await self.connection.commit()
+            logger.info("Добавлено поле materials_cost в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+        
+        try:
+            await self.connection.execute("""
+                ALTER TABLE orders ADD COLUMN master_profit REAL
+            """)
+            await self.connection.commit()
+            logger.info("Добавлено поле master_profit в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+        
+        try:
+            await self.connection.execute("""
+                ALTER TABLE orders ADD COLUMN company_profit REAL
+            """)
+            await self.connection.commit()
+            logger.info("Добавлено поле company_profit в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+        
+        try:
+            await self.connection.execute("""
+                ALTER TABLE orders ADD COLUMN has_review INTEGER DEFAULT 0
+            """)
+            await self.connection.commit()
+            logger.info("Добавлено поле has_review в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+        
         # Создание таблицы orders
         await self.connection.execute("""
             CREATE TABLE IF NOT EXISTS orders (
@@ -647,6 +698,11 @@ class Database:
                 assigned_master_id=row['assigned_master_id'],
                 dispatcher_id=row['dispatcher_id'],
                 notes=row['notes'],
+                total_amount=row['total_amount'] if 'total_amount' in row.keys() else None,
+                materials_cost=row['materials_cost'] if 'materials_cost' in row.keys() else None,
+                master_profit=row['master_profit'] if 'master_profit' in row.keys() else None,
+                company_profit=row['company_profit'] if 'company_profit' in row.keys() else None,
+                has_review=bool(row['has_review']) if 'has_review' in row.keys() and row['has_review'] is not None else None,
                 created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
                 updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
                 dispatcher_name=row['dispatcher_name'],
@@ -713,6 +769,11 @@ class Database:
                 assigned_master_id=row['assigned_master_id'],
                 dispatcher_id=row['dispatcher_id'],
                 notes=row['notes'],
+                total_amount=row['total_amount'] if 'total_amount' in row.keys() else None,
+                materials_cost=row['materials_cost'] if 'materials_cost' in row.keys() else None,
+                master_profit=row['master_profit'] if 'master_profit' in row.keys() else None,
+                company_profit=row['company_profit'] if 'company_profit' in row.keys() else None,
+                has_review=bool(row['has_review']) if 'has_review' in row.keys() and row['has_review'] is not None else None,
                 created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
                 updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
                 dispatcher_name=row['dispatcher_name'],
@@ -869,12 +930,76 @@ class Database:
                 assigned_master_id=row['assigned_master_id'],
                 dispatcher_id=row['dispatcher_id'],
                 notes=row['notes'],
+                total_amount=row['total_amount'] if 'total_amount' in row.keys() else None,
+                materials_cost=row['materials_cost'] if 'materials_cost' in row.keys() else None,
+                master_profit=row['master_profit'] if 'master_profit' in row.keys() else None,
+                company_profit=row['company_profit'] if 'company_profit' in row.keys() else None,
+                has_review=bool(row['has_review']) if 'has_review' in row.keys() and row['has_review'] is not None else None,
                 created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
                 updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
                 dispatcher_name=row['dispatcher_name'],
                 master_name=row['master_name']
             ))
         return orders
+    
+    async def update_order_amounts(
+        self,
+        order_id: int,
+        total_amount: Optional[float] = None,
+        materials_cost: Optional[float] = None,
+        master_profit: Optional[float] = None,
+        company_profit: Optional[float] = None,
+        has_review: Optional[bool] = None
+    ) -> bool:
+        """
+        Обновление сумм заказа
+        
+        Args:
+            order_id: ID заявки
+            total_amount: Общая сумма заказа
+            materials_cost: Сумма расходного материала
+            master_profit: Прибыль мастера
+            company_profit: Прибыль компании
+            has_review: Взял ли мастер отзыв
+            
+        Returns:
+            True если успешно
+        """
+        updates = []
+        params = []
+        
+        if total_amount is not None:
+            updates.append("total_amount = ?")
+            params.append(total_amount)
+        
+        if materials_cost is not None:
+            updates.append("materials_cost = ?")
+            params.append(materials_cost)
+        
+        if master_profit is not None:
+            updates.append("master_profit = ?")
+            params.append(master_profit)
+        
+        if company_profit is not None:
+            updates.append("company_profit = ?")
+            params.append(company_profit)
+        
+        if has_review is not None:
+            updates.append("has_review = ?")
+            params.append(1 if has_review else 0)
+        
+        if not updates:
+            return False
+        
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(order_id)
+        
+        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"
+        await self.connection.execute(query, params)
+        await self.connection.commit()
+        
+        logger.info(f"Суммы заявки #{order_id} обновлены")
+        return True
     
     # ==================== AUDIT LOG ====================
     
