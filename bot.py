@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.config import Config
 from app.database import Database
 from app.handlers import routers
-from app.middlewares import RoleCheckMiddleware
+from app.middlewares import RoleCheckMiddleware, global_error_handler
 from app.services.scheduler import TaskScheduler
 
 
@@ -131,13 +131,20 @@ async def main():
 
     logger.info("Подключено %s роутеров", len(routers))
 
+    # Регистрация глобального error handler
+    dp.errors.register(global_error_handler)
+
     # Вызов startup функции перед запуском
     await on_startup(bot, db, scheduler)
 
     # Запуск бота
     try:
         logger.info("Запуск бота...")
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+            drop_pending_updates=True,
+        )
     except Exception as e:
         logger.error("Критическая ошибка: %s", e)
     finally:

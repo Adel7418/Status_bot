@@ -11,6 +11,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import Config, OrderStatus
 from app.database import Database
+from app.utils import safe_send_message
 
 
 logger = logging.getLogger(__name__)
@@ -108,27 +109,26 @@ class TaskScheduler:
             # Отправляем уведомления администраторам
             if alerts:
                 for admin_id in Config.ADMIN_IDS:
-                    try:
-                        text = "⚠️ <b>Превышение SLA</b>\n\n"
-                        text += f"Найдено заявок с превышением SLA: {len(alerts)}\n\n"
+                    text = "⚠️ <b>Превышение SLA</b>\n\n"
+                    text += f"Найдено заявок с превышением SLA: {len(alerts)}\n\n"
 
-                        for alert in alerts[:5]:  # Показываем первые 5
-                            order = alert["order"]
-                            hours = int(alert["time"].total_seconds() / 3600)
+                    for alert in alerts[:5]:  # Показываем первые 5
+                        order = alert["order"]
+                        hours = int(alert["time"].total_seconds() / 3600)
 
-                            status_name = OrderStatus.get_status_name(order.status)
-                            text += (
-                                f"📋 Заявка #{order.id}\n"
-                                f"   Статус: {status_name}\n"
-                                f"   В статусе: {hours} ч.\n\n"
-                            )
+                        status_name = OrderStatus.get_status_name(order.status)
+                        text += (
+                            f"📋 Заявка #{order.id}\n"
+                            f"   Статус: {status_name}\n"
+                            f"   В статусе: {hours} ч.\n\n"
+                        )
 
-                        if len(alerts) > 5:
-                            text += f"<i>И еще {len(alerts) - 5} заявок...</i>"
+                    if len(alerts) > 5:
+                        text += f"<i>И еще {len(alerts) - 5} заявок...</i>"
 
-                        await self.bot.send_message(admin_id, text, parse_mode="HTML")
-                    except Exception as e:
-                        logger.error(f"Failed to send SLA alert to admin {admin_id}: {e}")
+                    await safe_send_message(
+                        self.bot, admin_id, text, parse_mode="HTML", max_attempts=5
+                    )
 
             logger.info(f"SLA check completed. Found {len(alerts)} alerts")
 
@@ -183,17 +183,15 @@ class TaskScheduler:
 
             # Отправляем администраторам
             for admin_id in Config.ADMIN_IDS:
-                try:
-                    await self.bot.send_message(admin_id, text, parse_mode="HTML")
-                except Exception as e:
-                    logger.error(f"Failed to send daily summary to admin {admin_id}: {e}")
+                await safe_send_message(
+                    self.bot, admin_id, text, parse_mode="HTML", max_attempts=5
+                )
 
             # Отправляем диспетчерам
             for dispatcher_id in Config.DISPATCHER_IDS:
-                try:
-                    await self.bot.send_message(dispatcher_id, text, parse_mode="HTML")
-                except Exception as e:
-                    logger.error(f"Failed to send daily summary to dispatcher {dispatcher_id}: {e}")
+                await safe_send_message(
+                    self.bot, dispatcher_id, text, parse_mode="HTML", max_attempts=5
+                )
 
             logger.info("Daily summary sent")
 
@@ -225,64 +223,66 @@ class TaskScheduler:
                     master = await self.db.get_master_by_id(order.assigned_master_id)
 
                     if master:
-                        try:
-                            minutes = int(time_assigned.total_seconds() / 60)
+                        minutes = int(time_assigned.total_seconds() / 60)
 
-                            logger.info(
-                                f"Sending reminder for order #{order.id}: assigned {minutes} minutes ago"
+                        logger.info(
+                            f"Sending reminder for order #{order.id}: assigned {minutes} minutes ago"
+                        )
+
+                        # Определяем, куда отправлять напоминание
+                        # Если есть work_chat_id - отправляем в рабочую группу
+                        # Иначе - в личные сообщения мастеру
+                        target_chat_id = (
+                            master.work_chat_id if master.work_chat_id else master.telegram_id
+                        )
+
+                        if master.work_chat_id:
+                            # Отправляем в группу с упоминанием мастера
+                            reminder_text = (
+                                f"⏰ <b>Напоминание</b>\n\n"
+                                f"У вас есть непринятая заявка #{order.id}\n"
+                                f"🔧 {order.equipment_type}\n"
+                                f"⏱ Назначена {minutes} мин. назад\n\n"
                             )
 
-                            # Определяем, куда отправлять напоминание
-                            # Если есть work_chat_id - отправляем в рабочую группу
-                            # Иначе - в личные сообщения мастеру
-                            target_chat_id = (
-                                master.work_chat_id if master.work_chat_id else master.telegram_id
+                            # Упоминаем мастера в группе
+                            if master.username:
+                                reminder_text += f"👨‍🔧 Мастер: @{master.username}\n\n"
+                            else:
+                                reminder_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
+
+                            reminder_text += "Пожалуйста, примите или отклоните заявку."
+
+                            result = await safe_send_message(
+                                self.bot,
+                                target_chat_id,
+                                reminder_text,
+                                parse_mode="HTML",
+                                max_attempts=5,
                             )
 
-                            if master.work_chat_id:
-                                # Отправляем в группу с упоминанием мастера
-                                reminder_text = (
-                                    f"⏰ <b>Напоминание</b>\n\n"
-                                    f"У вас есть непринятая заявка #{order.id}\n"
-                                    f"🔧 {order.equipment_type}\n"
-                                    f"⏱ Назначена {minutes} мин. назад\n\n"
-                                )
-
-                                # Упоминаем мастера в группе
-                                if master.username:
-                                    reminder_text += f"👨‍🔧 Мастер: @{master.username}\n\n"
-                                else:
-                                    reminder_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
-
-                                reminder_text += "Пожалуйста, примите или отклоните заявку."
-
-                                await self.bot.send_message(
-                                    target_chat_id, reminder_text, parse_mode="HTML"
-                                )
-
+                            if result:
                                 logger.info(
                                     f"Reminder sent to group {target_chat_id} for master {master.telegram_id}"
                                 )
-                            else:
-                                # Отправляем в личные сообщения
-                                await self.bot.send_message(
-                                    target_chat_id,
-                                    f"⏰ <b>Напоминание</b>\n\n"
-                                    f"У вас есть непринятая заявка #{order.id}\n"
-                                    f"🔧 {order.equipment_type}\n"
-                                    f"⏱ Назначена {minutes} мин. назад\n\n"
-                                    f"Пожалуйста, примите или отклоните заявку.",
-                                    parse_mode="HTML",
-                                )
+                        else:
+                            # Отправляем в личные сообщения
+                            result = await safe_send_message(
+                                self.bot,
+                                target_chat_id,
+                                f"⏰ <b>Напоминание</b>\n\n"
+                                f"У вас есть непринятая заявка #{order.id}\n"
+                                f"🔧 {order.equipment_type}\n"
+                                f"⏱ Назначена {minutes} мин. назад\n\n"
+                                f"Пожалуйста, примите или отклоните заявку.",
+                                parse_mode="HTML",
+                                max_attempts=5,
+                            )
 
+                            if result:
                                 logger.info(
                                     f"Reminder sent to DM {target_chat_id} for master {master.telegram_id}"
                                 )
-
-                        except Exception as e:
-                            logger.error(
-                                f"Failed to send reminder to master {master.telegram_id}: {e}"
-                            )
 
             logger.info(
                 f"Reminders check completed. Found {len(orders)} assigned orders, threshold: 15 minutes"

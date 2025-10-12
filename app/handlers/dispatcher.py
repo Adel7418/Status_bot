@@ -9,6 +9,8 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from pydantic import ValidationError
+
 from app.config import MAX_DESCRIPTION_LENGTH, MAX_NOTES_LENGTH, OrderStatus, UserRole
 from app.database import Database
 from app.decorators import handle_errors
@@ -20,8 +22,9 @@ from app.keyboards.inline import (
     get_orders_filter_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard, get_confirm_keyboard, get_skip_cancel_keyboard
+from app.schemas import OrderCreateSchema
 from app.states import CreateOrderStates
-from app.utils import format_datetime, format_phone, log_action, validate_phone
+from app.utils import format_datetime, format_phone, log_action, safe_send_message, validate_phone
 
 
 logger = logging.getLogger(__name__)
@@ -95,7 +98,7 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
 @handle_errors
 async def process_description(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка описания проблемы
+    Обработка описания проблемы с Pydantic валидацией
 
     Args:
         message: Сообщение
@@ -107,16 +110,42 @@ async def process_description(message: Message, state: FSMContext, user_role: st
 
     description = message.text.strip()
 
-    if len(description) < 10:
+    # Валидация через Pydantic
+    try:
+        # Создаем временную схему для валидации только description
+        from pydantic import BaseModel, Field, field_validator
+        
+        class DescriptionValidator(BaseModel):
+            description: str = Field(..., min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
+            
+            @field_validator('description')
+            @classmethod
+            def validate_description(cls, v: str) -> str:
+                import re
+                v = v.strip()
+                if len(v) < 10:
+                    raise ValueError("Описание слишком короткое. Минимум 10 символов")
+                
+                # Базовая защита от SQL injection
+                suspicious_patterns = [
+                    r";\s*(DROP|DELETE|UPDATE|INSERT|ALTER)\s+",
+                    r"--",
+                    r"/\*.*\*/",
+                    r"UNION\s+SELECT",
+                ]
+                for pattern in suspicious_patterns:
+                    if re.search(pattern, v, re.IGNORECASE):
+                        raise ValueError("Описание содержит недопустимые символы")
+                
+                return v
+        
+        validated = DescriptionValidator(description=description)
+        description = validated.description
+        
+    except ValidationError as e:
+        error_msg = e.errors()[0]['msg']
         await message.answer(
-            "❌ Описание слишком короткое. Опишите проблему подробнее (минимум 10 символов):",
-            reply_markup=get_cancel_keyboard(),
-        )
-        return
-
-    if len(description) > MAX_DESCRIPTION_LENGTH:
-        await message.answer(
-            f"❌ Описание слишком длинное. Максимум {MAX_DESCRIPTION_LENGTH} символов:",
+            f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
         )
         return
@@ -131,7 +160,7 @@ async def process_description(message: Message, state: FSMContext, user_role: st
 @handle_errors
 async def process_client_name(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка ФИО клиента
+    Обработка ФИО клиента с Pydantic валидацией
 
     Args:
         message: Сообщение
@@ -143,22 +172,42 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
 
     client_name = message.text.strip()
 
-    # Проверяем, что ФИО содержит хотя бы имя и фамилию
-    name_parts = client_name.split()
-    if len(name_parts) < 2 or len(client_name) < 5:
+    # Валидация через Pydantic
+    try:
+        from pydantic import BaseModel, Field, field_validator
+        import re
+        
+        class ClientNameValidator(BaseModel):
+            client_name: str = Field(..., min_length=5, max_length=200)
+            
+            @field_validator('client_name')
+            @classmethod
+            def validate_client_name(cls, v: str) -> str:
+                v = v.strip()
+                parts = v.split()
+                
+                if len(parts) < 2:
+                    raise ValueError("ФИО должно содержать минимум имя и фамилию")
+                
+                for part in parts:
+                    if not re.match(r"^[А-Яа-яЁёA-Za-z\-]+$", part):
+                        raise ValueError("ФИО должно содержать только буквы, пробелы и дефисы")
+                
+                if len(v) < 5:
+                    raise ValueError("ФИО слишком короткое")
+                
+                return v
+        
+        validated = ClientNameValidator(client_name=client_name)
+        client_name = validated.client_name
+        
+    except ValidationError as e:
+        error_msg = e.errors()[0]['msg']
         await message.answer(
-            "❌ Пожалуйста, введите полное ФИО (имя и фамилию):", reply_markup=get_cancel_keyboard()
+            f"❌ {error_msg}\n\nПопробуйте еще раз:",
+            reply_markup=get_cancel_keyboard(),
         )
         return
-
-    # Проверяем, что все части содержат только буквы
-    for part in name_parts:
-        if not part.isalpha():
-            await message.answer(
-                "❌ ФИО должно содержать только буквы. Попробуйте еще раз:",
-                reply_markup=get_cancel_keyboard(),
-            )
-            return
 
     await state.update_data(client_name=client_name)
     await state.set_state(CreateOrderStates.client_address)
@@ -170,7 +219,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
 @handle_errors
 async def process_client_address(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка адреса клиента
+    Обработка адреса клиента с Pydantic валидацией
 
     Args:
         message: Сообщение
@@ -182,9 +231,35 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
 
     client_address = message.text.strip()
 
-    if len(client_address) < 10:
+    # Валидация через Pydantic
+    try:
+        from pydantic import BaseModel, Field, field_validator
+        import re
+        
+        class ClientAddressValidator(BaseModel):
+            client_address: str = Field(..., min_length=10, max_length=500)
+            
+            @field_validator('client_address')
+            @classmethod
+            def validate_client_address(cls, v: str) -> str:
+                v = v.strip()
+                
+                if len(v) < 10:
+                    raise ValueError("Адрес слишком короткий. Минимум 10 символов")
+                
+                # Проверка что адрес содержит хотя бы одну цифру (номер дома)
+                if not re.search(r"\d", v):
+                    raise ValueError("Адрес должен содержать номер дома")
+                
+                return v
+        
+        validated = ClientAddressValidator(client_address=client_address)
+        client_address = validated.client_address
+        
+    except ValidationError as e:
+        error_msg = e.errors()[0]['msg']
         await message.answer(
-            "❌ Адрес слишком короткий. Укажите более подробный адрес (минимум 10 символов):",
+            f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
         )
         return
@@ -203,7 +278,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
 @handle_errors
 async def process_client_phone(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка телефона клиента
+    Обработка телефона клиента с Pydantic валидацией
 
     Args:
         message: Сообщение
@@ -215,14 +290,41 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
     phone = message.text.strip()
 
-    if not validate_phone(phone):
+    # Валидация через Pydantic (использует те же правила что и в схеме)
+    try:
+        from pydantic import BaseModel, Field, field_validator
+        import re
+        
+        class ClientPhoneValidator(BaseModel):
+            client_phone: str = Field(..., min_length=10, max_length=20)
+            
+            @field_validator('client_phone')
+            @classmethod
+            def validate_client_phone(cls, v: str) -> str:
+                cleaned = re.sub(r"[^\d+]", "", v.strip())
+                patterns = [r"^\+7\d{10}$", r"^8\d{10}$", r"^7\d{10}$"]
+                
+                if not any(re.match(pattern, cleaned) for pattern in patterns):
+                    raise ValueError("Неверный формат телефона. Ожидается: +7XXXXXXXXXX")
+                
+                # Форматируем
+                if cleaned.startswith("8") and len(cleaned) == 11:
+                    cleaned = "+7" + cleaned[1:]
+                elif cleaned.startswith("7") and len(cleaned) == 11:
+                    cleaned = "+" + cleaned
+                
+                return cleaned
+        
+        validated = ClientPhoneValidator(client_phone=phone)
+        phone = validated.client_phone
+        
+    except ValidationError as e:
+        error_msg = e.errors()[0]['msg']
         await message.answer(
-            "❌ Неверный формат номера телефона.\n" "Введите номер в формате: +7XXXXXXXXXX",
+            f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
         )
         return
-
-    phone = format_phone(phone)
 
     await state.update_data(client_phone=phone)
     await state.set_state(CreateOrderStates.notes)
@@ -337,7 +439,7 @@ async def show_order_confirmation(message: Message, state: FSMContext):
 @handle_errors
 async def confirm_create_order(message: Message, state: FSMContext, user_role: str):
     """
-    Подтверждение создания заявки
+    Подтверждение создания заявки с полной Pydantic валидацией
 
     Args:
         message: Сообщение
@@ -346,12 +448,9 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
     """
     data = await state.get_data()
 
-    db = Database()
-    await db.connect()
-
+    # КРИТИЧНО: Финальная валидация всех данных через Pydantic перед сохранением в БД
     try:
-        # Создаем заявку
-        order = await db.create_order(
+        order_data = OrderCreateSchema(
             equipment_type=data["equipment_type"],
             description=data["description"],
             client_name=data["client_name"],
@@ -359,6 +458,39 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             client_phone=data["client_phone"],
             dispatcher_id=message.from_user.id,
             notes=data.get("notes"),
+        )
+        logger.info(
+            f"Order data validated successfully for dispatcher {message.from_user.id}"
+        )
+    except ValidationError as e:
+        # Если валидация не прошла - отменяем создание
+        logger.error(f"Order validation failed: {e}")
+        await state.clear()
+        
+        from app.keyboards.reply import get_main_menu_keyboard
+        
+        error_details = "\n".join([f"• {err['msg']}" for err in e.errors()])
+        await message.answer(
+            f"❌ <b>Ошибка валидации данных заявки:</b>\n\n{error_details}\n\n"
+            "Пожалуйста, начните создание заявки заново.",
+            parse_mode="HTML",
+            reply_markup=get_main_menu_keyboard(user_role)
+        )
+        return
+
+    db = Database()
+    await db.connect()
+
+    try:
+        # Создаем заявку с валидированными данными
+        order = await db.create_order(
+            equipment_type=order_data.equipment_type,
+            description=order_data.description,
+            client_name=order_data.client_name,
+            client_address=order_data.client_address,
+            client_phone=order_data.client_phone,
+            dispatcher_id=order_data.dispatcher_id,
+            notes=order_data.notes,
         )
 
         # Добавляем в лог
@@ -408,6 +540,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
 
 
 @router.message(F.text == "📋 Все заявки")
+@handle_errors
 async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
     """
     Просмотр всех заявок
@@ -431,6 +564,7 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
 
 
 @router.callback_query(F.data.startswith("filter_orders:"))
+@handle_errors
 async def callback_filter_orders(callback: CallbackQuery, user_role: str):
     """
     Фильтрация заявок
@@ -491,6 +625,7 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
 
 
 @router.callback_query(F.data.startswith("view_order:"))
+@handle_errors
 async def callback_view_order(callback: CallbackQuery, user_role: str):
     """
     Просмотр детальной информации о заявке (для диспетчеров/админов)
@@ -597,6 +732,7 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
 
 
 @router.callback_query(F.data.startswith("select_master_for_order:"))
+@handle_errors
 async def callback_select_master_for_order(callback: CallbackQuery, user_role: str):
     """
     Назначение выбранного мастера на заявку
@@ -629,77 +765,84 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             details=f"Assigned master {master_id} to order #{order_id}",
         )
 
-        # Уведомляем мастера
-        try:
-            order = await db.get_order_by_id(order_id)
+        # Уведомляем мастера с retry
+        order = await db.get_order_by_id(order_id)
 
-            # Определяем, куда отправлять уведомление
-            # Если есть work_chat_id - отправляем в рабочую группу
-            # Иначе - в личные сообщения мастеру
-            target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+        # Определяем, куда отправлять уведомление
+        # Если есть work_chat_id - отправляем в рабочую группу
+        # Иначе - в личные сообщения мастеру
+        target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
 
-            logger.info(
-                f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}"
+        logger.info(
+            f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}"
+        )
+
+        # Если отправляем в группу, создаем полное сообщение с клавиатурой
+        if master.work_chat_id:
+            from app.keyboards.inline import get_group_order_keyboard
+
+            notification_text = (
+                f"🔔 <b>Новая заявка назначена!</b>\n\n"
+                f"📋 <b>Заявка #{order.id}</b>\n"
+                f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                f"📝 <b>Описание:</b> {order.description}\n\n"
+                f"👤 <b>Клиент:</b> {order.client_name}\n"
+                f"📍 <b>Адрес:</b> {order.client_address}\n"
+                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
             )
 
-            # Если отправляем в группу, создаем полное сообщение с клавиатурой
-            if master.work_chat_id:
-                from app.keyboards.inline import get_group_order_keyboard
+            if order.notes:
+                notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
 
-                notification_text = (
-                    f"🔔 <b>Новая заявка назначена!</b>\n\n"
-                    f"📋 <b>Заявка #{order.id}</b>\n"
-                    f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
-                    f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-                    f"📝 <b>Описание:</b> {order.description}\n\n"
-                    f"👤 <b>Клиент:</b> {order.client_name}\n"
-                    f"📍 <b>Адрес:</b> {order.client_address}\n"
-                    f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-                )
+            # Упоминаем мастера в группе
+            if master.username:
+                notification_text += f"👨‍🔧 <b>Мастер:</b> @{master.username}\n\n"
+            else:
+                notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
 
-                if order.notes:
-                    notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+            notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
 
-                # Упоминаем мастера в группе
-                if master.username:
-                    notification_text += f"👨‍🔧 <b>Мастер:</b> @{master.username}\n\n"
-                else:
-                    notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
+            keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
-                notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-                notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
+            logger.info(f"Notification text prepared: {len(notification_text)} chars")
 
-                keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
+            result = await safe_send_message(
+                callback.bot,
+                target_chat_id,
+                notification_text,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+                max_attempts=5,
+            )
 
-                logger.info(f"Notification text prepared: {len(notification_text)} chars")
-
-                await callback.bot.send_message(
-                    target_chat_id, notification_text, parse_mode="HTML", reply_markup=keyboard
-                )
-
+            if result:
                 logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
             else:
-                # Отправляем в личные сообщения (старая логика)
-                notification_text = (
-                    f"🔔 <b>Новая заявка!</b>\n\n"
-                    f"📋 Заявка #{order.id}\n"
-                    f"🔧 {order.equipment_type}\n"
-                    f"📝 {order.description}\n\n"
-                    f"Используйте /start и 'Мои заявки' для просмотра деталей."
-                )
+                logger.error(f"CRITICAL: Failed to notify master in group {target_chat_id}")
+        else:
+            # Отправляем в личные сообщения (старая логика)
+            notification_text = (
+                f"🔔 <b>Новая заявка!</b>\n\n"
+                f"📋 Заявка #{order.id}\n"
+                f"🔧 {order.equipment_type}\n"
+                f"📝 {order.description}\n\n"
+                f"Используйте /start и 'Мои заявки' для просмотра деталей."
+            )
 
-                await callback.bot.send_message(
-                    target_chat_id, notification_text, parse_mode="HTML"
-                )
+            result = await safe_send_message(
+                callback.bot,
+                target_chat_id,
+                notification_text,
+                parse_mode="HTML",
+                max_attempts=5,
+            )
 
+            if result:
                 logger.info(f"SUCCESS: Notification sent to DM {target_chat_id}")
-
-        except Exception as e:
-            logger.error(f"CRITICAL: Failed to notify master: {e}")
-            logger.error(f"Exception type: {type(e)}")
-            import traceback
-
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            else:
+                logger.error(f"CRITICAL: Failed to notify master in DM {target_chat_id}")
 
         await callback.message.edit_text(
             f"✅ <b>Мастер назначен!</b>\n\n"
@@ -821,82 +964,82 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
             details=f"Reassigned order #{order_id} from master {old_master_id} to master {new_master_id}",
         )
 
-        # Уведомляем старого мастера о снятии заявки
+        # Уведомляем старого мастера о снятии заявки с retry
         if old_master:
-            try:
-                target_chat_id = (
-                    old_master.work_chat_id if old_master.work_chat_id else old_master.telegram_id
-                )
-                await callback.bot.send_message(
-                    target_chat_id,
-                    f"ℹ️ <b>Заявка переназначена</b>\n\n"
-                    f"📋 Заявка #{order_id} была переназначена на другого мастера.\n"
-                    f"🔧 {order.equipment_type}\n"
-                    f"📝 {order.description}",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify old master {old_master.telegram_id}: {e}")
-
-        # Уведомляем нового мастера
-        try:
-            # Определяем, куда отправлять уведомление
             target_chat_id = (
-                new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
+                old_master.work_chat_id if old_master.work_chat_id else old_master.telegram_id
+            )
+            await safe_send_message(
+                callback.bot,
+                target_chat_id,
+                f"ℹ️ <b>Заявка переназначена</b>\n\n"
+                f"📋 Заявка #{order_id} была переназначена на другого мастера.\n"
+                f"🔧 {order.equipment_type}\n"
+                f"📝 {order.description}",
+                parse_mode="HTML",
+                max_attempts=3,
             )
 
-            # Если отправляем в группу, создаем полное сообщение с клавиатурой
-            if new_master.work_chat_id:
-                from app.keyboards.inline import get_group_order_keyboard
+        # Уведомляем нового мастера с retry
+        # Определяем, куда отправлять уведомление
+        target_chat_id = (
+            new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
+        )
 
-                notification_text = (
-                    f"🔔 <b>Новая заявка назначена!</b>\n\n"
-                    f"📋 <b>Заявка #{order.id}</b>\n"
-                    f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
-                    f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-                    f"📝 <b>Описание:</b> {order.description}\n\n"
-                    f"👤 <b>Клиент:</b> {order.client_name}\n"
-                    f"📍 <b>Адрес:</b> {order.client_address}\n"
-                    f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-                )
+        # Если отправляем в группу, создаем полное сообщение с клавиатурой
+        if new_master.work_chat_id:
+            from app.keyboards.inline import get_group_order_keyboard
 
-                if order.notes:
-                    notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+            notification_text = (
+                f"🔔 <b>Новая заявка назначена!</b>\n\n"
+                f"📋 <b>Заявка #{order.id}</b>\n"
+                f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                f"📝 <b>Описание:</b> {order.description}\n\n"
+                f"👤 <b>Клиент:</b> {order.client_name}\n"
+                f"📍 <b>Адрес:</b> {order.client_address}\n"
+                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+            )
 
-                # Упоминаем мастера в группе
-                if new_master.username:
-                    notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master.username}\n\n"
-                else:
-                    notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
+            if order.notes:
+                notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
 
-                notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-                notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(datetime.now())}"
-
-                keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
-
-                await callback.bot.send_message(
-                    target_chat_id, notification_text, parse_mode="HTML", reply_markup=keyboard
-                )
+            # Упоминаем мастера в группе
+            if new_master.username:
+                notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master.username}\n\n"
             else:
-                # Отправляем в личные сообщения
-                notification_text = (
-                    f"🔔 <b>Новая заявка!</b>\n\n"
-                    f"📋 Заявка #{order.id}\n"
-                    f"🔧 {order.equipment_type}\n"
-                    f"📝 {order.description}\n\n"
-                    f"Используйте /start и 'Мои заявки' для просмотра деталей."
-                )
+                notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
 
-                await callback.bot.send_message(
-                    target_chat_id, notification_text, parse_mode="HTML"
-                )
+            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+            notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(datetime.now())}"
 
-            logger.info(
-                f"Notification sent to new master {'group' if new_master.work_chat_id else 'DM'} {target_chat_id}"
+            keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
+
+            result = await safe_send_message(
+                callback.bot,
+                target_chat_id,
+                notification_text,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+                max_attempts=5,
+            )
+            if result:
+                logger.info(f"Notification sent to new master group {target_chat_id}")
+        else:
+            # Отправляем в личные сообщения
+            notification_text = (
+                f"🔔 <b>Новая заявка!</b>\n\n"
+                f"📋 Заявка #{order.id}\n"
+                f"🔧 {order.equipment_type}\n"
+                f"📝 {order.description}\n\n"
+                f"Используйте /start и 'Мои заявки' для просмотра деталей."
             )
 
-        except Exception as e:
-            logger.error(f"Failed to notify new master: {e}")
+            result = await safe_send_message(
+                callback.bot, target_chat_id, notification_text, parse_mode="HTML", max_attempts=5
+            )
+            if result:
+                logger.info(f"Notification sent to new master DM {target_chat_id}")
 
         old_master_name = old_master.get_display_name() if old_master else "Неизвестен"
 
@@ -962,20 +1105,19 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
             details=f"Unassigned master {order.assigned_master_id} from order #{order_id}",
         )
 
-        # Уведомляем мастера
+        # Уведомляем мастера с retry
         if master:
-            try:
-                target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
-                await callback.bot.send_message(
-                    target_chat_id,
-                    f"ℹ️ <b>Заявка снята</b>\n\n"
-                    f"📋 Заявка #{order_id} была снята с вас диспетчером.\n"
-                    f"🔧 {order.equipment_type}\n"
-                    f"📝 {order.description}",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+            target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+            await safe_send_message(
+                callback.bot,
+                target_chat_id,
+                f"ℹ️ <b>Заявка снята</b>\n\n"
+                f"📋 Заявка #{order_id} была снята с вас диспетчером.\n"
+                f"🔧 {order.equipment_type}\n"
+                f"📝 {order.description}",
+                parse_mode="HTML",
+                max_attempts=3,
+            )
 
         master_name = master.get_display_name() if master else "Неизвестен"
 
@@ -1064,17 +1206,17 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
             details=f"Refused order #{order_id}",
         )
 
-        # Уведомляем мастера если он был назначен
+        # Уведомляем мастера если он был назначен, с retry
         if order.assigned_master_id:
             master = await db.get_master_by_id(order.assigned_master_id)
-            try:
-                await callback.bot.send_message(
+            if master:
+                await safe_send_message(
+                    callback.bot,
                     master.telegram_id,
                     f"ℹ️ Заявка #{order_id} была отклонена диспетчером.",
                     parse_mode="HTML",
+                    max_attempts=3,
                 )
-            except Exception as e:
-                logger.error(f"Failed to notify master {master.telegram_id}: {e}")
 
         await callback.message.edit_text(f"❌ Заявка #{order_id} отклонена.")
 
