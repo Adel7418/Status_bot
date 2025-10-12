@@ -83,9 +83,10 @@ def check_database():
     cursor.execute(
         """
         SELECT o.id, o.equipment_type, o.client_name, o.status,
-               u1.first_name || ' ' || u1.last_name as dispatcher_name,
-               u2.first_name || ' ' || u2.last_name as master_name,
-               o.total_amount, o.notes, o.scheduled_time, o.created_at
+               u1.first_name || ' ' || COALESCE(u1.last_name, '') as dispatcher_name,
+               u2.first_name || ' ' || COALESCE(u2.last_name, '') as master_name,
+               o.total_amount, o.notes, o.scheduled_time, o.created_at,
+               o.dispatcher_id, o.assigned_master_id
         FROM orders o
         LEFT JOIN users u1 ON o.dispatcher_id = u1.telegram_id
         LEFT JOIN masters m ON o.assigned_master_id = m.id
@@ -113,11 +114,23 @@ def check_database():
                 "DR": "⏳",
             }.get(order["status"], "❓")
             
+            # Форматируем имена с fallback на ID
+            dispatcher_display = (
+                order['dispatcher_name'].strip() if order['dispatcher_name'] and order['dispatcher_name'].strip()
+                else f"ID: {order['dispatcher_id']}" if order['dispatcher_id']
+                else '-'
+            )
+            master_display = (
+                order['master_name'].strip() if order['master_name'] and order['master_name'].strip()
+                else f"Master ID: {order['assigned_master_id']}" if order['assigned_master_id']
+                else '-'
+            )
+            
             print(f"Заявка #{order['id']} | {status_emoji} {order['status']}")
             print(f"   Оборудование: {order['equipment_type']}")
             print(f"   Клиент: {order['client_name']}")
-            print(f"   Диспетчер: {order['dispatcher_name'] or '-'}")
-            print(f"   Мастер: {order['master_name'] or '-'}")
+            print(f"   Диспетчер: {dispatcher_display}")
+            print(f"   Мастер: {master_display}")
             if order['notes']:
                 print(f"   📝 Заметки: {order['notes']}")
             if order['scheduled_time']:
