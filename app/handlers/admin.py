@@ -606,7 +606,7 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
         )
         
         # Обновляем сообщение
-        await callback_manage_master(callback)
+        await callback_manage_master(callback, user_role)
         
         log_action(callback.from_user.id, "DEACTIVATE_MASTER", f"Master ID: {telegram_id}")
         
@@ -643,7 +643,7 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         )
         
         # Обновляем сообщение
-        await callback_manage_master(callback)
+        await callback_manage_master(callback, user_role)
         
         log_action(callback.from_user.id, "ACTIVATE_MASTER", f"Master ID: {telegram_id}")
         
