@@ -31,7 +31,7 @@ def handle_errors(func: Callable) -> Callable:
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+            logger.exception("Error in %s: %s", func.__name__, e)
 
             # Ищем объект сообщения или callback query в аргументах
             message_or_callback = None
@@ -137,7 +137,7 @@ def handle_database_errors(func: Callable) -> Callable:
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Database error in {func.__name__}: {e}", exc_info=True)
+            logger.exception("Database error in %s: %s", func.__name__, e)
 
             # Ищем объект сообщения или callback query в аргументах
             message_or_callback = None

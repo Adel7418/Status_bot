@@ -2,6 +2,7 @@
 Конфигурация бота
 """
 import os
+from typing import ClassVar
 
 from dotenv import load_dotenv
 
@@ -17,12 +18,12 @@ class Config:
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 
     # Telegram IDs администраторов
-    ADMIN_IDS: list[int] = [
+    ADMIN_IDS: ClassVar[list[int]] = [
         int(id_) for id_ in os.getenv("ADMIN_IDS", "").split(",") if id_.strip()
     ]
 
     # Telegram IDs диспетчеров
-    DISPATCHER_IDS: list[int] = [
+    DISPATCHER_IDS: ClassVar[list[int]] = [
         int(id_) for id_ in os.getenv("DISPATCHER_IDS", "").split(",") if id_.strip()
     ]
 

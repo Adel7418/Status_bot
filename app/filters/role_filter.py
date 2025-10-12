@@ -29,14 +29,14 @@ class RoleFilter(BaseFilter):
 
     async def __call__(
         self,
-        event: Message | CallbackQuery,
+        _event: Message | CallbackQuery,
         **kwargs
     ) -> bool:
         """
         Проверка роли
 
         Args:
-            event: Событие
+            _event: Событие (не используется, но требуется для совместимости с aiogram)
             **kwargs: Дополнительные данные, включая user_roles из middleware
 
         Returns:
