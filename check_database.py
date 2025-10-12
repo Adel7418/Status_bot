@@ -208,6 +208,53 @@ def check_database():
             print(f"   Роли: {roles_str}")
             print()
 
+    # Проверка истории изменений статусов (последние 20)
+    cursor.execute(
+        """
+        SELECT 
+            h.id,
+            h.order_id,
+            h.old_status,
+            h.new_status,
+            h.changed_by,
+            u.first_name || ' ' || COALESCE(u.last_name, '') as changed_by_name,
+            h.changed_at,
+            h.notes
+        FROM order_status_history h
+        LEFT JOIN users u ON h.changed_by = u.telegram_id
+        ORDER BY h.changed_at DESC
+        LIMIT 20
+    """
+    )
+    history = cursor.fetchall()
+
+    if history:
+        print("\n" + "="*80)
+        print("📜 ИСТОРИЯ ИЗМЕНЕНИЙ СТАТУСОВ (последние 20)")
+        print("="*80)
+        print()
+        
+        for h in history:
+            changed_by_name = h['changed_by_name'].strip() if h['changed_by_name'] else f"ID: {h['changed_by']}"
+            status_names = {
+                "NEW": "🆕 Новая",
+                "ASSIGNED": "👨‍🔧 Назначена",
+                "ACCEPTED": "✅ Принята",
+                "ONSITE": "🏠 На объекте",
+                "CLOSED": "💰 Завершена",
+                "REFUSED": "❌ Отклонена",
+                "DR": "⏳ Длительный ремонт",
+            }
+            old = status_names.get(h['old_status'], h['old_status']) if h['old_status'] else "-"
+            new = status_names.get(h['new_status'], h['new_status'])
+            
+            print(f"Заявка #{h['order_id']} | {old} → {new}")
+            print(f"   Изменил: {changed_by_name}")
+            print(f"   Время: {h['changed_at']}")
+            if h['notes']:
+                print(f"   Примечание: {h['notes']}")
+            print()
+
     conn.close()
 
 

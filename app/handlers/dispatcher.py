@@ -1272,7 +1272,9 @@ async def callback_close_order(callback: CallbackQuery, user_role: str):
     await db.connect()
 
     try:
-        await db.update_order_status(order_id, OrderStatus.CLOSED)
+        await db.update_order_status(
+            order_id, OrderStatus.CLOSED, changed_by=callback.from_user.id
+        )
 
         await db.add_audit_log(
             user_id=callback.from_user.id, action="CLOSE_ORDER", details=f"Closed order #{order_id}"
@@ -1307,7 +1309,9 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
 
     try:
         order = await db.get_order_by_id(order_id)
-        await db.update_order_status(order_id, OrderStatus.REFUSED)
+        await db.update_order_status(
+            order_id, OrderStatus.REFUSED, changed_by=callback.from_user.id
+        )
 
         await db.add_audit_log(
             user_id=callback.from_user.id,

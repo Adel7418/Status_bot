@@ -194,7 +194,9 @@ async def callback_accept_order(callback: CallbackQuery):
             return
 
         # Обновляем статус
-        await db.update_order_status(order_id, OrderStatus.ACCEPTED)
+        await db.update_order_status(
+            order_id, OrderStatus.ACCEPTED, changed_by=callback.from_user.id
+        )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -333,7 +335,9 @@ async def callback_onsite_order(callback: CallbackQuery):
             return
 
         # Обновляем статус
-        await db.update_order_status(order_id, OrderStatus.ONSITE)
+        await db.update_order_status(
+            order_id, OrderStatus.ONSITE, changed_by=callback.from_user.id
+        )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -437,7 +441,9 @@ async def callback_dr_order(callback: CallbackQuery):
             return
 
         # Обновляем статус
-        await db.update_order_status(order_id, OrderStatus.DR)
+        await db.update_order_status(
+            order_id, OrderStatus.DR, changed_by=callback.from_user.id
+        )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -666,7 +672,9 @@ async def process_review_confirmation(message: Message, state: FSMContext):
         )
 
         # Обновляем статус на CLOSED
-        await db.update_order_status(order_id, OrderStatus.CLOSED)
+        await db.update_order_status(
+            order_id, OrderStatus.CLOSED, changed_by=callback.from_user.id
+        )
 
         # Добавляем в лог
         await db.add_audit_log(

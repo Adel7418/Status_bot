@@ -201,6 +201,23 @@ class Database:
         """
         )
 
+        # Создание таблицы order_status_history для отслеживания изменений статусов
+        await self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS order_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                old_status TEXT,
+                new_status TEXT NOT NULL,
+                changed_by INTEGER,
+                changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT,
+                FOREIGN KEY (order_id) REFERENCES orders(id),
+                FOREIGN KEY (changed_by) REFERENCES users(telegram_id)
+            )
+        """
+        )
+
         await self.connection.commit()
         logger.info("База данных инициализирована")
 
@@ -974,25 +991,97 @@ class Database:
             )
         return orders
 
-    async def update_order_status(self, order_id: int, status: str) -> bool:
+    async def update_order_status(
+        self, order_id: int, status: str, changed_by: int | None = None, notes: str | None = None
+    ) -> bool:
         """
-        Обновление статуса заявки
+        Обновление статуса заявки с логированием изменений
 
         Args:
             order_id: ID заявки
             status: Новый статус
+            changed_by: ID пользователя, который изменил статус
+            notes: Дополнительные заметки об изменении
 
         Returns:
             True если успешно
         """
+        # Получаем текущий статус перед изменением
+        cursor = await self.connection.execute(
+            "SELECT status FROM orders WHERE id = ?", (order_id,)
+        )
+        row = await cursor.fetchone()
+        old_status = row["status"] if row else None
+
+        # Обновляем статус заявки
         await self.connection.execute(
             "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (status, order_id),
         )
+
+        # Логируем изменение статуса в историю
+        await self.connection.execute(
+            """
+            INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, notes)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (order_id, old_status, status, changed_by, notes),
+        )
+
         await self.connection.commit()
 
-        logger.info(f"Статус заявки #{order_id} изменен на {status}")
+        logger.info(
+            f"Статус заявки #{order_id} изменен с {old_status} на {status}"
+            + (f" пользователем {changed_by}" if changed_by else "")
+        )
         return True
+
+    async def get_order_status_history(self, order_id: int) -> list[dict]:
+        """
+        Получение истории изменений статусов заявки
+
+        Args:
+            order_id: ID заявки
+
+        Returns:
+            Список изменений статусов
+        """
+        cursor = await self.connection.execute(
+            """
+            SELECT 
+                h.id,
+                h.order_id,
+                h.old_status,
+                h.new_status,
+                h.changed_by,
+                u.first_name || ' ' || COALESCE(u.last_name, '') as changed_by_name,
+                h.changed_at,
+                h.notes
+            FROM order_status_history h
+            LEFT JOIN users u ON h.changed_by = u.telegram_id
+            WHERE h.order_id = ?
+            ORDER BY h.changed_at ASC
+            """,
+            (order_id,),
+        )
+        rows = await cursor.fetchall()
+
+        history = []
+        for row in rows:
+            history.append(
+                {
+                    "id": row["id"],
+                    "order_id": row["order_id"],
+                    "old_status": row["old_status"],
+                    "new_status": row["new_status"],
+                    "changed_by": row["changed_by"],
+                    "changed_by_name": row["changed_by_name"].strip() if row["changed_by_name"] else None,
+                    "changed_at": row["changed_at"],
+                    "notes": row["notes"],
+                }
+            )
+
+        return history
 
     async def assign_master_to_order(self, order_id: int, master_id: int) -> bool:
         """
