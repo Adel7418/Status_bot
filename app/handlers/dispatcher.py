@@ -824,20 +824,34 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             else:
                 logger.error(f"CRITICAL: Failed to notify master in group {target_chat_id}")
         else:
-            # Отправляем в личные сообщения (старая логика)
+            # Отправляем в личные сообщения
+            from app.keyboards.inline import get_group_order_keyboard
+
             notification_text = (
-                f"🔔 <b>Новая заявка!</b>\n\n"
-                f"📋 Заявка #{order.id}\n"
-                f"🔧 {order.equipment_type}\n"
-                f"📝 {order.description}\n\n"
-                f"Используйте /start и 'Мои заявки' для просмотра деталей."
+                f"🔔 <b>Новая заявка назначена!</b>\n\n"
+                f"📋 <b>Заявка #{order.id}</b>\n"
+                f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                f"📝 <b>Описание:</b> {order.description}\n\n"
+                f"👤 <b>Клиент:</b> {order.client_name}\n"
+                f"📍 <b>Адрес:</b> {order.client_address}\n"
+                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
             )
+
+            if order.notes:
+                notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+
+            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+            notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
+
+            keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
             result = await safe_send_message(
                 callback.bot,
                 target_chat_id,
                 notification_text,
                 parse_mode="HTML",
+                reply_markup=keyboard,
                 max_attempts=5,
             )
 
