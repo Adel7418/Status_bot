@@ -28,22 +28,21 @@ def check_database():
     )
     users = cursor.fetchall()
 
+    print("\n" + "="*80)
+    print("👥 ПОЛЬЗОВАТЕЛИ")
+    print("="*80)
+    
     if users:
-        users_data = []
+        print(f"\nВсего пользователей: {len(users)}\n")
         for user in users:
-            users_data.append(
-                [
-                    user["id"],
-                    user["telegram_id"],
-                    user["username"] or "-",
-                    user["first_name"] or "-",
-                    user["last_name"] or "-",
-                    user["role"],  # Теперь может быть "DISPATCHER,MASTER"
-                ]
-            )
-
+            print(f"ID: {user['id']} | TG: {user['telegram_id']}")
+            print(f"   Username: @{user['username'] or '-'}")
+            print(f"   Имя: {user['first_name'] or '-'} {user['last_name'] or '-'}")
+            print(f"   Роль: {user['role']}")
+            print(f"   Создан: {user['created_at']}")
+            print()
     else:
-        pass
+        print("Пользователей нет\n")
 
     # Проверка мастеров
     cursor.execute(
@@ -58,28 +57,27 @@ def check_database():
     )
     masters = cursor.fetchall()
 
+    print("\n" + "="*80)
+    print("👨‍🔧 МАСТЕРА")
+    print("="*80)
+    
     if masters:
-        masters_data = []
+        print(f"\nВсего мастеров: {len(masters)}\n")
         for master in masters:
             name = f"{master['first_name'] or ''} {master['last_name'] or ''}".strip() or "-"
-            status = "✅" if master["is_approved"] else "⏳"
-            active = "🟢" if master["is_active"] else "🔴"
+            status = "✅ Подтвержден" if master["is_approved"] else "⏳ Ожидает"
+            active = "🟢 Активен" if master["is_active"] else "🔴 Неактивен"
             work_chat = master["work_chat_id"] if master["work_chat_id"] else "-"
-
-            masters_data.append(
-                [
-                    master["id"],
-                    master["telegram_id"],
-                    name,
-                    master["phone"],
-                    master["specialization"],
-                    f"{status} {active}",
-                    work_chat,
-                ]
-            )
-
+            
+            print(f"ID: {master['id']} | TG: {master['telegram_id']}")
+            print(f"   Имя: {name}")
+            print(f"   Телефон: {master['phone']}")
+            print(f"   Специализация: {master['specialization']}")
+            print(f"   Статус: {status} | {active}")
+            print(f"   Рабочий чат: {work_chat}")
+            print()
     else:
-        pass
+        print("Мастеров нет\n")
 
     # Проверка заявок
     cursor.execute(
@@ -87,7 +85,7 @@ def check_database():
         SELECT o.id, o.equipment_type, o.client_name, o.status,
                u1.first_name || ' ' || u1.last_name as dispatcher_name,
                u2.first_name || ' ' || u2.last_name as master_name,
-               o.total_amount, o.created_at
+               o.total_amount, o.notes, o.scheduled_time, o.created_at
         FROM orders o
         LEFT JOIN users u1 ON o.dispatcher_id = u1.telegram_id
         LEFT JOIN masters m ON o.assigned_master_id = m.id
@@ -98,8 +96,12 @@ def check_database():
     )
     orders = cursor.fetchall()
 
+    print("\n" + "="*80)
+    print("📋 ЗАЯВКИ (последние 20)")
+    print("="*80)
+    
     if orders:
-        orders_data = []
+        print(f"\nВсего заявок в выборке: {len(orders)}\n")
         for order in orders:
             status_emoji = {
                 "NEW": "🆕",
@@ -110,21 +112,22 @@ def check_database():
                 "REFUSED": "❌",
                 "DR": "⏳",
             }.get(order["status"], "❓")
-
-            orders_data.append(
-                [
-                    order["id"],
-                    order["equipment_type"][:20],
-                    order["client_name"][:15],
-                    f"{status_emoji} {order['status']}",
-                    (order["dispatcher_name"] or "-")[:15],
-                    (order["master_name"] or "-")[:15],
-                    f"{order['total_amount']:.0f} ₽" if order["total_amount"] else "-",
-                ]
-            )
-
+            
+            print(f"Заявка #{order['id']} | {status_emoji} {order['status']}")
+            print(f"   Оборудование: {order['equipment_type']}")
+            print(f"   Клиент: {order['client_name']}")
+            print(f"   Диспетчер: {order['dispatcher_name'] or '-'}")
+            print(f"   Мастер: {order['master_name'] or '-'}")
+            if order['notes']:
+                print(f"   📝 Заметки: {order['notes']}")
+            if order['scheduled_time']:
+                print(f"   ⏰ Время прибытия: {order['scheduled_time']}")
+            if order['total_amount']:
+                print(f"   💰 Сумма: {order['total_amount']:.0f} ₽")
+            print(f"   Создана: {order['created_at']}")
+            print()
     else:
-        pass
+        print("Заявок нет\n")
 
     # Статистика по заявкам
     cursor.execute(
@@ -137,19 +140,27 @@ def check_database():
     )
     stats = cursor.fetchall()
 
+    print("\n" + "="*80)
+    print("📊 СТАТИСТИКА ПО ЗАЯВКАМ")
+    print("="*80)
+    
     if stats:
-        stats_data = []
+        print()
         for stat in stats:
             status_names = {
-                "NEW": "Новые",
-                "ASSIGNED": "Назначены",
-                "ACCEPTED": "Приняты",
-                "ONSITE": "На объекте",
-                "CLOSED": "Завершены",
-                "REFUSED": "Отклонены",
-                "DR": "Длительный ремонт",
+                "NEW": "🆕 Новые",
+                "ASSIGNED": "👨‍🔧 Назначены",
+                "ACCEPTED": "✅ Приняты",
+                "ONSITE": "🏠 На объекте",
+                "CLOSED": "💰 Завершены",
+                "REFUSED": "❌ Отклонены",
+                "DR": "⏳ Длительный ремонт",
             }
-            stats_data.append([status_names.get(stat["status"], stat["status"]), stat["count"]])
+            status_name = status_names.get(stat["status"], stat["status"])
+            print(f"   {status_name}: {stat['count']}")
+        print()
+    else:
+        print("Нет статистики\n")
 
     # Проверка пользователей с множественными ролями
     cursor.execute(
@@ -163,22 +174,26 @@ def check_database():
     multi_role_users = cursor.fetchall()
 
     if multi_role_users:
-        multi_data = []
+        print("\n" + "="*80)
+        print("👥 ПОЛЬЗОВАТЕЛИ С МНОЖЕСТВЕННЫМИ РОЛЯМИ")
+        print("="*80)
+        print()
+        
         for user in multi_role_users:
             name = f"{user['first_name'] or ''} {user['last_name'] or ''}".strip() or "-"
             roles = user["role"].split(",")
             role_names = {
-                "ADMIN": "Администратор",
-                "DISPATCHER": "Диспетчер",
-                "MASTER": "Мастер",
-                "UNKNOWN": "Неизвестно",
+                "ADMIN": "👑 Администратор",
+                "DISPATCHER": "📋 Диспетчер",
+                "MASTER": "👨‍🔧 Мастер",
+                "UNKNOWN": "❓ Неизвестно",
             }
             roles_str = ", ".join([role_names.get(r.strip(), r) for r in roles])
-
-            multi_data.append([user["telegram_id"], user["username"] or "-", name, roles_str])
-
-    else:
-        pass
+            
+            print(f"TG: {user['telegram_id']} | @{user['username'] or '-'}")
+            print(f"   Имя: {name}")
+            print(f"   Роли: {roles_str}")
+            print()
 
     conn.close()
 
