@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 router = Router(name="group_interaction")
 
 
-@router.callback_query(F.data.startswith("group_accept_order:"), IsGroupOrderCallback())
+@router.callback_query(F.data.startswith("group_accept_order:"))
 async def callback_group_accept_order(callback: CallbackQuery):
     """
-    Принятие заявки мастером в группе
+    Принятие заявки мастером (в группе или личке)
 
     Args:
         callback: Callback query
@@ -90,10 +90,10 @@ async def callback_group_accept_order(callback: CallbackQuery):
     await callback.answer("Заявка принята!")
 
 
-@router.callback_query(F.data.startswith("group_refuse_order:"), IsGroupOrderCallback())
+@router.callback_query(F.data.startswith("group_refuse_order:"))
 async def callback_group_refuse_order(callback: CallbackQuery):
     """
-    Отклонение заявки мастером в группе
+    Отклонение заявки мастером (в группе или личке)
 
     Args:
         callback: Callback query
@@ -161,10 +161,10 @@ async def callback_group_refuse_order(callback: CallbackQuery):
     await callback.answer("Заявка отклонена")
 
 
-@router.callback_query(F.data.startswith("group_onsite_order:"), IsGroupOrderCallback())
+@router.callback_query(F.data.startswith("group_onsite_order:"))
 async def callback_group_onsite_order(callback: CallbackQuery):
     """
-    Мастер на объекте (в группе)
+    Мастер на объекте (в группе или личке)
 
     Args:
         callback: Callback query
@@ -230,10 +230,10 @@ async def callback_group_onsite_order(callback: CallbackQuery):
     await callback.answer("Статус обновлен!")
 
 
-@router.callback_query(F.data.startswith("group_complete_order:"), IsGroupOrderCallback())
+@router.callback_query(F.data.startswith("group_complete_order:"))
 async def callback_group_complete_order(callback: CallbackQuery, state: FSMContext):
     """
-    Начало процесса завершения заявки мастером в группе
+    Начало процесса завершения заявки мастером (в группе или личке)
 
     Args:
         callback: Callback query
@@ -282,10 +282,10 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("group_dr_order:"), IsGroupOrderCallback())
+@router.callback_query(F.data.startswith("group_dr_order:"))
 async def callback_group_dr_order(callback: CallbackQuery):
     """
-    Переход в длительный ремонт (в группе)
+    Переход в длительный ремонт (в группе или личке)
 
     Args:
         callback: Callback query
