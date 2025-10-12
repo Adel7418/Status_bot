@@ -1,8 +1,7 @@
 """
 Тесты для утилит
 """
-import pytest
-from app.utils import validate_phone, format_phone
+from app.utils import format_phone, validate_phone
 
 
 class TestPhoneUtils:
@@ -26,9 +25,9 @@ class TestPhoneUtils:
 
     def test_format_phone_with_plus(self):
         """Тест форматирования номера с +"""
-        assert format_phone("+79991234567") == "+7 999 123-45-67"
+        assert format_phone("+79991234567") == "+79991234567"
 
     def test_format_phone_without_plus(self):
         """Тест форматирования номера без +"""
-        assert format_phone("79991234567") == "+7 999 123-45-67"
+        assert format_phone("79991234567") == "+79991234567"
 

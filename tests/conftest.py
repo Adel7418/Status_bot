@@ -3,13 +3,14 @@ Pytest fixtures и конфигурация для тестов
 """
 import asyncio
 import sys
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+
 
 # Добавляем корневую директорию в PYTHONPATH
 ROOT_DIR = Path(__file__).parent.parent

@@ -1,15 +1,28 @@
 """
 Filters package
 """
-from app.filters.role_filter import RoleFilter, IsAdmin, IsDispatcher, IsMaster, IsAdminOrDispatcher
 from app.filters.group_filter import (
-    IsGroupChat, IsPrivateChat, IsMasterWorkGroup, 
-    IsOrderRelatedMessage, IsMasterInGroup, IsGroupOrderCallback
+    IsGroupChat,
+    IsGroupOrderCallback,
+    IsMasterInGroup,
+    IsMasterWorkGroup,
+    IsOrderRelatedMessage,
+    IsPrivateChat,
 )
+from app.filters.role_filter import IsAdmin, IsAdminOrDispatcher, IsDispatcher, IsMaster, RoleFilter
+
 
 __all__ = [
-    'RoleFilter', 'IsAdmin', 'IsDispatcher', 'IsMaster', 'IsAdminOrDispatcher',
-    'IsGroupChat', 'IsPrivateChat', 'IsMasterWorkGroup', 
-    'IsOrderRelatedMessage', 'IsMasterInGroup', 'IsGroupOrderCallback'
+    "IsAdmin",
+    "IsAdminOrDispatcher",
+    "IsDispatcher",
+    "IsGroupChat",
+    "IsGroupOrderCallback",
+    "IsMaster",
+    "IsMasterInGroup",
+    "IsMasterWorkGroup",
+    "IsOrderRelatedMessage",
+    "IsPrivateChat",
+    "RoleFilter"
 ]
 

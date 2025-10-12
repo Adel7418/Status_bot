@@ -2,7 +2,8 @@
 Тесты для модуля config
 """
 import pytest
-from app.config import UserRole, OrderStatus, EquipmentType, Config
+
+from app.config import Config, EquipmentType, OrderStatus, UserRole
 
 
 class TestUserRole:
@@ -63,7 +64,7 @@ class TestConfig:
         """Тест валидации с пустым токеном"""
         monkeypatch.setattr(Config, "BOT_TOKEN", "")
         monkeypatch.setattr(Config, "ADMIN_IDS", [123])
-        
+
         with pytest.raises(ValueError, match="BOT_TOKEN не установлен"):
             Config.validate()
 
@@ -71,7 +72,7 @@ class TestConfig:
         """Тест валидации с пустым списком админов"""
         monkeypatch.setattr(Config, "BOT_TOKEN", "test_token")
         monkeypatch.setattr(Config, "ADMIN_IDS", [])
-        
+
         with pytest.raises(ValueError, match="ADMIN_IDS не установлены"):
             Config.validate()
 
@@ -79,6 +80,6 @@ class TestConfig:
         """Тест успешной валидации"""
         monkeypatch.setattr(Config, "BOT_TOKEN", "test_token")
         monkeypatch.setattr(Config, "ADMIN_IDS", [123])
-        
+
         assert Config.validate() is True
 

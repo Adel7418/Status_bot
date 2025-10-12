@@ -1,12 +1,11 @@
 """
 Тесты для модуля database
 """
-import pytest
-from datetime import datetime
 
-from app.config import UserRole, OrderStatus
+import pytest
+
+from app.config import OrderStatus, UserRole
 from app.database import Database
-from app.database.models import User, Master, Order
 
 
 class TestDatabase:
@@ -234,7 +233,7 @@ class TestDatabase:
         # Создаём данные
         dispatcher_id = 111
         await db.get_or_create_user(telegram_id=dispatcher_id)
-        
+
         # Создаём несколько заявок
         for i in range(5):
             await db.create_order(

@@ -1,11 +1,10 @@
 """
 Тесты для моделей данных
 """
-import pytest
 from datetime import datetime
 
-from app.config import UserRole, OrderStatus
-from app.database.models import User, Master, Order
+from app.config import OrderStatus, UserRole
+from app.database.models import Master, Order, User
 
 
 class TestUserModel:
@@ -22,7 +21,7 @@ class TestUserModel:
             role=UserRole.ADMIN,
             created_at=datetime.now()
         )
-        
+
         assert user.telegram_id == 123456789
         assert user.username == "test_user"
         assert user.role == UserRole.ADMIN
@@ -37,7 +36,7 @@ class TestUserModel:
             last_name="User",
             role=UserRole.ADMIN
         )
-        
+
         assert user.get_display_name() == "@test_user"
 
     def test_get_display_name_without_username(self):
@@ -50,7 +49,7 @@ class TestUserModel:
             last_name="User",
             role=UserRole.ADMIN
         )
-        
+
         assert user.get_display_name() == "Test User"
 
     def test_get_roles_single(self):
@@ -60,7 +59,7 @@ class TestUserModel:
             telegram_id=123,
             role=UserRole.ADMIN
         )
-        
+
         roles = user.get_roles()
         assert roles == [UserRole.ADMIN]
 
@@ -71,7 +70,7 @@ class TestUserModel:
             telegram_id=123,
             role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}"
         )
-        
+
         roles = user.get_roles()
         assert UserRole.ADMIN in roles
         assert UserRole.DISPATCHER in roles
@@ -83,7 +82,7 @@ class TestUserModel:
             telegram_id=123,
             role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}"
         )
-        
+
         assert user.has_role(UserRole.ADMIN) is True
         assert user.has_role(UserRole.DISPATCHER) is True
         assert user.has_role(UserRole.MASTER) is False
@@ -95,7 +94,7 @@ class TestUserModel:
             telegram_id=123,
             role=UserRole.DISPATCHER
         )
-        
+
         new_roles = user.add_role(UserRole.MASTER)
         assert UserRole.DISPATCHER in new_roles
         assert UserRole.MASTER in new_roles
@@ -107,7 +106,7 @@ class TestUserModel:
             telegram_id=123,
             role=f"{UserRole.DISPATCHER},{UserRole.MASTER}"
         )
-        
+
         new_roles = user.remove_role(UserRole.MASTER)
         assert UserRole.DISPATCHER in new_roles
         assert UserRole.MASTER not in new_roles
@@ -119,7 +118,7 @@ class TestUserModel:
             telegram_id=123,
             role=UserRole.ADMIN
         )
-        
+
         assert user.get_primary_role() == UserRole.ADMIN
 
     def test_get_primary_role_multiple(self):
@@ -129,7 +128,7 @@ class TestUserModel:
             telegram_id=123,
             role=f"{UserRole.DISPATCHER},{UserRole.MASTER}"
         )
-        
+
         # Должна вернуться первая роль
         assert user.get_primary_role() == UserRole.DISPATCHER
 
@@ -148,7 +147,7 @@ class TestMasterModel:
             is_approved=True,
             created_at=datetime.now()
         )
-        
+
         assert master.telegram_id == 123456789
         assert master.phone == "+79991234567"
         assert master.is_active is True
@@ -164,7 +163,7 @@ class TestMasterModel:
             first_name="Иван",
             last_name="Иванов"
         )
-        
+
         assert master.get_display_name() == "Иван Иванов"
 
 
@@ -185,7 +184,7 @@ class TestOrderModel:
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
-        
+
         assert order.equipment_type == "Стиральные машины"
         assert order.status == OrderStatus.NEW
         assert order.dispatcher_id == 123
@@ -205,7 +204,7 @@ class TestOrderModel:
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
-        
+
         assert order.assigned_master_id == 999
         assert order.status == OrderStatus.ASSIGNED
 

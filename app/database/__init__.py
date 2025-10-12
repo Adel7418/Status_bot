@@ -3,5 +3,6 @@ Database package
 """
 from app.database.db import Database
 
-__all__ = ['Database']
+
+__all__ = ["Database"]
 
