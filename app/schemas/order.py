@@ -150,28 +150,38 @@ class OrderCreateSchema(BaseModel):
     @field_validator('scheduled_time')
     @classmethod
     def validate_scheduled_time(cls, v: Optional[str]) -> Optional[str]:
-        """Валидация времени прибытия"""
+        """Валидация времени прибытия (гибкий формат)"""
         if v is None:
             return None
             
         v = v.strip()
         if not v:
             return None
-            
-        # Проверяем основные форматы времени
-        patterns = [
-            r"^([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # 14:30, 9:00
-            r"^завтра\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # завтра 14:30
-            r"^послезавтра\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # послезавтра 14:30
-            r"^сегодня\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # сегодня 14:30
-            r"^\d{1,2}\.\d{1,2}\.\d{4}\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # 15.10.2025 14:30
+        
+        # Проверка длины (минимум 3 символа, максимум 100)
+        if len(v) < 3:
+            raise ValueError("Время/инструкция слишком короткие (минимум 3 символа)")
+        
+        if len(v) > 100:
+            raise ValueError("Время/инструкция слишком длинные (максимум 100 символов)")
+        
+        # Проверка на SQL injection и опасные символы
+        dangerous_patterns = [
+            r";\s*(drop|delete|truncate|insert|update|alter)\s+",
+            r"--",
+            r"/\*.*\*/",
+            r"xp_",
+            r"sp_",
         ]
         
-        valid = any(re.match(pattern, v, re.IGNORECASE) for pattern in patterns)
-        if not valid:
-            raise ValueError(
-                "Неверный формат времени. Ожидается: 14:30, завтра 10:00, 15.10.2025 14:30"
-            )
+        for pattern in dangerous_patterns:
+            if re.search(pattern, v, re.IGNORECASE):
+                raise ValueError("Недопустимые символы в тексте")
+        
+        # Допускаются любые текстовые инструкции:
+        # - Конкретное время: "14:30", "завтра 10:00", "15.10.2025 16:00"
+        # - Инструкции: "Набрать клиенту", "После 14:00", "Уточнить у клиента"
+        # - Относительное время: "Через 2 часа", "В течение дня"
         
         return v
     

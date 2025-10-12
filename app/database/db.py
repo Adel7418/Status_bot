@@ -800,6 +800,7 @@ class Database:
             client_phone=client_phone,
             dispatcher_id=dispatcher_id,
             notes=notes,
+            scheduled_time=scheduled_time,
             status=OrderStatus.NEW,
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -935,6 +936,7 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
+                    scheduled_time=row["scheduled_time"] if "scheduled_time" in row else None,
                     total_amount=(
                         row["total_amount"]
                         if "total_amount" in row and row["total_amount"] is not None
@@ -1124,6 +1126,7 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
+                    scheduled_time=row["scheduled_time"] if "scheduled_time" in row else None,
                     total_amount=(
                         row["total_amount"]
                         if "total_amount" in row and row["total_amount"] is not None

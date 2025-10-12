@@ -155,6 +155,9 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
         if order.notes:
             text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
 
+        if order.scheduled_time:
+            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
+
         if order.created_at:
             text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
 

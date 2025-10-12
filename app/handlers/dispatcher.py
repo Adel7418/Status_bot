@@ -387,12 +387,17 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     await state.set_state(CreateOrderStates.scheduled_time)
     await message.answer(
         "⏰ <b>Время прибытия к клиенту</b>\n\n"
-        "Укажите время когда мастер должен быть у клиента.\n"
-        "Примеры:\n"
+        "Укажите время или инструкцию для мастера:\n\n"
+        "<b>Примеры времени:</b>\n"
         "• 14:30\n"
         "• завтра 10:00\n"
         "• 15.10.2025 16:00\n\n"
-        "Или нажмите '⏭️ Пропустить' если время не указано.",
+        "<b>Примеры инструкций:</b>\n"
+        "• Набрать клиенту\n"
+        "• После 14:00\n"
+        "• Уточнить у клиента\n"
+        "• В течение дня\n\n"
+        "Или нажмите '⏭️ Пропустить' если не требуется.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
@@ -414,16 +419,24 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
 
     scheduled_time = message.text.strip()
 
-    # Валидация времени через Pydantic
+    # Валидация времени через Pydantic валидатор
     try:
         from app.schemas.order import OrderCreateSchema
-        # Создаем временную схему для валидации только времени
-        temp_data = {"scheduled_time": scheduled_time}
-        validated = OrderCreateSchema.model_validate(temp_data)
-        scheduled_time = validated.scheduled_time
-    except Exception as e:
+        # Используем только валидатор поля scheduled_time
+        validator = OrderCreateSchema.model_fields['scheduled_time'].metadata
+        # Применяем валидацию вручную вызывая валидатор
+        validated_time = OrderCreateSchema.validate_scheduled_time(scheduled_time)
+        scheduled_time = validated_time
+    except ValueError as e:
         await message.answer(
             f"❌ {str(e)}\n\n"
+            "Попробуйте еще раз:",
+            reply_markup=get_skip_cancel_keyboard(),
+        )
+        return
+    except Exception as e:
+        await message.answer(
+            f"❌ Ошибка валидации: {str(e)}\n\n"
             "Попробуйте еще раз:",
             reply_markup=get_skip_cancel_keyboard(),
         )
@@ -740,6 +753,9 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
 
         if order.notes:
             text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
+
+        if order.scheduled_time:
+            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
 
         if order.created_at:
             text += f"\n📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
