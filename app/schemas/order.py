@@ -45,6 +45,11 @@ class OrderCreateSchema(BaseModel):
         max_length=MAX_NOTES_LENGTH,
         description="Дополнительные заметки"
     )
+    scheduled_time: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Время прибытия к клиенту"
+    )
     dispatcher_id: int = Field(
         ...,
         gt=0,
@@ -141,6 +146,34 @@ class OrderCreateSchema(BaseModel):
             cleaned = "+" + cleaned
         
         return cleaned
+    
+    @field_validator('scheduled_time')
+    @classmethod
+    def validate_scheduled_time(cls, v: Optional[str]) -> Optional[str]:
+        """Валидация времени прибытия"""
+        if v is None:
+            return None
+            
+        v = v.strip()
+        if not v:
+            return None
+            
+        # Проверяем основные форматы времени
+        patterns = [
+            r"^([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # 14:30, 9:00
+            r"^завтра\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # завтра 14:30
+            r"^послезавтра\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # послезавтра 14:30
+            r"^сегодня\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # сегодня 14:30
+            r"^\d{1,2}\.\d{1,2}\.\d{4}\s+([01]?[0-9]|2[0-3]):[0-5][0-9]$",  # 15.10.2025 14:30
+        ]
+        
+        valid = any(re.match(pattern, v, re.IGNORECASE) for pattern in patterns)
+        if not valid:
+            raise ValueError(
+                "Неверный формат времени. Ожидается: 14:30, завтра 10:00, 15.10.2025 14:30"
+            )
+        
+        return v
     
     @field_validator('notes')
     @classmethod

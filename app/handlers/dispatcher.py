@@ -382,6 +382,72 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
         return
 
     await state.update_data(notes=notes)
+    
+    # Переходим к вводу времени прибытия
+    await state.set_state(CreateOrderStates.scheduled_time)
+    await message.answer(
+        "⏰ <b>Время прибытия к клиенту</b>\n\n"
+        "Укажите время когда мастер должен быть у клиента.\n"
+        "Примеры:\n"
+        "• 14:30\n"
+        "• завтра 10:00\n"
+        "• 15.10.2025 16:00\n\n"
+        "Или нажмите '⏭️ Пропустить' если время не указано.",
+        parse_mode="HTML",
+        reply_markup=get_skip_cancel_keyboard(),
+    )
+
+
+@router.message(CreateOrderStates.scheduled_time, F.text != "❌ Отмена")
+@handle_errors
+async def process_scheduled_time(message: Message, state: FSMContext, user_role: str):
+    """
+    Обработка времени прибытия к клиенту
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    scheduled_time = message.text.strip()
+
+    # Валидация времени через Pydantic
+    try:
+        from app.schemas.order import OrderCreateSchema
+        # Создаем временную схему для валидации только времени
+        temp_data = {"scheduled_time": scheduled_time}
+        validated = OrderCreateSchema.model_validate(temp_data)
+        scheduled_time = validated.scheduled_time
+    except Exception as e:
+        await message.answer(
+            f"❌ {str(e)}\n\n"
+            "Попробуйте еще раз:",
+            reply_markup=get_skip_cancel_keyboard(),
+        )
+        return
+
+    await state.update_data(scheduled_time=scheduled_time)
+    await show_order_confirmation(message, state)
+
+
+@router.message(CreateOrderStates.scheduled_time, F.text == "⏭️ Пропустить")
+@handle_errors
+async def skip_scheduled_time(message: Message, state: FSMContext, user_role: str):
+    """
+    Пропуск времени прибытия
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    await state.update_data(scheduled_time=None)
     await show_order_confirmation(message, state)
 
 
@@ -431,6 +497,9 @@ async def show_order_confirmation(message: Message, state: FSMContext):
 
     if data.get("notes"):
         text += f"\n📝 <b>Заметки:</b> {data['notes']}\n"
+    
+    if data.get("scheduled_time"):
+        text += f"⏰ <b>Время прибытия:</b> {data['scheduled_time']}\n"
 
     await state.set_state(CreateOrderStates.confirm)
 
@@ -460,6 +529,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             client_phone=data["client_phone"],
             dispatcher_id=message.from_user.id,
             notes=data.get("notes"),
+            scheduled_time=data.get("scheduled_time"),
         )
         logger.info(
             f"Order data validated successfully for dispatcher {message.from_user.id}"
@@ -493,6 +563,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             client_phone=order_data.client_phone,
             dispatcher_id=order_data.dispatcher_id,
             notes=order_data.notes,
+            scheduled_time=order_data.scheduled_time,
         )
 
         # Добавляем в лог
@@ -796,6 +867,9 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
 
             if order.notes:
                 notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+            
+            if order.scheduled_time:
+                notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
             # Упоминаем мастера в группе
             if master.username:
@@ -840,6 +914,9 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
 
             if order.notes:
                 notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+            
+            if order.scheduled_time:
+                notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
             notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
             notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"

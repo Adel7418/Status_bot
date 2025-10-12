@@ -151,6 +151,19 @@ class Database:
             # Поле уже существует, игнорируем ошибку
             pass
 
+        # Добавление поля scheduled_time в таблицу orders (если его нет)
+        try:
+            await self.connection.execute(
+                """
+                ALTER TABLE orders ADD COLUMN scheduled_time TEXT
+            """
+            )
+            await self.connection.commit()
+            logger.info("Добавлено поле scheduled_time в таблицу orders")
+        except Exception:
+            # Поле уже существует, игнорируем ошибку
+            pass
+
         # Создание таблицы orders
         await self.connection.execute(
             """
@@ -165,6 +178,7 @@ class Database:
                 assigned_master_id INTEGER,
                 dispatcher_id INTEGER,
                 notes TEXT,
+                scheduled_time TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (assigned_master_id) REFERENCES masters(id),
@@ -740,6 +754,7 @@ class Database:
         client_phone: str,
         dispatcher_id: int,
         notes: str | None = None,
+        scheduled_time: str | None = None,
     ) -> Order:
         """
         Создание заявки
@@ -752,6 +767,7 @@ class Database:
             client_phone: Телефон клиента
             dispatcher_id: ID диспетчера
             notes: Заметки
+            scheduled_time: Время прибытия к клиенту
 
         Returns:
             Объект Order
@@ -759,8 +775,8 @@ class Database:
         cursor = await self.connection.execute(
             """
             INSERT INTO orders (equipment_type, description, client_name, client_address,
-                              client_phone, dispatcher_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                              client_phone, dispatcher_id, notes, scheduled_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 equipment_type,
@@ -770,6 +786,7 @@ class Database:
                 client_phone,
                 dispatcher_id,
                 notes,
+                scheduled_time,
             ),
         )
         await self.connection.commit()
@@ -828,6 +845,7 @@ class Database:
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],
                 notes=row["notes"],
+                scheduled_time=row["scheduled_time"],
                 total_amount=(
                     row["total_amount"]
                     if "total_amount" in row and row["total_amount"] is not None
