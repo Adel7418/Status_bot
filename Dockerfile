@@ -3,7 +3,7 @@
 # ========================================
 
 # Stage 1: Builder
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Установка зависимостей для сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Stage 2: Runtime
 # ========================================
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Метаданные образа
 LABEL maintainer="your.email@example.com"
