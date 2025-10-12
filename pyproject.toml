@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Adel7418", email = "5flora.adel5@gmail.com"}
 ]
 keywords = ["telegram", "bot", "aiogram", "repair", "management"]
 classifiers = [
@@ -54,10 +54,10 @@ alembic = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/telegram-repair-bot"
-Documentation = "https://github.com/yourusername/telegram-repair-bot/blob/main/README.md"
-Repository = "https://github.com/yourusername/telegram-repair-bot"
-Issues = "https://github.com/yourusername/telegram-repair-bot/issues"
+Homepage = "https://github.com/Adel7418/telegram-repair-bot"
+Documentation = "https://github.com/Adel7418/telegram-repair-bot/blob/main/README.md"
+Repository = "https://github.com/Adel7418/telegram-repair-bot"
+Issues = "https://github.com/Adel7418/telegram-repair-bot/issues"
 
 [project.scripts]
 bot = "bot:main"

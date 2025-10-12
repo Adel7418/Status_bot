@@ -360,8 +360,8 @@ open htmlcov/index.html
 
 ## Вопросы?
 
-- Создайте [Issue](https://github.com/yourusername/telegram-repair-bot/issues)
-- Напишите в [Discussions](https://github.com/yourusername/telegram-repair-bot/discussions)
+- Создайте [Issue](https://github.com/Adel7418/telegram-repair-bot/issues)
+- Напишите в [Discussions](https://github.com/Adel7418/telegram-repair-bot/discussions)
 
 ## Лицензия
 

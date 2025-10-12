@@ -28,8 +28,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 FROM python:3.11-slim
 
 # Метаданные образа
-LABEL maintainer="your.email@example.com"
-LABEL version="1.1.0"
+LABEL maintainer="5flora.adel5@gmail.com"
+LABEL version="1.2.0"
 LABEL description="Telegram бот для управления заявками на ремонт техники"
 
 # Установка runtime зависимостей
