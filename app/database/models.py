@@ -1,6 +1,7 @@
 """
 Модели данных
 """
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -8,6 +9,7 @@ from datetime import datetime
 @dataclass
 class User:
     """Модель пользователя"""
+
     id: int | None = None
     telegram_id: int = 0
     username: str | None = None
@@ -120,6 +122,7 @@ class User:
 @dataclass
 class Master:
     """Модель мастера"""
+
     id: int | None = None
     telegram_id: int = 0
     phone: str = ""
@@ -144,6 +147,7 @@ class Master:
 @dataclass
 class Order:
     """Модель заявки"""
+
     id: int | None = None
     equipment_type: str = ""
     description: str = ""
@@ -170,9 +174,9 @@ class Order:
 @dataclass
 class AuditLog:
     """Модель лога аудита"""
+
     id: int | None = None
     user_id: int | None = None
     action: str = ""
     details: str | None = None
     timestamp: datetime | None = None
-

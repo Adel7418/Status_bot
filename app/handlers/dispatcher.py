@@ -1,6 +1,7 @@
 """
 Обработчики для диспетчеров (и администраторов)
 """
+
 import logging
 from datetime import datetime
 
@@ -32,6 +33,7 @@ router = Router(name="dispatcher")
 
 # ==================== СОЗДАНИЕ ЗАЯВКИ ====================
 
+
 @router.message(F.text == "➕ Создать заявку")
 @handle_errors
 async def btn_create_order(message: Message, state: FSMContext, user_role: str):
@@ -51,10 +53,9 @@ async def btn_create_order(message: Message, state: FSMContext, user_role: str):
     await state.set_state(CreateOrderStates.equipment_type)
 
     await message.answer(
-        "➕ <b>Создание новой заявки</b>\n\n"
-        "Шаг 1/6: Выберите тип техники:",
+        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/6: Выберите тип техники:",
         parse_mode="HTML",
-        reply_markup=get_equipment_types_keyboard()
+        reply_markup=get_equipment_types_keyboard(),
     )
 
 
@@ -78,16 +79,13 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await state.set_state(CreateOrderStates.description)
 
     await callback.message.edit_text(
-        f"✅ Выбрано: {equipment_type}\n\n"
-        f"Шаг 2/6: Опишите проблему:",
-        parse_mode="HTML"
+        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/6: Опишите проблему:", parse_mode="HTML"
     )
 
     await callback.message.answer(
-        "📝 Введите описание проблемы:\n"
-        f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
+        "📝 Введите описание проблемы:\n" f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
         parse_mode="HTML",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(),
     )
 
     await callback.answer()
@@ -112,24 +110,21 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     if len(description) < 10:
         await message.answer(
             "❌ Описание слишком короткое. Опишите проблему подробнее (минимум 10 символов):",
-            reply_markup=get_cancel_keyboard()
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
     if len(description) > MAX_DESCRIPTION_LENGTH:
         await message.answer(
             f"❌ Описание слишком длинное. Максимум {MAX_DESCRIPTION_LENGTH} символов:",
-            reply_markup=get_cancel_keyboard()
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
     await state.update_data(description=description)
     await state.set_state(CreateOrderStates.client_name)
 
-    await message.answer(
-        "👤 Шаг 3/6: Введите ФИО клиента:",
-        reply_markup=get_cancel_keyboard()
-    )
+    await message.answer("👤 Шаг 3/6: Введите ФИО клиента:", reply_markup=get_cancel_keyboard())
 
 
 @router.message(CreateOrderStates.client_name, F.text != "❌ Отмена")
@@ -152,8 +147,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     name_parts = client_name.split()
     if len(name_parts) < 2 or len(client_name) < 5:
         await message.answer(
-            "❌ Пожалуйста, введите полное ФИО (имя и фамилию):",
-            reply_markup=get_cancel_keyboard()
+            "❌ Пожалуйста, введите полное ФИО (имя и фамилию):", reply_markup=get_cancel_keyboard()
         )
         return
 
@@ -162,17 +156,14 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
         if not part.isalpha():
             await message.answer(
                 "❌ ФИО должно содержать только буквы. Попробуйте еще раз:",
-                reply_markup=get_cancel_keyboard()
+                reply_markup=get_cancel_keyboard(),
             )
             return
 
     await state.update_data(client_name=client_name)
     await state.set_state(CreateOrderStates.client_address)
 
-    await message.answer(
-        "📍 Шаг 4/6: Введите адрес клиента:",
-        reply_markup=get_cancel_keyboard()
-    )
+    await message.answer("📍 Шаг 4/6: Введите адрес клиента:", reply_markup=get_cancel_keyboard())
 
 
 @router.message(CreateOrderStates.client_address, F.text != "❌ Отмена")
@@ -194,7 +185,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     if len(client_address) < 10:
         await message.answer(
             "❌ Адрес слишком короткий. Укажите более подробный адрес (минимум 10 символов):",
-            reply_markup=get_cancel_keyboard()
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -202,10 +193,9 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     await state.set_state(CreateOrderStates.client_phone)
 
     await message.answer(
-        "📞 Шаг 5/6: Введите телефон клиента:\n"
-        "<i>(в формате +7XXXXXXXXXX)</i>",
+        "📞 Шаг 5/6: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
         parse_mode="HTML",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(),
     )
 
 
@@ -227,9 +217,8 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
     if not validate_phone(phone):
         await message.answer(
-            "❌ Неверный формат номера телефона.\n"
-            "Введите номер в формате: +7XXXXXXXXXX",
-            reply_markup=get_cancel_keyboard()
+            "❌ Неверный формат номера телефона.\n" "Введите номер в формате: +7XXXXXXXXXX",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -243,7 +232,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
         "Или нажмите 'Пропустить' для завершения.",
         parse_mode="HTML",
-        reply_markup=get_skip_cancel_keyboard()
+        reply_markup=get_skip_cancel_keyboard(),
     )
 
 
@@ -284,7 +273,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     if len(notes) > MAX_NOTES_LENGTH:
         await message.answer(
             f"❌ Заметки слишком длинные. Максимум {MAX_NOTES_LENGTH} символов:",
-            reply_markup=get_skip_cancel_keyboard()
+            reply_markup=get_skip_cancel_keyboard(),
         )
         return
 
@@ -293,6 +282,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
 
 
 # ==================== ОТМЕНА СОЗДАНИЯ ЗАЯВКИ ====================
+
 
 @router.message(CreateOrderStates.confirm, F.text == "❌ Отмена")
 @handle_errors
@@ -310,8 +300,7 @@ async def cancel_create_order(message: Message, state: FSMContext, user_role: st
     from app.keyboards.reply import get_main_menu_keyboard
 
     await message.answer(
-        "❌ Создание заявки отменено.",
-        reply_markup=get_main_menu_keyboard(user_role)
+        "❌ Создание заявки отменено.", reply_markup=get_main_menu_keyboard(user_role)
     )
 
     log_action(message.from_user.id, "CANCEL_CREATE_ORDER", "Order creation cancelled")
@@ -341,11 +330,7 @@ async def show_order_confirmation(message: Message, state: FSMContext):
 
     await state.set_state(CreateOrderStates.confirm)
 
-    await message.answer(
-        text,
-        parse_mode="HTML",
-        reply_markup=get_confirm_keyboard()
-    )
+    await message.answer(text, parse_mode="HTML", reply_markup=get_confirm_keyboard())
 
 
 @router.message(CreateOrderStates.confirm, F.text == "✅ Подтвердить")
@@ -373,14 +358,14 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             client_address=data["client_address"],
             client_phone=data["client_phone"],
             dispatcher_id=message.from_user.id,
-            notes=data.get("notes")
+            notes=data.get("notes"),
         )
 
         # Добавляем в лог
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="CREATE_ORDER",
-            details=f"Created order #{order.id}"
+            details=f"Created order #{order.id}",
         )
 
         log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
@@ -399,15 +384,11 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="👨‍🔧 Назначить мастера",
-            callback_data=f"assign_master:{order.id}"
+            text="👨‍🔧 Назначить мастера", callback_data=f"assign_master:{order.id}"
         )
     )
     builder.row(
-        InlineKeyboardButton(
-            text="📋 Просмотреть заявку",
-            callback_data=f"view_order:{order.id}"
-        )
+        InlineKeyboardButton(text="📋 Просмотреть заявку", callback_data=f"view_order:{order.id}")
     )
 
     # Отправляем сообщение с inline кнопками
@@ -416,17 +397,15 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         f"Статус: 🆕 Новая\n\n"
         f"Теперь вы можете назначить на нее мастера или просмотреть детали заявки.",
         parse_mode="HTML",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
 
     # Обновляем reply клавиатуру главного меню коротким сообщением
-    await message.answer(
-        "Главное меню:",
-        reply_markup=get_main_menu_keyboard(user_role)
-    )
+    await message.answer("Главное меню:", reply_markup=get_main_menu_keyboard(user_role))
 
 
 # ==================== ПРОСМОТР ЗАЯВОК ====================
+
 
 @router.message(F.text == "📋 Все заявки")
 async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
@@ -445,10 +424,9 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
     await state.clear()
 
     await message.answer(
-        "📋 <b>Все заявки</b>\n\n"
-        "Выберите фильтр:",
+        "📋 <b>Все заявки</b>\n\n" "Выберите фильтр:",
         parse_mode="HTML",
-        reply_markup=get_orders_filter_keyboard()
+        reply_markup=get_orders_filter_keyboard(),
     )
 
 
@@ -478,9 +456,7 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
             filter_name = OrderStatus.get_status_name(filter_status)
 
         if not orders:
-            await callback.message.edit_text(
-                f"📭 Нет заявок со статусом '{filter_name}'."
-            )
+            await callback.message.edit_text(f"📭 Нет заявок со статусом '{filter_name}'.")
             await callback.answer()
             return
 
@@ -506,11 +482,7 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
 
         keyboard = get_order_list_keyboard(orders[:20])
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -569,11 +541,7 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
 
         keyboard = get_order_actions_keyboard(order, user_role)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -582,6 +550,7 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
 
 
 # ==================== НАЗНАЧЕНИЕ МАСТЕРА ====================
+
 
 @router.callback_query(F.data.startswith("assign_master:"))
 async def callback_assign_master(callback: CallbackQuery, state: FSMContext, user_role: str):
@@ -608,22 +577,17 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
         masters = await db.get_all_masters(only_approved=True, only_active=True)
 
         if not masters:
-            await callback.answer(
-                "❌ Нет доступных мастеров",
-                show_alert=True
-            )
+            await callback.answer("❌ Нет доступных мастеров", show_alert=True)
             return
 
         keyboard = get_masters_list_keyboard(
-            masters,
-            order_id=order_id,
-            action="select_master_for_order"
+            masters, order_id=order_id, action="select_master_for_order"
         )
 
         await callback.message.edit_text(
             f"👨‍🔧 <b>Выберите мастера для заявки #{order_id}:</b>",
             parse_mode="HTML",
-            reply_markup=keyboard
+            reply_markup=keyboard,
         )
 
     finally:
@@ -662,7 +626,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ASSIGN_MASTER",
-            details=f"Assigned master {master_id} to order #{order_id}"
+            details=f"Assigned master {master_id} to order #{order_id}",
         )
 
         # Уведомляем мастера
@@ -674,7 +638,9 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             # Иначе - в личные сообщения мастеру
             target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
 
-            logger.info(f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}")
+            logger.info(
+                f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}"
+            )
 
             # Если отправляем в группу, создаем полное сообщение с клавиатурой
             if master.work_chat_id:
@@ -708,10 +674,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
                 logger.info(f"Notification text prepared: {len(notification_text)} chars")
 
                 await callback.bot.send_message(
-                    target_chat_id,
-                    notification_text,
-                    parse_mode="HTML",
-                    reply_markup=keyboard
+                    target_chat_id, notification_text, parse_mode="HTML", reply_markup=keyboard
                 )
 
                 logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
@@ -726,9 +689,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
                 )
 
                 await callback.bot.send_message(
-                    target_chat_id,
-                    notification_text,
-                    parse_mode="HTML"
+                    target_chat_id, notification_text, parse_mode="HTML"
                 )
 
                 logger.info(f"SUCCESS: Notification sent to DM {target_chat_id}")
@@ -737,6 +698,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             logger.error(f"CRITICAL: Failed to notify master: {e}")
             logger.error(f"Exception type: {type(e)}")
             import traceback
+
             logger.error(f"Traceback: {traceback.format_exc()}")
 
         await callback.message.edit_text(
@@ -744,7 +706,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             f"📋 Заявка #{order_id}\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"Мастер получил уведомление о новой заявке.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "ASSIGN_MASTER", f"Order #{order_id}, Master {master_id}")
@@ -756,6 +718,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
 
 
 # ==================== ПЕРЕНАЗНАЧЕНИЕ МАСТЕРА ====================
+
 
 @router.callback_query(F.data.startswith("reassign_master:"))
 async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, user_role: str):
@@ -787,10 +750,7 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
         masters = await db.get_all_masters(only_approved=True, only_active=True)
 
         if not masters:
-            await callback.answer(
-                "❌ Нет доступных мастеров",
-                show_alert=True
-            )
+            await callback.answer("❌ Нет доступных мастеров", show_alert=True)
             return
 
         # Фильтруем текущего мастера из списка
@@ -798,15 +758,12 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
 
         if not available_masters:
             await callback.answer(
-                "❌ Нет других доступных мастеров для переназначения",
-                show_alert=True
+                "❌ Нет других доступных мастеров для переназначения", show_alert=True
             )
             return
 
         keyboard = get_masters_list_keyboard(
-            available_masters,
-            order_id=order_id,
-            action="select_new_master_for_order"
+            available_masters, order_id=order_id, action="select_new_master_for_order"
         )
 
         current_master_name = order.master_name if order.master_name else "Неизвестен"
@@ -817,7 +774,7 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
             f"👨‍🔧 Текущий мастер: {current_master_name}\n\n"
             f"Выберите нового мастера:",
             parse_mode="HTML",
-            reply_markup=keyboard
+            reply_markup=keyboard,
         )
 
     finally:
@@ -861,20 +818,22 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="REASSIGN_MASTER",
-            details=f"Reassigned order #{order_id} from master {old_master_id} to master {new_master_id}"
+            details=f"Reassigned order #{order_id} from master {old_master_id} to master {new_master_id}",
         )
 
         # Уведомляем старого мастера о снятии заявки
         if old_master:
             try:
-                target_chat_id = old_master.work_chat_id if old_master.work_chat_id else old_master.telegram_id
+                target_chat_id = (
+                    old_master.work_chat_id if old_master.work_chat_id else old_master.telegram_id
+                )
                 await callback.bot.send_message(
                     target_chat_id,
                     f"ℹ️ <b>Заявка переназначена</b>\n\n"
                     f"📋 Заявка #{order_id} была переназначена на другого мастера.\n"
                     f"🔧 {order.equipment_type}\n"
                     f"📝 {order.description}",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify old master {old_master.telegram_id}: {e}")
@@ -882,7 +841,9 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
         # Уведомляем нового мастера
         try:
             # Определяем, куда отправлять уведомление
-            target_chat_id = new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
+            target_chat_id = (
+                new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
+            )
 
             # Если отправляем в группу, создаем полное сообщение с клавиатурой
             if new_master.work_chat_id:
@@ -914,10 +875,7 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
                 keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
                 await callback.bot.send_message(
-                    target_chat_id,
-                    notification_text,
-                    parse_mode="HTML",
-                    reply_markup=keyboard
+                    target_chat_id, notification_text, parse_mode="HTML", reply_markup=keyboard
                 )
             else:
                 # Отправляем в личные сообщения
@@ -930,12 +888,12 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
                 )
 
                 await callback.bot.send_message(
-                    target_chat_id,
-                    notification_text,
-                    parse_mode="HTML"
+                    target_chat_id, notification_text, parse_mode="HTML"
                 )
 
-            logger.info(f"Notification sent to new master {'group' if new_master.work_chat_id else 'DM'} {target_chat_id}")
+            logger.info(
+                f"Notification sent to new master {'group' if new_master.work_chat_id else 'DM'} {target_chat_id}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to notify new master: {e}")
@@ -948,10 +906,14 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
             f"👨‍🔧 Старый мастер: {old_master_name}\n"
             f"👨‍🔧 Новый мастер: {new_master.get_display_name()}\n\n"
             f"Оба мастера получили уведомления.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
-        log_action(callback.from_user.id, "REASSIGN_MASTER", f"Order #{order_id}, Old Master {old_master_id}, New Master {new_master_id}")
+        log_action(
+            callback.from_user.id,
+            "REASSIGN_MASTER",
+            f"Order #{order_id}, Old Master {old_master_id}, New Master {new_master_id}",
+        )
 
     finally:
         await db.disconnect()
@@ -989,7 +951,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
         # Снимаем мастера и возвращаем статус в NEW
         await db.connection.execute(
             "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id)
+            (OrderStatus.NEW, order_id),
         )
         await db.connection.commit()
 
@@ -997,7 +959,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="UNASSIGN_MASTER",
-            details=f"Unassigned master {order.assigned_master_id} from order #{order_id}"
+            details=f"Unassigned master {order.assigned_master_id} from order #{order_id}",
         )
 
         # Уведомляем мастера
@@ -1010,7 +972,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
                     f"📋 Заявка #{order_id} была снята с вас диспетчером.\n"
                     f"🔧 {order.equipment_type}\n"
                     f"📝 {order.description}",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify master {master.telegram_id}: {e}")
@@ -1023,10 +985,14 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
             f"👨‍🔧 Мастер: {master_name}\n\n"
             f"Заявка возвращена в статус 🆕 Новая.\n"
             f"Теперь можно назначить другого мастера.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
-        log_action(callback.from_user.id, "UNASSIGN_MASTER", f"Order #{order_id}, Master {order.assigned_master_id}")
+        log_action(
+            callback.from_user.id,
+            "UNASSIGN_MASTER",
+            f"Order #{order_id}, Master {order.assigned_master_id}",
+        )
 
     finally:
         await db.disconnect()
@@ -1035,6 +1001,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
 
 # ==================== УПРАВЛЕНИЕ СТАТУСАМИ ====================
+
 
 @router.callback_query(F.data.startswith("close_order:"))
 async def callback_close_order(callback: CallbackQuery, user_role: str):
@@ -1057,14 +1024,10 @@ async def callback_close_order(callback: CallbackQuery, user_role: str):
         await db.update_order_status(order_id, OrderStatus.CLOSED)
 
         await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="CLOSE_ORDER",
-            details=f"Closed order #{order_id}"
+            user_id=callback.from_user.id, action="CLOSE_ORDER", details=f"Closed order #{order_id}"
         )
 
-        await callback.message.edit_text(
-            f"✅ Заявка #{order_id} закрыта."
-        )
+        await callback.message.edit_text(f"✅ Заявка #{order_id} закрыта.")
 
         log_action(callback.from_user.id, "CLOSE_ORDER", f"Order #{order_id}")
 
@@ -1098,7 +1061,7 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="REFUSE_ORDER",
-            details=f"Refused order #{order_id}"
+            details=f"Refused order #{order_id}",
         )
 
         # Уведомляем мастера если он был назначен
@@ -1108,14 +1071,12 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
                 await callback.bot.send_message(
                     master.telegram_id,
                     f"ℹ️ Заявка #{order_id} была отклонена диспетчером.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify master {master.telegram_id}: {e}")
 
-        await callback.message.edit_text(
-            f"❌ Заявка #{order_id} отклонена."
-        )
+        await callback.message.edit_text(f"❌ Заявка #{order_id} отклонена.")
 
         log_action(callback.from_user.id, "REFUSE_ORDER", f"Order #{order_id}")
 
@@ -1138,16 +1099,16 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
         return
 
     await callback.message.edit_text(
-        "📋 <b>Все заявки</b>\n\n"
-        "Выберите фильтр:",
+        "📋 <b>Все заявки</b>\n\n" "Выберите фильтр:",
         parse_mode="HTML",
-        reply_markup=get_orders_filter_keyboard()
+        reply_markup=get_orders_filter_keyboard(),
     )
 
     await callback.answer()
 
 
 # ==================== ОТЧЕТЫ ====================
+
 
 @router.message(F.text == "📊 Отчеты")
 async def btn_reports(message: Message, user_role: str):
@@ -1165,10 +1126,9 @@ async def btn_reports(message: Message, user_role: str):
     from app.keyboards.inline import get_reports_keyboard
 
     await message.answer(
-        "📊 <b>Отчеты</b>\n\n"
-        "Выберите тип отчета:",
+        "📊 <b>Отчеты</b>\n\n" "Выберите тип отчета:",
         parse_mode="HTML",
-        reply_markup=get_reports_keyboard()
+        reply_markup=get_reports_keyboard(),
     )
 
 
@@ -1189,6 +1149,7 @@ async def callback_report_masters(callback: CallbackQuery, user_role: str):
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         text = await reports.generate_masters_report()
@@ -1200,15 +1161,9 @@ async def callback_report_masters(callback: CallbackQuery, user_role: str):
         builder.row(
             InlineKeyboardButton(text="📥 Скачать Excel", callback_data="download_masters_excel")
         )
-        builder.row(
-            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports")
-        )
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=builder.as_markup()
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -1233,6 +1188,7 @@ async def callback_report_statuses(callback: CallbackQuery, user_role: str):
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         text = await reports.generate_statuses_report()
@@ -1244,15 +1200,9 @@ async def callback_report_statuses(callback: CallbackQuery, user_role: str):
         builder.row(
             InlineKeyboardButton(text="📥 Скачать Excel", callback_data="download_statuses_excel")
         )
-        builder.row(
-            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports")
-        )
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=builder.as_markup()
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -1277,6 +1227,7 @@ async def callback_report_equipment(callback: CallbackQuery, user_role: str):
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         text = await reports.generate_equipment_report()
@@ -1288,15 +1239,9 @@ async def callback_report_equipment(callback: CallbackQuery, user_role: str):
         builder.row(
             InlineKeyboardButton(text="📥 Скачать Excel", callback_data="download_equipment_excel")
         )
-        builder.row(
-            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports")
-        )
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=builder.as_markup()
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -1319,9 +1264,7 @@ async def callback_report_period(callback: CallbackQuery, user_role: str):
     from app.keyboards.inline import get_period_keyboard
 
     await callback.message.edit_text(
-        "📅 <b>Выберите период:</b>",
-        parse_mode="HTML",
-        reply_markup=get_period_keyboard()
+        "📅 <b>Выберите период:</b>", parse_mode="HTML", reply_markup=get_period_keyboard()
     )
 
     await callback.answer()
@@ -1346,6 +1289,7 @@ async def callback_period_selected(callback: CallbackQuery, user_role: str):
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         start_date, end_date = ReportsService.get_period_dates(period)
@@ -1357,19 +1301,12 @@ async def callback_period_selected(callback: CallbackQuery, user_role: str):
         builder = InlineKeyboardBuilder()
         builder.row(
             InlineKeyboardButton(
-                text="📥 Скачать Excel",
-                callback_data=f"download_period_excel:{period}"
+                text="📥 Скачать Excel", callback_data=f"download_period_excel:{period}"
             )
         )
-        builder.row(
-            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports")
-        )
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=builder.as_markup()
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -1396,14 +1333,12 @@ async def callback_download_masters_excel(callback: CallbackQuery, user_role: st
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         excel_file = await reports.generate_excel_report(report_type="masters")
 
-        await callback.message.answer_document(
-            document=excel_file,
-            caption="📊 Отчет по мастерам"
-        )
+        await callback.message.answer_document(document=excel_file, caption="📊 Отчет по мастерам")
 
     finally:
         await db.disconnect()
@@ -1428,14 +1363,12 @@ async def callback_download_statuses_excel(callback: CallbackQuery, user_role: s
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         excel_file = await reports.generate_excel_report(report_type="statuses")
 
-        await callback.message.answer_document(
-            document=excel_file,
-            caption="📊 Отчет по статусам"
-        )
+        await callback.message.answer_document(document=excel_file, caption="📊 Отчет по статусам")
 
     finally:
         await db.disconnect()
@@ -1460,13 +1393,13 @@ async def callback_download_equipment_excel(callback: CallbackQuery, user_role: 
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         excel_file = await reports.generate_excel_report(report_type="equipment")
 
         await callback.message.answer_document(
-            document=excel_file,
-            caption="📊 Отчет по типам техники"
+            document=excel_file, caption="📊 Отчет по типам техники"
         )
 
     finally:
@@ -1494,18 +1427,16 @@ async def callback_download_period_excel(callback: CallbackQuery, user_role: str
 
     try:
         from app.services.reports import ReportsService
+
         reports = ReportsService(db)
 
         start_date, end_date = ReportsService.get_period_dates(period)
         excel_file = await reports.generate_excel_report(
-            report_type="all",
-            start_date=start_date,
-            end_date=end_date
+            report_type="all", start_date=start_date, end_date=end_date
         )
 
         await callback.message.answer_document(
-            document=excel_file,
-            caption=f"📊 Отчет за период ({period})"
+            document=excel_file, caption=f"📊 Отчет за период ({period})"
         )
 
     finally:
@@ -1527,10 +1458,9 @@ async def callback_back_to_reports(callback: CallbackQuery, user_role: str):
     from app.keyboards.inline import get_reports_keyboard
 
     await callback.message.edit_text(
-        "📊 <b>Отчеты</b>\n\n"
-        "Выберите тип отчета:",
+        "📊 <b>Отчеты</b>\n\n" "Выберите тип отчета:",
         parse_mode="HTML",
-        reply_markup=get_reports_keyboard()
+        reply_markup=get_reports_keyboard(),
     )
 
     await callback.answer()

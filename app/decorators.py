@@ -1,6 +1,7 @@
 """
 Декораторы для обработки ошибок и проверки ролей
 """
+
 import contextlib
 import functools
 import inspect
@@ -26,6 +27,7 @@ def handle_errors(func: Callable) -> Callable:
     Returns:
         Обернутая функция с обработкой ошибок
     """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         try:
@@ -61,13 +63,11 @@ def handle_errors(func: Callable) -> Callable:
             try:
                 if isinstance(message_or_callback, Message):
                     await message_or_callback.answer(
-                        error_text,
-                        reply_markup=get_main_menu_keyboard(user_role)
+                        error_text, reply_markup=get_main_menu_keyboard(user_role)
                     )
                 elif isinstance(message_or_callback, CallbackQuery):
                     await message_or_callback.message.answer(
-                        error_text,
-                        reply_markup=get_main_menu_keyboard(user_role)
+                        error_text, reply_markup=get_main_menu_keyboard(user_role)
                     )
                     await message_or_callback.answer("Произошла ошибка", show_alert=True)
             except Exception as send_error:
@@ -100,7 +100,7 @@ def require_role(roles: str | list[str]):
                 "user_role",
                 inspect.Parameter.KEYWORD_ONLY,
                 default=UserRole.UNKNOWN,
-                annotation=str
+                annotation=str,
             )
             params.append(user_role_param)
 
@@ -108,7 +108,9 @@ def require_role(roles: str | list[str]):
         async def wrapper(*args, user_role: str = UserRole.UNKNOWN, **kwargs):
             # Проверяем роль
             if user_role not in roles:
-                logger.debug(f"Access denied for {func.__name__}: user_role={user_role}, required={roles}")
+                logger.debug(
+                    f"Access denied for {func.__name__}: user_role={user_role}, required={roles}"
+                )
                 return None
 
             # Передаем user_role дальше в kwargs
@@ -118,6 +120,7 @@ def require_role(roles: str | list[str]):
         wrapper.__signature__ = sig.replace(parameters=params)
 
         return wrapper
+
     return decorator
 
 
@@ -131,6 +134,7 @@ def handle_database_errors(func: Callable) -> Callable:
     Returns:
         Обернутая функция с обработкой ошибок БД
     """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         db = None
@@ -156,13 +160,11 @@ def handle_database_errors(func: Callable) -> Callable:
 
             if isinstance(message_or_callback, Message):
                 await message_or_callback.answer(
-                    error_text,
-                    reply_markup=get_main_menu_keyboard(user_role)
+                    error_text, reply_markup=get_main_menu_keyboard(user_role)
                 )
             elif isinstance(message_or_callback, CallbackQuery):
                 await message_or_callback.message.answer(
-                    error_text,
-                    reply_markup=get_main_menu_keyboard(user_role)
+                    error_text, reply_markup=get_main_menu_keyboard(user_role)
                 )
                 await message_or_callback.answer("Ошибка базы данных", show_alert=True)
         finally:

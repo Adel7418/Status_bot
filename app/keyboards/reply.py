@@ -30,18 +30,9 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
 
     if has_admin:
         # Администратор видит все
-        builder.row(
-            KeyboardButton(text="📋 Все заявки"),
-            KeyboardButton(text="➕ Создать заявку")
-        )
-        builder.row(
-            KeyboardButton(text="👥 Мастера"),
-            KeyboardButton(text="📊 Отчеты")
-        )
-        builder.row(
-            KeyboardButton(text="👤 Пользователи"),
-            KeyboardButton(text="⚙️ Настройки")
-        )
+        builder.row(KeyboardButton(text="📋 Все заявки"), KeyboardButton(text="➕ Создать заявку"))
+        builder.row(KeyboardButton(text="👥 Мастера"), KeyboardButton(text="📊 Отчеты"))
+        builder.row(KeyboardButton(text="👤 Пользователи"), KeyboardButton(text="⚙️ Настройки"))
 
     elif has_dispatcher or has_master:
         # Комбинированное меню для диспетчера и/или мастера
@@ -50,35 +41,25 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
         # Кнопки диспетчера
         if has_dispatcher:
             builder.row(
-                KeyboardButton(text="📋 Все заявки"),
-                KeyboardButton(text="➕ Создать заявку")
+                KeyboardButton(text="📋 Все заявки"), KeyboardButton(text="➕ Создать заявку")
             )
             buttons_added.add("dispatcher_orders")
 
         # Кнопки мастера
         if has_master:
             builder.row(
-                KeyboardButton(text="📋 Мои заявки"),
-                KeyboardButton(text="📊 Моя статистика")
+                KeyboardButton(text="📋 Мои заявки"), KeyboardButton(text="📊 Моя статистика")
             )
             buttons_added.add("master_orders")
 
         # Общие кнопки
         if has_dispatcher:
-            builder.row(
-                KeyboardButton(text="👥 Мастера"),
-                KeyboardButton(text="📊 Отчеты")
-            )
+            builder.row(KeyboardButton(text="👥 Мастера"), KeyboardButton(text="📊 Отчеты"))
 
-        builder.row(
-            KeyboardButton(text="⚙️ Настройки")
-        )
+        builder.row(KeyboardButton(text="⚙️ Настройки"))
 
     else:  # UNKNOWN
-        builder.row(
-            KeyboardButton(text="ℹ️ Информация"),
-            KeyboardButton(text="📞 Связаться")
-        )
+        builder.row(KeyboardButton(text="ℹ️ Информация"), KeyboardButton(text="📞 Связаться"))
 
     return builder.as_markup(resize_keyboard=True)
 
@@ -103,10 +84,7 @@ def get_skip_cancel_keyboard() -> ReplyKeyboardMarkup:
         ReplyKeyboardMarkup
     """
     builder = ReplyKeyboardBuilder()
-    builder.row(
-        KeyboardButton(text="⏭️ Пропустить"),
-        KeyboardButton(text="❌ Отмена")
-    )
+    builder.row(KeyboardButton(text="⏭️ Пропустить"), KeyboardButton(text="❌ Отмена"))
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -118,9 +96,5 @@ def get_confirm_keyboard() -> ReplyKeyboardMarkup:
         ReplyKeyboardMarkup
     """
     builder = ReplyKeyboardBuilder()
-    builder.row(
-        KeyboardButton(text="✅ Подтвердить"),
-        KeyboardButton(text="❌ Отмена")
-    )
+    builder.row(KeyboardButton(text="✅ Подтвердить"), KeyboardButton(text="❌ Отмена"))
     return builder.as_markup(resize_keyboard=True)
-

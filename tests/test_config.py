@@ -1,6 +1,7 @@
 """
 Тесты для модуля config
 """
+
 import pytest
 
 from app.config import Config, EquipmentType, OrderStatus, UserRole
@@ -82,4 +83,3 @@ class TestConfig:
         monkeypatch.setattr(Config, "ADMIN_IDS", [123])
 
         assert Config.validate() is True
-

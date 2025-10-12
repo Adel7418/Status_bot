@@ -1,6 +1,7 @@
 """
 Вспомогательные функции
 """
+
 import logging
 import re
 from datetime import datetime
@@ -25,8 +26,8 @@ def validate_phone(phone: str) -> bool:
     # Проверяем основные форматы
     patterns = [
         r"^\+7\d{10}$",  # +79001234567
-        r"^8\d{10}$",    # 89001234567
-        r"^7\d{10}$"     # 79001234567
+        r"^8\d{10}$",  # 89001234567
+        r"^7\d{10}$",  # 79001234567
     ]
 
     return any(re.match(pattern, cleaned) for pattern in patterns)
@@ -94,7 +95,7 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     """
     if len(text) <= max_length:
         return text
-    return text[:max_length - len(suffix)] + suffix
+    return text[: max_length - len(suffix)] + suffix
 
 
 def escape_markdown(text: str) -> str:
@@ -107,7 +108,26 @@ def escape_markdown(text: str) -> str:
     Returns:
         Экранированный текст
     """
-    special_chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
+    special_chars = [
+        "_",
+        "*",
+        "[",
+        "]",
+        "(",
+        ")",
+        "~",
+        "`",
+        ">",
+        "#",
+        "+",
+        "-",
+        "=",
+        "|",
+        "{",
+        "}",
+        ".",
+        "!",
+    ]
     for char in special_chars:
         text = text.replace(char, "\\" + char)
     return text
@@ -117,7 +137,7 @@ def get_user_display_name(
     first_name: str | None = None,
     last_name: str | None = None,
     username: str | None = None,
-    telegram_id: int | None = None
+    telegram_id: int | None = None,
 ) -> str:
     """
     Получение отображаемого имени пользователя
@@ -155,7 +175,7 @@ def parse_callback_data(callback_data: str) -> dict:
     parts = callback_data.split(":")
     return {
         "action": parts[0] if len(parts) > 0 else None,
-        "params": parts[1:] if len(parts) > 1 else []
+        "params": parts[1:] if len(parts) > 1 else [],
     }
 
 
@@ -188,7 +208,9 @@ def log_action(user_id: int, action: str, details: str | None = None):
     logger.info(log_msg)
 
 
-def calculate_profit_split(total_amount: float, materials_cost: float, has_review: bool = False) -> tuple[float, float]:
+def calculate_profit_split(
+    total_amount: float, materials_cost: float, has_review: bool = False
+) -> tuple[float, float]:
     """
     Расчет распределения прибыли между мастером и компанией
 
@@ -225,4 +247,3 @@ def calculate_profit_split(total_amount: float, materials_cost: float, has_revie
         company_profit -= review_bonus
 
     return (master_profit, company_profit)
-

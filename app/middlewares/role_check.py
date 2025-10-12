@@ -1,6 +1,7 @@
 """
 Middleware для проверки ролей и регистрации пользователей
 """
+
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -31,7 +32,7 @@ class RoleCheckMiddleware(BaseMiddleware):
         self,
         handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
         event: Message | CallbackQuery,
-        data: dict[str, Any]
+        data: dict[str, Any],
     ) -> Any:
         """
         Обработка события
@@ -53,16 +54,17 @@ class RoleCheckMiddleware(BaseMiddleware):
                 telegram_id=user.id,
                 username=user.username,
                 first_name=user.first_name,
-                last_name=user.last_name
+                last_name=user.last_name,
             )
 
             # Добавляем пользователя и его роли в данные
             data["user"] = db_user
-            data["user_role"] = db_user.get_primary_role()  # Основная роль для обратной совместимости
+            data["user_role"] = (
+                db_user.get_primary_role()
+            )  # Основная роль для обратной совместимости
             data["user_roles"] = db_user.get_roles()  # Список всех ролей
 
             logger.debug("User %s with roles %s processed", user.id, db_user.get_roles())
 
         # Вызываем следующий handler
         return await handler(event, data)
-

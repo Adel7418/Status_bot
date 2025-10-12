@@ -1,6 +1,7 @@
 """
 Filters package
 """
+
 from app.filters.group_filter import (
     IsGroupChat,
     IsGroupOrderCallback,
@@ -23,6 +24,5 @@ __all__ = [
     "IsMasterWorkGroup",
     "IsOrderRelatedMessage",
     "IsPrivateChat",
-    "RoleFilter"
+    "RoleFilter",
 ]
-

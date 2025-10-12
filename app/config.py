@@ -1,6 +1,7 @@
 """
 Конфигурация бота
 """
+
 import os
 from typing import ClassVar
 
@@ -45,6 +46,7 @@ class Config:
 
 class UserRole:
     """Роли пользователей"""
+
     ADMIN = "ADMIN"
     DISPATCHER = "DISPATCHER"
     MASTER = "MASTER"
@@ -58,13 +60,14 @@ class UserRole:
 
 class OrderStatus:
     """Статусы заявок"""
-    NEW = "NEW"                  # Новая заявка
-    ASSIGNED = "ASSIGNED"        # Назначена мастеру
-    ACCEPTED = "ACCEPTED"        # Принята мастером
-    ONSITE = "ONSITE"           # Мастер на объекте
-    CLOSED = "CLOSED"           # Завершена
-    REFUSED = "REFUSED"         # Отклонена
-    DR = "DR"                   # Длительный ремонт
+
+    NEW = "NEW"  # Новая заявка
+    ASSIGNED = "ASSIGNED"  # Назначена мастеру
+    ACCEPTED = "ACCEPTED"  # Принята мастером
+    ONSITE = "ONSITE"  # Мастер на объекте
+    CLOSED = "CLOSED"  # Завершена
+    REFUSED = "REFUSED"  # Отклонена
+    DR = "DR"  # Длительный ремонт
 
     @classmethod
     def all_statuses(cls) -> list[str]:
@@ -81,7 +84,7 @@ class OrderStatus:
             cls.ONSITE: "🏠",
             cls.CLOSED: "💰",
             cls.REFUSED: "❌",
-            cls.DR: "⏳"
+            cls.DR: "⏳",
         }
         return emojis.get(status, "")
 
@@ -95,13 +98,14 @@ class OrderStatus:
             cls.ONSITE: "На объекте",
             cls.CLOSED: "Завершена",
             cls.REFUSED: "Отклонена",
-            cls.DR: "Длительный ремонт"
+            cls.DR: "Длительный ремонт",
         }
         return names.get(status, status)
 
 
 class EquipmentType:
     """Типы техники"""
+
     WASHING_MACHINE = "Стиральные машины"
     OVEN = "Духовой шкаф"
     DISHWASHER = "Посудомоечная машина"
@@ -122,7 +126,7 @@ class EquipmentType:
             cls.PLUMBING,
             cls.ELECTRICAL,
             cls.WATER_HEATER,
-            cls.TV
+            cls.TV,
         ]
 
 
@@ -171,4 +175,3 @@ class Messages:
 MAX_DESCRIPTION_LENGTH = 500
 MAX_NOTES_LENGTH = 1000
 PHONE_REGEX = r"^\+?[0-9]{10,15}$"
-

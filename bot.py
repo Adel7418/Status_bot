@@ -1,6 +1,7 @@
 """
 Главный файл Telegram бота для управления заявками на ремонт техники
 """
+
 import asyncio
 import logging
 import sys
@@ -21,10 +22,7 @@ from app.services.scheduler import TaskScheduler
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.FileHandler("bot.log", encoding="utf-8"), logging.StreamHandler(sys.stdout)],
 )
 
 logger = logging.getLogger(__name__)
@@ -82,9 +80,8 @@ async def on_shutdown(bot: Bot, db: Database, scheduler: TaskScheduler):
         try:
             await bot.send_message(
                 admin_id,
-                "🛑 <b>Бот остановлен</b>\n\n"
-                "Система управления заявками прекратила работу.",
-                parse_mode="HTML"
+                "🛑 <b>Бот остановлен</b>\n\n" "Система управления заявками прекратила работу.",
+                parse_mode="HTML",
             )
         except Exception as e:
             logger.error("Failed to notify admin %s: %s", admin_id, e)
@@ -103,12 +100,7 @@ async def main():
         sys.exit(1)
 
     # Инициализация бота
-    bot = Bot(
-        token=Config.BOT_TOKEN,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML
-        )
-    )
+    bot = Bot(token=Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
     # Инициализация хранилища состояний
     storage = MemoryStorage()
@@ -145,10 +137,7 @@ async def main():
     # Запуск бота
     try:
         logger.info("Запуск бота...")
-        await dp.start_polling(
-            bot,
-            allowed_updates=dp.resolve_used_update_types()
-        )
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
         logger.error("Критическая ошибка: %s", e)
     finally:
@@ -165,4 +154,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.critical("Неожиданная ошибка: %s", e)
         sys.exit(1)
-

@@ -1,6 +1,7 @@
 """
 Общие обработчики для всех пользователей
 """
+
 import logging
 
 from aiogram import F, Router
@@ -39,7 +40,7 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
         UserRole.ADMIN: Messages.WELCOME_ADMIN,
         UserRole.DISPATCHER: Messages.WELCOME_DISPATCHER,
         UserRole.MASTER: Messages.WELCOME_MASTER,
-        UserRole.UNKNOWN: Messages.WELCOME_UNKNOWN
+        UserRole.UNKNOWN: Messages.WELCOME_UNKNOWN,
     }
 
     # Если у пользователя несколько ролей, формируем комбинированное приветствие
@@ -62,10 +63,7 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
     logger.info("Sending welcome message...")
 
     # Отправляем приветствие с клавиатурой (передаем список ролей)
-    await message.answer(
-        welcome_text,
-        reply_markup=get_main_menu_keyboard(user_roles)
-    )
+    await message.answer(welcome_text, reply_markup=get_main_menu_keyboard(user_roles))
 
     logger.info(f"User {message.from_user.id} ({', '.join(user_roles)}) started the bot")
 
@@ -132,7 +130,7 @@ async def cmd_help(message: Message, user_role: str, user_roles: list):
             "Команды:\n"
             "/start - главное меню\n"
             "/help - эта справка"
-        )
+        ),
     }
 
     # Формируем справку для пользователей с несколькими ролями
@@ -176,10 +174,7 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_r
     # Очищаем состояние
     await state.clear()
 
-    await message.answer(
-        "❌ Действие отменено.",
-        reply_markup=get_main_menu_keyboard(user_roles)
-    )
+    await message.answer("❌ Действие отменено.", reply_markup=get_main_menu_keyboard(user_roles))
 
     logger.info(f"User {message.from_user.id} cancelled action")
 
@@ -217,7 +212,7 @@ async def btn_settings(message: Message, user: User):
         UserRole.ADMIN: "Администратор",
         UserRole.DISPATCHER: "Диспетчер",
         UserRole.MASTER: "Мастер",
-        UserRole.UNKNOWN: "Неизвестно"
+        UserRole.UNKNOWN: "Неизвестно",
     }
 
     roles_display = ", ".join([role_names.get(r, r) for r in roles])
@@ -341,7 +336,7 @@ async def handle_unknown_text(message: Message, user_role: str):
         "📞 Связаться",
         "❌ Отмена",
         "⏭️ Пропустить",
-        "✅ Подтвердить"
+        "✅ Подтвердить",
     ]
 
     # Если это известная кнопка, не обрабатываем здесь
@@ -352,11 +347,10 @@ async def handle_unknown_text(message: Message, user_role: str):
         await message.answer(
             "❌ У вас нет доступа к системе.\n"
             "Обратитесь к администратору для получения доступа.",
-            reply_markup=get_main_menu_keyboard(user_role)
+            reply_markup=get_main_menu_keyboard(user_role),
         )
     else:
         await message.answer(
             "❓ Не понимаю эту команду. Используйте меню ниже или /help для справки.",
-            reply_markup=get_main_menu_keyboard(user_role)
+            reply_markup=get_main_menu_keyboard(user_role),
         )
-

@@ -1,6 +1,7 @@
 """
 Сервис генерации отчетов
 """
+
 import logging
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -49,7 +50,9 @@ class ReportsService:
             orders = await self.db.get_orders_by_master(master.id, exclude_closed=False)
             total = len(orders)
             completed = len([o for o in orders if o.status == OrderStatus.CLOSED])
-            active = len([o for o in orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]])
+            active = len(
+                [o for o in orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]]
+            )
 
             status = "🟢" if master.is_active else "🔴"
 
@@ -118,11 +121,7 @@ class ReportsService:
 
         return text
 
-    async def generate_period_report(
-        self,
-        start_date: datetime,
-        end_date: datetime
-    ) -> str:
+    async def generate_period_report(self, start_date: datetime, end_date: datetime) -> str:
         """
         Генерация отчета за период
 
@@ -137,10 +136,7 @@ class ReportsService:
         all_orders = await self.db.get_all_orders()
 
         # Фильтруем по периоду
-        orders = [
-            o for o in all_orders
-            if o.created_at and start_date <= o.created_at <= end_date
-        ]
+        orders = [o for o in all_orders if o.created_at and start_date <= o.created_at <= end_date]
 
         text = (
             f"📊 <b>Отчет за период</b>\n"
@@ -180,7 +176,7 @@ class ReportsService:
         self,
         report_type: str = "all",
         start_date: datetime | None = None,
-        end_date: datetime | None = None
+        end_date: datetime | None = None,
     ) -> BufferedInputFile:
         """
         Генерация отчета в формате Excel
@@ -209,7 +205,9 @@ class ReportsService:
         elif report_type == "equipment":
             await self._fill_equipment_sheet(ws, header_font, header_fill, header_alignment)
         else:  # all
-            await self._fill_all_orders_sheet(ws, header_font, header_fill, header_alignment, start_date, end_date)
+            await self._fill_all_orders_sheet(
+                ws, header_font, header_fill, header_alignment, start_date, end_date
+            )
 
         # Сохраняем в BytesIO
         excel_file = BytesIO()
@@ -223,7 +221,16 @@ class ReportsService:
     async def _fill_masters_sheet(self, ws, header_font, header_fill, header_alignment):
         """Заполнение листа отчета по мастерам"""
         # Заголовки
-        headers = ["ID", "Имя", "Телефон", "Специализация", "Статус", "Всего заявок", "Завершено", "Активных"]
+        headers = [
+            "ID",
+            "Имя",
+            "Телефон",
+            "Специализация",
+            "Статус",
+            "Всего заявок",
+            "Завершено",
+            "Активных",
+        ]
         ws.append(headers)
 
         for cell in ws[1]:
@@ -238,18 +245,22 @@ class ReportsService:
             orders = await self.db.get_orders_by_master(master.id, exclude_closed=False)
             total = len(orders)
             completed = len([o for o in orders if o.status == OrderStatus.CLOSED])
-            active = len([o for o in orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]])
+            active = len(
+                [o for o in orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]]
+            )
 
-            ws.append([
-                master.id,
-                master.get_display_name(),
-                master.phone,
-                master.specialization,
-                "Активен" if master.is_active else "Неактивен",
-                total,
-                completed,
-                active
-            ])
+            ws.append(
+                [
+                    master.id,
+                    master.get_display_name(),
+                    master.phone,
+                    master.specialization,
+                    "Активен" if master.is_active else "Неактивен",
+                    total,
+                    completed,
+                    active,
+                ]
+            )
 
         # Автоширина колонок
         for column in ws.columns:
@@ -261,7 +272,7 @@ class ReportsService:
                         max_length = len(cell.value)
                 except Exception:
                     pass
-            adjusted_width = (max_length + 2)
+            adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
 
     async def _fill_statuses_sheet(self, ws, header_font, header_fill, header_alignment):
@@ -282,11 +293,7 @@ class ReportsService:
             count = orders_by_status.get(status, 0)
             percentage = (count / total * 100) if total > 0 else 0
 
-            ws.append([
-                OrderStatus.get_status_name(status),
-                count,
-                f"{percentage:.1f}%"
-            ])
+            ws.append([OrderStatus.get_status_name(status), count, f"{percentage:.1f}%"])
 
         for column in ws.columns:
             max_length = 0
@@ -297,7 +304,7 @@ class ReportsService:
                         max_length = len(cell.value)
                 except Exception:
                     pass
-            adjusted_width = (max_length + 2)
+            adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
 
     async def _fill_equipment_sheet(self, ws, header_font, header_fill, header_alignment):
@@ -332,15 +339,24 @@ class ReportsService:
                         max_length = len(cell.value)
                 except Exception:
                     pass
-            adjusted_width = (max_length + 2)
+            adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
 
-    async def _fill_all_orders_sheet(self, ws, header_font, header_fill, header_alignment, start_date, end_date):
+    async def _fill_all_orders_sheet(
+        self, ws, header_font, header_fill, header_alignment, start_date, end_date
+    ):
         """Заполнение листа со всеми заявками"""
         headers = [
-            "ID", "Дата создания", "Тип техники", "Описание",
-            "Клиент", "Телефон", "Адрес", "Статус",
-            "Мастер", "Диспетчер"
+            "ID",
+            "Дата создания",
+            "Тип техники",
+            "Описание",
+            "Клиент",
+            "Телефон",
+            "Адрес",
+            "Статус",
+            "Мастер",
+            "Диспетчер",
         ]
         ws.append(headers)
 
@@ -354,25 +370,26 @@ class ReportsService:
         # Фильтруем по периоду если указан
         if start_date and end_date:
             orders = [
-                o for o in all_orders
-                if o.created_at and start_date <= o.created_at <= end_date
+                o for o in all_orders if o.created_at and start_date <= o.created_at <= end_date
             ]
         else:
             orders = all_orders
 
         for order in orders:
-            ws.append([
-                order.id,
-                format_datetime(order.created_at) if order.created_at else "",
-                order.equipment_type,
-                order.description,
-                order.client_name,
-                order.client_phone,
-                order.client_address,
-                OrderStatus.get_status_name(order.status),
-                order.master_name or "",
-                order.dispatcher_name or ""
-            ])
+            ws.append(
+                [
+                    order.id,
+                    format_datetime(order.created_at) if order.created_at else "",
+                    order.equipment_type,
+                    order.description,
+                    order.client_name,
+                    order.client_phone,
+                    order.client_address,
+                    OrderStatus.get_status_name(order.status),
+                    order.master_name or "",
+                    order.dispatcher_name or "",
+                ]
+            )
 
         for column in ws.columns:
             max_length = 0
@@ -420,4 +437,3 @@ class ReportsService:
             end = now
 
         return start, end
-

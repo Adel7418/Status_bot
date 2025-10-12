@@ -27,30 +27,30 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
         builder.row(
             InlineKeyboardButton(
                 text="✅ Принять заявку",
-                callback_data=create_callback_data("group_accept_order", order.id)
+                callback_data=create_callback_data("group_accept_order", order.id),
             ),
             InlineKeyboardButton(
                 text="❌ Отклонить",
-                callback_data=create_callback_data("group_refuse_order", order.id)
-            )
+                callback_data=create_callback_data("group_refuse_order", order.id),
+            ),
         )
     elif status == OrderStatus.ACCEPTED:
         builder.row(
             InlineKeyboardButton(
                 text="🏠 Я на объекте",
-                callback_data=create_callback_data("group_onsite_order", order.id)
+                callback_data=create_callback_data("group_onsite_order", order.id),
             )
         )
     elif status == OrderStatus.ONSITE:
         builder.row(
             InlineKeyboardButton(
                 text="💰 Завершить",
-                callback_data=create_callback_data("group_complete_order", order.id)
+                callback_data=create_callback_data("group_complete_order", order.id),
             ),
             InlineKeyboardButton(
                 text="⏳ Длительный ремонт",
-                callback_data=create_callback_data("group_dr_order", order.id)
-            )
+                callback_data=create_callback_data("group_dr_order", order.id),
+            ),
         )
 
     return builder.as_markup()
@@ -68,22 +68,16 @@ def get_equipment_types_keyboard() -> InlineKeyboardMarkup:
     for equipment_type in EquipmentType.all_types():
         builder.row(
             InlineKeyboardButton(
-                text=equipment_type,
-                callback_data=create_callback_data("equipment", equipment_type)
+                text=equipment_type, callback_data=create_callback_data("equipment", equipment_type)
             )
         )
 
-    builder.row(
-        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
-    )
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
 
     return builder.as_markup()
 
 
-def get_order_actions_keyboard(
-    order: Order,
-    user_role: str
-) -> InlineKeyboardMarkup:
+def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMarkup:
     """
     Клавиатура действий с заявкой
 
@@ -104,39 +98,42 @@ def get_order_actions_keyboard(
             builder.row(
                 InlineKeyboardButton(
                     text="👨‍🔧 Назначить мастера",
-                    callback_data=create_callback_data("assign_master", order.id)
+                    callback_data=create_callback_data("assign_master", order.id),
                 )
             )
 
         # Кнопка переназначения мастера для заявок с уже назначенным мастером
-        if order.assigned_master_id and order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
+        if order.assigned_master_id and order.status not in [
+            OrderStatus.CLOSED,
+            OrderStatus.REFUSED,
+        ]:
             builder.row(
                 InlineKeyboardButton(
                     text="🔄 Переназначить мастера",
-                    callback_data=create_callback_data("reassign_master", order.id)
+                    callback_data=create_callback_data("reassign_master", order.id),
                 ),
                 InlineKeyboardButton(
                     text="🚫 Снять мастера",
-                    callback_data=create_callback_data("unassign_master", order.id)
-                )
+                    callback_data=create_callback_data("unassign_master", order.id),
+                ),
             )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
             builder.row(
                 InlineKeyboardButton(
                     text="✏️ Редактировать",
-                    callback_data=create_callback_data("edit_order", order.id)
+                    callback_data=create_callback_data("edit_order", order.id),
                 )
             )
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Закрыть заявку",
-                    callback_data=create_callback_data("close_order", order.id)
+                    callback_data=create_callback_data("close_order", order.id),
                 ),
                 InlineKeyboardButton(
                     text="❌ Отклонить",
-                    callback_data=create_callback_data("refuse_order", order.id)
-                )
+                    callback_data=create_callback_data("refuse_order", order.id),
+                ),
             )
 
     # Действия для мастеров
@@ -145,47 +142,40 @@ def get_order_actions_keyboard(
             builder.row(
                 InlineKeyboardButton(
                     text="✅ Принять заявку",
-                    callback_data=create_callback_data("accept_order", order.id)
+                    callback_data=create_callback_data("accept_order", order.id),
                 ),
                 InlineKeyboardButton(
                     text="❌ Отклонить",
-                    callback_data=create_callback_data("refuse_order_master", order.id)
-                )
+                    callback_data=create_callback_data("refuse_order_master", order.id),
+                ),
             )
         elif order.status == OrderStatus.ACCEPTED:
             builder.row(
                 InlineKeyboardButton(
                     text="🏠 Я на объекте",
-                    callback_data=create_callback_data("onsite_order", order.id)
+                    callback_data=create_callback_data("onsite_order", order.id),
                 )
             )
         elif order.status == OrderStatus.ONSITE:
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Завершить",
-                    callback_data=create_callback_data("complete_order", order.id)
+                    callback_data=create_callback_data("complete_order", order.id),
                 ),
                 InlineKeyboardButton(
                     text="⏳ Длительный ремонт",
-                    callback_data=create_callback_data("dr_order", order.id)
-                )
+                    callback_data=create_callback_data("dr_order", order.id),
+                ),
             )
 
     # Кнопка "Назад" для всех
-    builder.row(
-        InlineKeyboardButton(
-            text="◀️ Назад",
-            callback_data="back_to_orders"
-        )
-    )
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_orders"))
 
     return builder.as_markup()
 
 
 def get_masters_list_keyboard(
-    masters: list[Master],
-    order_id: int | None = None,
-    action: str = "select_master"
+    masters: list[Master], order_id: int | None = None, action: str = "select_master"
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура со списком мастеров
@@ -211,14 +201,11 @@ def get_masters_list_keyboard(
 
         builder.row(
             InlineKeyboardButton(
-                text=f"{display_name}{specialization}",
-                callback_data=callback_data
+                text=f"{display_name}{specialization}", callback_data=callback_data
             )
         )
 
-    builder.row(
-        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
-    )
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
 
     return builder.as_markup()
 
@@ -237,13 +224,11 @@ def get_master_approval_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
 
     builder.row(
         InlineKeyboardButton(
-            text="✅ Одобрить",
-            callback_data=create_callback_data("approve_master", telegram_id)
+            text="✅ Одобрить", callback_data=create_callback_data("approve_master", telegram_id)
         ),
         InlineKeyboardButton(
-            text="❌ Отклонить",
-            callback_data=create_callback_data("reject_master", telegram_id)
-        )
+            text="❌ Отклонить", callback_data=create_callback_data("reject_master", telegram_id)
+        ),
     )
 
     return builder.as_markup()
@@ -260,38 +245,36 @@ def get_orders_filter_keyboard() -> InlineKeyboardMarkup:
 
     builder.row(
         InlineKeyboardButton(
-            text="🆕 Новые",
-            callback_data=create_callback_data("filter_orders", OrderStatus.NEW)
+            text="🆕 Новые", callback_data=create_callback_data("filter_orders", OrderStatus.NEW)
         ),
         InlineKeyboardButton(
             text="👨‍🔧 Назначенные",
-            callback_data=create_callback_data("filter_orders", OrderStatus.ASSIGNED)
-        )
+            callback_data=create_callback_data("filter_orders", OrderStatus.ASSIGNED),
+        ),
     )
     builder.row(
         InlineKeyboardButton(
             text="✅ Принятые",
-            callback_data=create_callback_data("filter_orders", OrderStatus.ACCEPTED)
+            callback_data=create_callback_data("filter_orders", OrderStatus.ACCEPTED),
         ),
         InlineKeyboardButton(
             text="🏠 На объекте",
-            callback_data=create_callback_data("filter_orders", OrderStatus.ONSITE)
-        )
+            callback_data=create_callback_data("filter_orders", OrderStatus.ONSITE),
+        ),
     )
     builder.row(
         InlineKeyboardButton(
             text="💰 Завершенные",
-            callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED)
+            callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
         ),
         InlineKeyboardButton(
             text="⏳ Длительный ремонт",
-            callback_data=create_callback_data("filter_orders", OrderStatus.DR)
-        )
+            callback_data=create_callback_data("filter_orders", OrderStatus.DR),
+        ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="🔄 Все заявки",
-            callback_data=create_callback_data("filter_orders", "all")
+            text="🔄 Все заявки", callback_data=create_callback_data("filter_orders", "all")
         )
     )
 
@@ -320,15 +303,12 @@ def get_order_list_keyboard(orders: list[Order], for_master: bool = False) -> In
 
         builder.row(
             InlineKeyboardButton(
-                text=text,
-                callback_data=create_callback_data(callback_prefix, order.id)
+                text=text, callback_data=create_callback_data(callback_prefix, order.id)
             )
         )
 
     if not orders:
-        builder.row(
-            InlineKeyboardButton(text="❌ Заявок нет", callback_data="no_orders")
-        )
+        builder.row(InlineKeyboardButton(text="❌ Заявок нет", callback_data="no_orders"))
 
     return builder.as_markup()
 
@@ -342,33 +322,11 @@ def get_reports_keyboard() -> InlineKeyboardMarkup:
     """
     builder = InlineKeyboardBuilder()
 
-    builder.row(
-        InlineKeyboardButton(
-            text="👥 По мастерам",
-            callback_data="report_masters"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="📊 По статусам",
-            callback_data="report_statuses"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="🔧 По типам техники",
-            callback_data="report_equipment"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="📅 За период",
-            callback_data="report_period"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
-    )
+    builder.row(InlineKeyboardButton(text="👥 По мастерам", callback_data="report_masters"))
+    builder.row(InlineKeyboardButton(text="📊 По статусам", callback_data="report_statuses"))
+    builder.row(InlineKeyboardButton(text="🔧 По типам техники", callback_data="report_equipment"))
+    builder.row(InlineKeyboardButton(text="📅 За период", callback_data="report_period"))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
 
     return builder.as_markup()
 
@@ -384,18 +342,14 @@ def get_period_keyboard() -> InlineKeyboardMarkup:
 
     builder.row(
         InlineKeyboardButton(text="📅 Сегодня", callback_data="period_today"),
-        InlineKeyboardButton(text="📅 Вчера", callback_data="period_yesterday")
+        InlineKeyboardButton(text="📅 Вчера", callback_data="period_yesterday"),
     )
     builder.row(
         InlineKeyboardButton(text="📅 Неделя", callback_data="period_week"),
-        InlineKeyboardButton(text="📅 Месяц", callback_data="period_month")
+        InlineKeyboardButton(text="📅 Месяц", callback_data="period_month"),
     )
-    builder.row(
-        InlineKeyboardButton(text="📅 Год", callback_data="period_year")
-    )
-    builder.row(
-        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
-    )
+    builder.row(InlineKeyboardButton(text="📅 Год", callback_data="period_year"))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
 
     return builder.as_markup()
 
@@ -417,7 +371,7 @@ def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineK
     builder.row(
         InlineKeyboardButton(
             text="💬 Установить рабочую группу",
-            callback_data=create_callback_data("set_work_chat", telegram_id)
+            callback_data=create_callback_data("set_work_chat", telegram_id),
         )
     )
 
@@ -425,34 +379,29 @@ def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineK
         builder.row(
             InlineKeyboardButton(
                 text="🚫 Деактивировать",
-                callback_data=create_callback_data("deactivate_master", telegram_id)
+                callback_data=create_callback_data("deactivate_master", telegram_id),
             )
         )
     else:
         builder.row(
             InlineKeyboardButton(
                 text="✅ Активировать",
-                callback_data=create_callback_data("activate_master", telegram_id)
+                callback_data=create_callback_data("activate_master", telegram_id),
             )
         )
 
     builder.row(
         InlineKeyboardButton(
-            text="📊 Статистика",
-            callback_data=create_callback_data("master_stats", telegram_id)
+            text="📊 Статистика", callback_data=create_callback_data("master_stats", telegram_id)
         )
     )
-    builder.row(
-        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_masters")
-    )
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_masters"))
 
     return builder.as_markup()
 
 
 def get_pagination_keyboard(
-    current_page: int,
-    total_pages: int,
-    callback_prefix: str
+    current_page: int, total_pages: int, callback_prefix: str
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура пагинации
@@ -472,27 +421,21 @@ def get_pagination_keyboard(
     if current_page > 1:
         buttons.append(
             InlineKeyboardButton(
-                text="◀️",
-                callback_data=create_callback_data(callback_prefix, current_page - 1)
+                text="◀️", callback_data=create_callback_data(callback_prefix, current_page - 1)
             )
         )
 
     buttons.append(
-        InlineKeyboardButton(
-            text=f"{current_page}/{total_pages}",
-            callback_data="current_page"
-        )
+        InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="current_page")
     )
 
     if current_page < total_pages:
         buttons.append(
             InlineKeyboardButton(
-                text="▶️",
-                callback_data=create_callback_data(callback_prefix, current_page + 1)
+                text="▶️", callback_data=create_callback_data(callback_prefix, current_page + 1)
             )
         )
 
     builder.row(*buttons)
 
     return builder.as_markup()
-

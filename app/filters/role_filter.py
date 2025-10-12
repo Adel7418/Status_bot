@@ -1,6 +1,7 @@
 """
 Фильтры для проверки ролей пользователей
 """
+
 import logging
 
 from aiogram.filters import BaseFilter
@@ -27,11 +28,7 @@ class RoleFilter(BaseFilter):
         else:
             self.roles = roles
 
-    async def __call__(
-        self,
-        _event: Message | CallbackQuery,
-        **kwargs
-    ) -> bool:
+    async def __call__(self, _event: Message | CallbackQuery, **kwargs) -> bool:
         """
         Проверка роли
 
@@ -47,7 +44,6 @@ class RoleFilter(BaseFilter):
 
         # Проверяем, есть ли хотя бы одна из требуемых ролей у пользователя
         return any(role in user_roles for role in self.roles)
-
 
 
 class IsAdmin(RoleFilter):
@@ -76,4 +72,3 @@ class IsAdminOrDispatcher(RoleFilter):
 
     def __init__(self):
         super().__init__([UserRole.ADMIN, UserRole.DISPATCHER])
-

@@ -1,6 +1,7 @@
 """
 Работа с базой данных
 """
+
 import logging
 from datetime import datetime
 from typing import Any
@@ -45,7 +46,8 @@ class Database:
             await self.connect()
 
         # Создание таблицы users
-        await self.connection.execute("""
+        await self.connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER UNIQUE NOT NULL,
@@ -55,10 +57,12 @@ class Database:
                 role TEXT DEFAULT 'UNKNOWN',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # Создание таблицы masters
-        await self.connection.execute("""
+        await self.connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS masters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER UNIQUE NOT NULL,
@@ -70,13 +74,16 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
             )
-        """)
+        """
+        )
 
         # Добавление поля work_chat_id в существующую таблицу (если его нет)
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE masters ADD COLUMN work_chat_id INTEGER
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле work_chat_id в таблицу masters")
         except Exception:
@@ -85,9 +92,11 @@ class Database:
 
         # Добавление полей для сумм в таблицу orders (если их нет)
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE orders ADD COLUMN total_amount REAL
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле total_amount в таблицу orders")
         except Exception:
@@ -95,9 +104,11 @@ class Database:
             pass
 
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE orders ADD COLUMN materials_cost REAL
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле materials_cost в таблицу orders")
         except Exception:
@@ -105,9 +116,11 @@ class Database:
             pass
 
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE orders ADD COLUMN master_profit REAL
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле master_profit в таблицу orders")
         except Exception:
@@ -115,9 +128,11 @@ class Database:
             pass
 
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE orders ADD COLUMN company_profit REAL
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле company_profit в таблицу orders")
         except Exception:
@@ -125,9 +140,11 @@ class Database:
             pass
 
         try:
-            await self.connection.execute("""
+            await self.connection.execute(
+                """
                 ALTER TABLE orders ADD COLUMN has_review INTEGER DEFAULT 0
-            """)
+            """
+            )
             await self.connection.commit()
             logger.info("Добавлено поле has_review в таблицу orders")
         except Exception:
@@ -135,7 +152,8 @@ class Database:
             pass
 
         # Создание таблицы orders
-        await self.connection.execute("""
+        await self.connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 equipment_type TEXT NOT NULL,
@@ -152,10 +170,12 @@ class Database:
                 FOREIGN KEY (assigned_master_id) REFERENCES masters(id),
                 FOREIGN KEY (dispatcher_id) REFERENCES users(telegram_id)
             )
-        """)
+        """
+        )
 
         # Создание таблицы audit_log
-        await self.connection.execute("""
+        await self.connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS audit_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -164,7 +184,8 @@ class Database:
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(telegram_id)
             )
-        """)
+        """
+        )
 
         await self.connection.commit()
         logger.info("База данных инициализирована")
@@ -182,7 +203,7 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
             "CREATE INDEX IF NOT EXISTS idx_orders_assigned_master_id ON orders(assigned_master_id)",
             "CREATE INDEX IF NOT EXISTS idx_orders_dispatcher_id ON orders(dispatcher_id)",
-            "CREATE INDEX IF NOT EXISTS idx_audit_user_id ON audit_log(user_id)"
+            "CREATE INDEX IF NOT EXISTS idx_audit_user_id ON audit_log(user_id)",
         ]
 
         for index_sql in indexes:
@@ -197,7 +218,7 @@ class Database:
         telegram_id: int,
         username: str | None = None,
         first_name: str | None = None,
-        last_name: str | None = None
+        last_name: str | None = None,
     ) -> User:
         """
         Получение или создание пользователя
@@ -216,14 +237,18 @@ class Database:
 
         if user:
             # Обновляем информацию если изменилась
-            if user.username != username or user.first_name != first_name or user.last_name != last_name:
+            if (
+                user.username != username
+                or user.first_name != first_name
+                or user.last_name != last_name
+            ):
                 await self.connection.execute(
                     """
                     UPDATE users
                     SET username = ?, first_name = ?, last_name = ?
                     WHERE telegram_id = ?
                     """,
-                    (username, first_name, last_name, telegram_id)
+                    (username, first_name, last_name, telegram_id),
                 )
                 await self.connection.commit()
                 user.username = username
@@ -244,7 +269,7 @@ class Database:
             INSERT INTO users (telegram_id, username, first_name, last_name, role)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (telegram_id, username, first_name, last_name, role)
+            (telegram_id, username, first_name, last_name, role),
         )
         await self.connection.commit()
 
@@ -255,7 +280,7 @@ class Database:
             first_name=first_name,
             last_name=last_name,
             role=role,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
         logger.info("Создан новый пользователь: %s с ролью %s", telegram_id, role)
@@ -272,8 +297,7 @@ class Database:
             Объект User или None
         """
         cursor = await self.connection.execute(
-            "SELECT * FROM users WHERE telegram_id = ?",
-            (telegram_id,)
+            "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
         )
         row = await cursor.fetchone()
 
@@ -285,7 +309,7 @@ class Database:
                 first_name=row["first_name"],
                 last_name=row["last_name"],
                 role=row["role"],
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
             )
         return None
 
@@ -301,8 +325,7 @@ class Database:
             True если успешно
         """
         await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?",
-            (role, telegram_id)
+            "UPDATE users SET role = ? WHERE telegram_id = ?", (role, telegram_id)
         )
         await self.connection.commit()
         logger.info("Роль пользователя %s изменена на %s", telegram_id, role)
@@ -328,8 +351,7 @@ class Database:
         new_roles = user.add_role(role)
 
         await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?",
-            (new_roles, telegram_id)
+            "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
         )
         await self.connection.commit()
         logger.info("Роль %s добавлена пользователю %s. Роли: %s", role, telegram_id, new_roles)
@@ -355,8 +377,7 @@ class Database:
         new_roles = user.remove_role(role)
 
         await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?",
-            (new_roles, telegram_id)
+            "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
         )
         await self.connection.commit()
         logger.info(f"Роль {role} удалена у пользователя {telegram_id}. Роли: {new_roles}")
@@ -379,8 +400,7 @@ class Database:
         roles_str = ",".join(sorted(set(roles)))
 
         await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?",
-            (roles_str, telegram_id)
+            "UPDATE users SET role = ? WHERE telegram_id = ?", (roles_str, telegram_id)
         )
         await self.connection.commit()
         logger.info(f"Роли пользователя {telegram_id} установлены: {roles_str}")
@@ -398,25 +418,25 @@ class Database:
 
         users = []
         for row in rows:
-            users.append(User(
-                id=row["id"],
-                telegram_id=row["telegram_id"],
-                username=row["username"],
-                first_name=row["first_name"],
-                last_name=row["last_name"],
-                role=row["role"],
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
-            ))
+            users.append(
+                User(
+                    id=row["id"],
+                    telegram_id=row["telegram_id"],
+                    username=row["username"],
+                    first_name=row["first_name"],
+                    last_name=row["last_name"],
+                    role=row["role"],
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                    ),
+                )
+            )
         return users
 
     # ==================== MASTERS ====================
 
     async def create_master(
-        self,
-        telegram_id: int,
-        phone: str,
-        specialization: str,
-        is_approved: bool = False
+        self, telegram_id: int, phone: str, specialization: str, is_approved: bool = False
     ) -> Master:
         """
         Создание мастера
@@ -435,7 +455,7 @@ class Database:
             INSERT INTO masters (telegram_id, phone, specialization, is_approved)
             VALUES (?, ?, ?, ?)
             """,
-            (telegram_id, phone, specialization, is_approved)
+            (telegram_id, phone, specialization, is_approved),
         )
         await self.connection.commit()
 
@@ -445,7 +465,7 @@ class Database:
             phone=phone,
             specialization=specialization,
             is_approved=is_approved,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
         logger.info(f"Создан мастер: {telegram_id}")
@@ -468,7 +488,7 @@ class Database:
             LEFT JOIN users u ON m.telegram_id = u.telegram_id
             WHERE m.telegram_id = ?
             """,
-            (telegram_id,)
+            (telegram_id,),
         )
         row = await cursor.fetchone()
 
@@ -480,11 +500,15 @@ class Database:
                 specialization=row["specialization"],
                 is_active=bool(row["is_active"]),
                 is_approved=bool(row["is_approved"]),
-                work_chat_id=row["work_chat_id"] if "work_chat_id" in row and row["work_chat_id"] is not None else None,
+                work_chat_id=(
+                    row["work_chat_id"]
+                    if "work_chat_id" in row and row["work_chat_id"] is not None
+                    else None
+                ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
                 username=row["username"],
                 first_name=row["first_name"],
-                last_name=row["last_name"]
+                last_name=row["last_name"],
             )
         return None
 
@@ -505,7 +529,7 @@ class Database:
             LEFT JOIN users u ON m.telegram_id = u.telegram_id
             WHERE m.id = ?
             """,
-            (master_id,)
+            (master_id,),
         )
         row = await cursor.fetchone()
 
@@ -517,15 +541,21 @@ class Database:
                 specialization=row["specialization"],
                 is_active=bool(row["is_active"]),
                 is_approved=bool(row["is_approved"]),
-                work_chat_id=row["work_chat_id"] if "work_chat_id" in row and row["work_chat_id"] is not None else None,
+                work_chat_id=(
+                    row["work_chat_id"]
+                    if "work_chat_id" in row and row["work_chat_id"] is not None
+                    else None
+                ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
                 username=row["username"],
                 first_name=row["first_name"],
-                last_name=row["last_name"]
+                last_name=row["last_name"],
             )
         return None
 
-    async def get_all_masters(self, only_approved: bool = False, only_active: bool = False) -> list[Master]:
+    async def get_all_masters(
+        self, only_approved: bool = False, only_active: bool = False
+    ) -> list[Master]:
         """
         Получение всех мастеров
 
@@ -556,19 +586,27 @@ class Database:
 
         masters = []
         for row in rows:
-            masters.append(Master(
-                id=row["id"],
-                telegram_id=row["telegram_id"],
-                phone=row["phone"],
-                specialization=row["specialization"],
-                is_active=bool(row["is_active"]),
-                is_approved=bool(row["is_approved"]),
-                work_chat_id=row["work_chat_id"] if "work_chat_id" in row and row["work_chat_id"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-                username=row["username"],
-                first_name=row["first_name"],
-                last_name=row["last_name"]
-            ))
+            masters.append(
+                Master(
+                    id=row["id"],
+                    telegram_id=row["telegram_id"],
+                    phone=row["phone"],
+                    specialization=row["specialization"],
+                    is_active=bool(row["is_active"]),
+                    is_approved=bool(row["is_approved"]),
+                    work_chat_id=(
+                        row["work_chat_id"]
+                        if "work_chat_id" in row and row["work_chat_id"] is not None
+                        else None
+                    ),
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                    ),
+                    username=row["username"],
+                    first_name=row["first_name"],
+                    last_name=row["last_name"],
+                )
+            )
         return masters
 
     async def get_pending_masters(self) -> list[Master]:
@@ -591,19 +629,27 @@ class Database:
 
         masters = []
         for row in rows:
-            masters.append(Master(
-                id=row["id"],
-                telegram_id=row["telegram_id"],
-                phone=row["phone"],
-                specialization=row["specialization"],
-                is_active=bool(row["is_active"]),
-                is_approved=bool(row["is_approved"]),
-                work_chat_id=row["work_chat_id"] if "work_chat_id" in row and row["work_chat_id"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-                username=row["username"],
-                first_name=row["first_name"],
-                last_name=row["last_name"]
-            ))
+            masters.append(
+                Master(
+                    id=row["id"],
+                    telegram_id=row["telegram_id"],
+                    phone=row["phone"],
+                    specialization=row["specialization"],
+                    is_active=bool(row["is_active"]),
+                    is_approved=bool(row["is_approved"]),
+                    work_chat_id=(
+                        row["work_chat_id"]
+                        if "work_chat_id" in row and row["work_chat_id"] is not None
+                        else None
+                    ),
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                    ),
+                    username=row["username"],
+                    first_name=row["first_name"],
+                    last_name=row["last_name"],
+                )
+            )
         return masters
 
     async def approve_master(self, telegram_id: int) -> bool:
@@ -617,8 +663,7 @@ class Database:
             True если успешно
         """
         await self.connection.execute(
-            "UPDATE masters SET is_approved = 1 WHERE telegram_id = ?",
-            (telegram_id,)
+            "UPDATE masters SET is_approved = 1 WHERE telegram_id = ?", (telegram_id,)
         )
         await self.connection.commit()
 
@@ -638,10 +683,7 @@ class Database:
         Returns:
             True если успешно
         """
-        await self.connection.execute(
-            "DELETE FROM masters WHERE telegram_id = ?",
-            (telegram_id,)
-        )
+        await self.connection.execute("DELETE FROM masters WHERE telegram_id = ?", (telegram_id,))
         await self.connection.commit()
 
         logger.info(f"Мастер {telegram_id} отклонен и удален")
@@ -659,12 +701,13 @@ class Database:
             True если успешно
         """
         await self.connection.execute(
-            "UPDATE masters SET is_active = ? WHERE telegram_id = ?",
-            (is_active, telegram_id)
+            "UPDATE masters SET is_active = ? WHERE telegram_id = ?", (is_active, telegram_id)
         )
         await self.connection.commit()
 
-        logger.info(f"Статус мастера {telegram_id} изменен на {'активный' if is_active else 'неактивный'}")
+        logger.info(
+            f"Статус мастера {telegram_id} изменен на {'активный' if is_active else 'неактивный'}"
+        )
         return True
 
     async def update_master_work_chat(self, telegram_id: int, work_chat_id: int | None) -> bool:
@@ -679,8 +722,7 @@ class Database:
             True если успешно
         """
         await self.connection.execute(
-            "UPDATE masters SET work_chat_id = ? WHERE telegram_id = ?",
-            (work_chat_id, telegram_id)
+            "UPDATE masters SET work_chat_id = ? WHERE telegram_id = ?", (work_chat_id, telegram_id)
         )
         await self.connection.commit()
 
@@ -697,7 +739,7 @@ class Database:
         client_address: str,
         client_phone: str,
         dispatcher_id: int,
-        notes: str | None = None
+        notes: str | None = None,
     ) -> Order:
         """
         Создание заявки
@@ -720,8 +762,15 @@ class Database:
                               client_phone, dispatcher_id, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (equipment_type, description, client_name, client_address, client_phone,
-             dispatcher_id, notes)
+            (
+                equipment_type,
+                description,
+                client_name,
+                client_address,
+                client_phone,
+                dispatcher_id,
+                notes,
+            ),
         )
         await self.connection.commit()
 
@@ -736,7 +785,7 @@ class Database:
             notes=notes,
             status=OrderStatus.NEW,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         logger.info(f"Создана заявка #{order.id}")
@@ -763,7 +812,7 @@ class Database:
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE o.id = ?
             """,
-            (order_id,)
+            (order_id,),
         )
         row = await cursor.fetchone()
 
@@ -779,23 +828,40 @@ class Database:
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],
                 notes=row["notes"],
-                total_amount=row["total_amount"] if "total_amount" in row and row["total_amount"] is not None else None,
-                materials_cost=row["materials_cost"] if "materials_cost" in row and row["materials_cost"] is not None else None,
-                master_profit=row["master_profit"] if "master_profit" in row and row["master_profit"] is not None else None,
-                company_profit=row["company_profit"] if "company_profit" in row and row["company_profit"] is not None else None,
-                has_review=bool(row["has_review"]) if "has_review" in row and row["has_review"] is not None else None,
+                total_amount=(
+                    row["total_amount"]
+                    if "total_amount" in row and row["total_amount"] is not None
+                    else None
+                ),
+                materials_cost=(
+                    row["materials_cost"]
+                    if "materials_cost" in row and row["materials_cost"] is not None
+                    else None
+                ),
+                master_profit=(
+                    row["master_profit"]
+                    if "master_profit" in row and row["master_profit"] is not None
+                    else None
+                ),
+                company_profit=(
+                    row["company_profit"]
+                    if "company_profit" in row and row["company_profit"] is not None
+                    else None
+                ),
+                has_review=(
+                    bool(row["has_review"])
+                    if "has_review" in row and row["has_review"] is not None
+                    else None
+                ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
                 updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
                 dispatcher_name=row["dispatcher_name"],
-                master_name=row["master_name"]
+                master_name=row["master_name"],
             )
         return None
 
     async def get_all_orders(
-        self,
-        status: str | None = None,
-        master_id: int | None = None,
-        limit: int | None = None
+        self, status: str | None = None, master_id: int | None = None, limit: int | None = None
     ) -> list[Order]:
         """
         Получение всех заявок с фильтрацией
@@ -839,27 +905,53 @@ class Database:
 
         orders = []
         for row in rows:
-            orders.append(Order(
-                id=row["id"],
-                equipment_type=row["equipment_type"],
-                description=row["description"],
-                client_name=row["client_name"],
-                client_address=row["client_address"],
-                client_phone=row["client_phone"],
-                status=row["status"],
-                assigned_master_id=row["assigned_master_id"],
-                dispatcher_id=row["dispatcher_id"],
-                notes=row["notes"],
-                total_amount=row["total_amount"] if "total_amount" in row and row["total_amount"] is not None else None,
-                materials_cost=row["materials_cost"] if "materials_cost" in row and row["materials_cost"] is not None else None,
-                master_profit=row["master_profit"] if "master_profit" in row and row["master_profit"] is not None else None,
-                company_profit=row["company_profit"] if "company_profit" in row and row["company_profit"] is not None else None,
-                has_review=bool(row["has_review"]) if "has_review" in row and row["has_review"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
-                dispatcher_name=row["dispatcher_name"],
-                master_name=row["master_name"]
-            ))
+            orders.append(
+                Order(
+                    id=row["id"],
+                    equipment_type=row["equipment_type"],
+                    description=row["description"],
+                    client_name=row["client_name"],
+                    client_address=row["client_address"],
+                    client_phone=row["client_phone"],
+                    status=row["status"],
+                    assigned_master_id=row["assigned_master_id"],
+                    dispatcher_id=row["dispatcher_id"],
+                    notes=row["notes"],
+                    total_amount=(
+                        row["total_amount"]
+                        if "total_amount" in row and row["total_amount"] is not None
+                        else None
+                    ),
+                    materials_cost=(
+                        row["materials_cost"]
+                        if "materials_cost" in row and row["materials_cost"] is not None
+                        else None
+                    ),
+                    master_profit=(
+                        row["master_profit"]
+                        if "master_profit" in row and row["master_profit"] is not None
+                        else None
+                    ),
+                    company_profit=(
+                        row["company_profit"]
+                        if "company_profit" in row and row["company_profit"] is not None
+                        else None
+                    ),
+                    has_review=(
+                        bool(row["has_review"])
+                        if "has_review" in row and row["has_review"] is not None
+                        else None
+                    ),
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                    ),
+                    updated_at=(
+                        datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None
+                    ),
+                    dispatcher_name=row["dispatcher_name"],
+                    master_name=row["master_name"],
+                )
+            )
         return orders
 
     async def update_order_status(self, order_id: int, status: str) -> bool:
@@ -875,7 +967,7 @@ class Database:
         """
         await self.connection.execute(
             "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, order_id)
+            (status, order_id),
         )
         await self.connection.commit()
 
@@ -899,7 +991,7 @@ class Database:
             SET assigned_master_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (master_id, OrderStatus.ASSIGNED, order_id)
+            (master_id, OrderStatus.ASSIGNED, order_id),
         )
         await self.connection.commit()
 
@@ -914,7 +1006,7 @@ class Database:
         client_name: str | None = None,
         client_address: str | None = None,
         client_phone: str | None = None,
-        notes: str | None = None
+        notes: str | None = None,
     ) -> bool:
         """
         Обновление информации о заявке
@@ -966,7 +1058,9 @@ class Database:
         logger.info(f"Заявка #{order_id} обновлена")
         return True
 
-    async def get_orders_by_master(self, master_id: int, exclude_closed: bool = True) -> list[Order]:
+    async def get_orders_by_master(
+        self, master_id: int, exclude_closed: bool = True
+    ) -> list[Order]:
         """
         Получение заявок мастера
 
@@ -1000,27 +1094,53 @@ class Database:
 
         orders = []
         for row in rows:
-            orders.append(Order(
-                id=row["id"],
-                equipment_type=row["equipment_type"],
-                description=row["description"],
-                client_name=row["client_name"],
-                client_address=row["client_address"],
-                client_phone=row["client_phone"],
-                status=row["status"],
-                assigned_master_id=row["assigned_master_id"],
-                dispatcher_id=row["dispatcher_id"],
-                notes=row["notes"],
-                total_amount=row["total_amount"] if "total_amount" in row and row["total_amount"] is not None else None,
-                materials_cost=row["materials_cost"] if "materials_cost" in row and row["materials_cost"] is not None else None,
-                master_profit=row["master_profit"] if "master_profit" in row and row["master_profit"] is not None else None,
-                company_profit=row["company_profit"] if "company_profit" in row and row["company_profit"] is not None else None,
-                has_review=bool(row["has_review"]) if "has_review" in row and row["has_review"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
-                dispatcher_name=row["dispatcher_name"],
-                master_name=row["master_name"]
-            ))
+            orders.append(
+                Order(
+                    id=row["id"],
+                    equipment_type=row["equipment_type"],
+                    description=row["description"],
+                    client_name=row["client_name"],
+                    client_address=row["client_address"],
+                    client_phone=row["client_phone"],
+                    status=row["status"],
+                    assigned_master_id=row["assigned_master_id"],
+                    dispatcher_id=row["dispatcher_id"],
+                    notes=row["notes"],
+                    total_amount=(
+                        row["total_amount"]
+                        if "total_amount" in row and row["total_amount"] is not None
+                        else None
+                    ),
+                    materials_cost=(
+                        row["materials_cost"]
+                        if "materials_cost" in row and row["materials_cost"] is not None
+                        else None
+                    ),
+                    master_profit=(
+                        row["master_profit"]
+                        if "master_profit" in row and row["master_profit"] is not None
+                        else None
+                    ),
+                    company_profit=(
+                        row["company_profit"]
+                        if "company_profit" in row and row["company_profit"] is not None
+                        else None
+                    ),
+                    has_review=(
+                        bool(row["has_review"])
+                        if "has_review" in row and row["has_review"] is not None
+                        else None
+                    ),
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+                    ),
+                    updated_at=(
+                        datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None
+                    ),
+                    dispatcher_name=row["dispatcher_name"],
+                    master_name=row["master_name"],
+                )
+            )
         return orders
 
     async def update_order_amounts(
@@ -1030,7 +1150,7 @@ class Database:
         materials_cost: float | None = None,
         master_profit: float | None = None,
         company_profit: float | None = None,
-        has_review: bool | None = None
+        has_review: bool | None = None,
     ) -> bool:
         """
         Обновление сумм заказа
@@ -1084,12 +1204,7 @@ class Database:
 
     # ==================== AUDIT LOG ====================
 
-    async def add_audit_log(
-        self,
-        user_id: int,
-        action: str,
-        details: str | None = None
-    ):
+    async def add_audit_log(self, user_id: int, action: str, details: str | None = None):
         """
         Добавление записи в лог аудита
 
@@ -1100,7 +1215,7 @@ class Database:
         """
         await self.connection.execute(
             "INSERT INTO audit_log (user_id, action, details) VALUES (?, ?, ?)",
-            (user_id, action, details)
+            (user_id, action, details),
         )
         await self.connection.commit()
 
@@ -1115,20 +1230,23 @@ class Database:
             Список логов
         """
         cursor = await self.connection.execute(
-            "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?",
-            (limit,)
+            "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?", (limit,)
         )
         rows = await cursor.fetchall()
 
         logs = []
         for row in rows:
-            logs.append(AuditLog(
-                id=row["id"],
-                user_id=row["user_id"],
-                action=row["action"],
-                details=row["details"],
-                timestamp=datetime.fromisoformat(row["timestamp"]) if row["timestamp"] else None
-            ))
+            logs.append(
+                AuditLog(
+                    id=row["id"],
+                    user_id=row["user_id"],
+                    action=row["action"],
+                    details=row["details"],
+                    timestamp=(
+                        datetime.fromisoformat(row["timestamp"]) if row["timestamp"] else None
+                    ),
+                )
+            )
         return logs
 
     # ==================== STATISTICS ====================
@@ -1169,4 +1287,3 @@ class Database:
         stats["total_orders"] = row["count"]
 
         return stats
-

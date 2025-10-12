@@ -1,6 +1,7 @@
 """
 Обработчики для администраторов
 """
+
 import logging
 
 from aiogram import F, Router
@@ -46,21 +47,16 @@ async def btn_masters(message: Message, state: FSMContext, user_role: str):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters")
-    )
+    builder.row(InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters"))
     builder.row(
         InlineKeyboardButton(text="⏳ Ожидают одобрения", callback_data="list_pending_masters")
     )
-    builder.row(
-        InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master")
-    )
+    builder.row(InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master"))
 
     await message.answer(
-        "👥 <b>Управление мастерами</b>\n\n"
-        "Выберите действие:",
+        "👥 <b>Управление мастерами</b>\n\n" "Выберите действие:",
         parse_mode="HTML",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
 
 
@@ -104,16 +100,9 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
             )
 
         # Клавиатура со списком для управления
-        keyboard = get_masters_list_keyboard(
-            masters,
-            action="manage_master"
-        )
+        keyboard = get_masters_list_keyboard(masters, action="manage_master")
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -140,9 +129,7 @@ async def callback_list_pending_masters(callback: CallbackQuery, user_role: str)
         masters = await db.get_pending_masters()
 
         if not masters:
-            await callback.message.edit_text(
-                "✅ Нет мастеров, ожидающих одобрения."
-            )
+            await callback.message.edit_text("✅ Нет мастеров, ожидающих одобрения.")
             await callback.answer()
             return
 
@@ -161,11 +148,7 @@ async def callback_list_pending_masters(callback: CallbackQuery, user_role: str)
             # Добавляем клавиатуру для одобрения
             keyboard = get_master_approval_keyboard(master.telegram_id)
 
-            await callback.message.answer(
-                text,
-                parse_mode="HTML",
-                reply_markup=keyboard
-            )
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
             text = ""  # Сбрасываем для следующего мастера
 
         if text:  # Если остался текст без клавиатуры
@@ -206,7 +189,7 @@ async def callback_approve_master(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="APPROVE_MASTER",
-            details=f"Approved master {telegram_id}"
+            details=f"Approved master {telegram_id}",
         )
 
         # Уведомляем мастера
@@ -217,14 +200,12 @@ async def callback_approve_master(callback: CallbackQuery, user_role: str):
                 "Ваша заявка на регистрацию в качестве мастера одобрена.\n"
                 "Теперь вы можете получать заявки на ремонт.\n\n"
                 "Используйте /start для начала работы.",
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"Failed to send approval notification to {telegram_id}: {e}")
 
-        await callback.message.edit_text(
-            f"✅ Мастер (ID: {telegram_id}) успешно одобрен!"
-        )
+        await callback.message.edit_text(f"✅ Мастер (ID: {telegram_id}) успешно одобрен!")
 
         log_action(callback.from_user.id, "APPROVE_MASTER", f"Master ID: {telegram_id}")
 
@@ -259,7 +240,7 @@ async def callback_reject_master(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="REJECT_MASTER",
-            details=f"Rejected master {telegram_id}"
+            details=f"Rejected master {telegram_id}",
         )
 
         # Уведомляем мастера
@@ -269,14 +250,12 @@ async def callback_reject_master(callback: CallbackQuery, user_role: str):
                 "❌ <b>Уведомление</b>\n\n"
                 "К сожалению, ваша заявка на регистрацию в качестве мастера отклонена.\n\n"
                 "Для получения дополнительной информации обратитесь к администратору.",
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"Failed to send rejection notification to {telegram_id}: {e}")
 
-        await callback.message.edit_text(
-            f"❌ Мастер (ID: {telegram_id}) отклонен."
-        )
+        await callback.message.edit_text(f"❌ Мастер (ID: {telegram_id}) отклонен.")
 
         log_action(callback.from_user.id, "REJECT_MASTER", f"Master ID: {telegram_id}")
 
@@ -302,7 +281,7 @@ async def callback_add_master(callback: CallbackQuery, state: FSMContext):
         "Введите Telegram ID мастера:\n"
         "<i>(попросите мастера отправить команду /start боту и сообщить вам его ID)</i>",
         parse_mode="HTML",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(),
     )
 
     await callback.message.delete()
@@ -322,8 +301,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
         telegram_id = int(message.text.strip())
     except ValueError:
         await message.answer(
-            "❌ Неверный формат. Введите числовой ID:",
-            reply_markup=get_cancel_keyboard()
+            "❌ Неверный формат. Введите числовой ID:", reply_markup=get_cancel_keyboard()
         )
         return
 
@@ -337,7 +315,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
             await message.answer(
                 "❌ Пользователь с таким ID не найден в системе.\n"
                 "Попросите пользователя сначала отправить /start боту.",
-                reply_markup=get_cancel_keyboard()
+                reply_markup=get_cancel_keyboard(),
             )
             return
 
@@ -346,7 +324,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
         if master:
             await message.answer(
                 "❌ Этот пользователь уже зарегистрирован как мастер.",
-                reply_markup=get_cancel_keyboard()
+                reply_markup=get_cancel_keyboard(),
             )
             return
 
@@ -359,7 +337,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
             "Введите номер телефона мастера:\n"
             "<i>(в формате +7XXXXXXXXXX)</i>",
             parse_mode="HTML",
-            reply_markup=get_cancel_keyboard()
+            reply_markup=get_cancel_keyboard(),
         )
 
     finally:
@@ -379,9 +357,8 @@ async def process_master_phone(message: Message, state: FSMContext):
 
     if not validate_phone(phone):
         await message.answer(
-            "❌ Неверный формат номера телефона.\n"
-            "Введите номер в формате: +7XXXXXXXXXX",
-            reply_markup=get_cancel_keyboard()
+            "❌ Неверный формат номера телефона.\n" "Введите номер в формате: +7XXXXXXXXXX",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -394,7 +371,7 @@ async def process_master_phone(message: Message, state: FSMContext):
         "📝 Введите специализацию мастера:\n"
         "<i>(например: Стиральные машины, Сантехника и т.д.)</i>",
         parse_mode="HTML",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(),
     )
 
 
@@ -412,7 +389,7 @@ async def process_master_specialization(message: Message, state: FSMContext):
     if len(specialization) < 3:
         await message.answer(
             "❌ Специализация слишком короткая. Попробуйте еще раз:",
-            reply_markup=get_cancel_keyboard()
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -428,7 +405,7 @@ async def process_master_specialization(message: Message, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="✅ Подтвердить", callback_data="confirm_add_master"),
-        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"),
     )
 
     await message.answer(
@@ -439,7 +416,7 @@ async def process_master_specialization(message: Message, state: FSMContext):
         f"🔧 Специализация: {data['specialization']}\n\n"
         "Подтвердите добавление:",
         parse_mode="HTML",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
 
 
@@ -467,7 +444,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             telegram_id=data["telegram_id"],
             phone=data["phone"],
             specialization=data["specialization"],
-            is_approved=True  # Администратор добавляет сразу с одобрением
+            is_approved=True,  # Администратор добавляет сразу с одобрением
         )
 
         # Добавляем роль мастера (не удаляя существующие роли)
@@ -477,7 +454,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ADD_MASTER",
-            details=f"Added master {data['telegram_id']}"
+            details=f"Added master {data['telegram_id']}",
         )
 
         # Уведомляем мастера
@@ -488,7 +465,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
                 "Вы добавлены в систему как мастер.\n"
                 "Теперь вы можете получать заявки на ремонт.\n\n"
                 "Используйте /start для начала работы.",
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
         except Exception as e:
             logger.error(f"Failed to send notification to master {data['telegram_id']}: {e}")
@@ -499,7 +476,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             f"🆔 ID: {data['telegram_id']}\n"
             f"📞 {data['phone']}\n"
             f"🔧 {data['specialization']}",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "ADD_MASTER", f"Master ID: {data['telegram_id']}")
@@ -512,8 +489,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
 
     # Возвращаем главное меню
     await callback.message.answer(
-        "Главное меню:",
-        reply_markup=get_main_menu_keyboard(UserRole.ADMIN)
+        "Главное меню:", reply_markup=get_main_menu_keyboard(UserRole.ADMIN)
     )
 
 
@@ -564,11 +540,7 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
 
         keyboard = get_master_management_keyboard(telegram_id, master.is_active)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -599,7 +571,7 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="DEACTIVATE_MASTER",
-            details=f"Deactivated master {telegram_id}"
+            details=f"Deactivated master {telegram_id}",
         )
 
         # Обновляем сообщение
@@ -636,7 +608,7 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ACTIVATE_MASTER",
-            details=f"Activated master {telegram_id}"
+            details=f"Activated master {telegram_id}",
         )
 
         # Обновляем сообщение
@@ -734,7 +706,7 @@ async def btn_users(message: Message, user_role: str):
             UserRole.ADMIN: "Администратор",
             UserRole.DISPATCHER: "Диспетчер",
             UserRole.MASTER: "Мастер",
-            UserRole.UNKNOWN: "Неизвестно"
+            UserRole.UNKNOWN: "Неизвестно",
         }
 
         # Отображаем пользователей с группировкой
@@ -742,7 +714,7 @@ async def btn_users(message: Message, user_role: str):
             UserRole.ADMIN: "Администраторы",
             UserRole.DISPATCHER: "Диспетчеры",
             UserRole.MASTER: "Мастера",
-            UserRole.UNKNOWN: "Неизвестные"
+            UserRole.UNKNOWN: "Неизвестные",
         }
 
         for role, role_users in by_role.items():
@@ -778,29 +750,23 @@ async def callback_back_to_masters(callback: CallbackQuery, user_role: str):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters")
-    )
+    builder.row(InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters"))
     builder.row(
         InlineKeyboardButton(text="⏳ Ожидают одобрения", callback_data="list_pending_masters")
     )
-    builder.row(
-        InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master")
-    )
+    builder.row(InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master"))
 
     await callback.message.edit_text(
-        "👥 <b>Управление мастерами</b>\n\n"
-        "Выберите действие:",
+        "👥 <b>Управление мастерами</b>\n\n" "Выберите действие:",
         parse_mode="HTML",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
 
     await callback.answer()
 
 
-
-
 # ==================== УСТАНОВКА РАБОЧЕЙ ГРУППЫ ====================
+
 
 @router.callback_query(F.data.startswith("set_work_chat:"))
 async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, user_role: str):
@@ -830,14 +796,11 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
         KeyboardButton(
             text="💬 Выбрать группу",
             request_chat=KeyboardButtonRequestChat(
-                request_id=1,
-                chat_is_channel=False  # Включает только обычные группы (не каналы)
-            )
+                request_id=1, chat_is_channel=False  # Включает только обычные группы (не каналы)
+            ),
         )
     )
-    builder.row(
-        KeyboardButton(text="❌ Отмена")
-    )
+    builder.row(KeyboardButton(text="❌ Отмена"))
 
     keyboard = builder.as_markup(resize_keyboard=True)
 
@@ -848,7 +811,7 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
         "2️⃣ Нажмите кнопку ниже и выберите группу\n\n"
         "<i>Кнопка отмены доступна внизу</i>",
         parse_mode="HTML",
-        reply_markup=keyboard
+        reply_markup=keyboard,
     )
 
     await callback.answer()
@@ -871,10 +834,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
     chat_shared = message.chat_shared
 
     if not chat_shared or chat_shared.request_id != 1:
-        await message.answer(
-            "❌ Неверный запрос.",
-            reply_markup=get_main_menu_keyboard(user_role)
-        )
+        await message.answer("❌ Неверный запрос.", reply_markup=get_main_menu_keyboard(user_role))
         await state.clear()
         return
 
@@ -892,7 +852,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
         if chat_type not in ["group", "supergroup"]:
             await message.answer(
                 "❌ Выбранный чат не является группой.",
-                reply_markup=get_main_menu_keyboard(user_role)
+                reply_markup=get_main_menu_keyboard(user_role),
             )
             await state.clear()
             return
@@ -906,7 +866,9 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
             master = await db.get_master_by_telegram_id(master_telegram_id)
 
             if not master:
-                await message.answer("❌ Мастер не найден", reply_markup=get_main_menu_keyboard(user_role))
+                await message.answer(
+                    "❌ Мастер не найден", reply_markup=get_main_menu_keyboard(user_role)
+                )
                 await state.clear()
                 return
 
@@ -920,7 +882,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
                 f"🆔 Chat ID: <code>{chat_id}</code>\n\n"
                 f"Теперь все уведомления о новых заявках будут отправляться в эту группу.",
                 parse_mode="HTML",
-                reply_markup=get_main_menu_keyboard(user_role)
+                reply_markup=get_main_menu_keyboard(user_role),
             )
 
             logger.info(f"Work chat {chat_id} set for master {master_telegram_id}")
@@ -935,7 +897,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
             f"🆔 Chat ID: <code>{chat_id}</code>\n\n"
             f"Теперь все уведомления о новых заявках будут отправляться в эту группу.",
             parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(user_role)
+            reply_markup=get_main_menu_keyboard(user_role),
         )
 
     await state.clear()
@@ -958,12 +920,7 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
         "❌ <b>Установка рабочей группы отменена</b>\n\n"
         "Вы можете попробовать снова в любое время.",
         parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_role)
+        reply_markup=get_main_menu_keyboard(user_role),
     )
 
     await state.clear()
-
-
-
-
-

@@ -27,10 +27,7 @@ class TestDatabase:
 
         # Создаём пользователя
         user = await db.get_or_create_user(
-            telegram_id=telegram_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name
+            telegram_id=telegram_id, username=username, first_name=first_name, last_name=last_name
         )
 
         assert user is not None
@@ -90,10 +87,7 @@ class TestDatabase:
 
         # Создаём мастера
         master = await db.create_master(
-            telegram_id=telegram_id,
-            phone=phone,
-            specialization=specialization,
-            is_approved=True
+            telegram_id=telegram_id, phone=phone, specialization=specialization, is_approved=True
         )
 
         assert master is not None
@@ -123,7 +117,7 @@ class TestDatabase:
             client_address="ул. Ленина, 1",
             client_phone="+79991234567",
             dispatcher_id=dispatcher_id,
-            notes="Срочно"
+            notes="Срочно",
         )
 
         assert order is not None
@@ -151,7 +145,7 @@ class TestDatabase:
             telegram_id=master_telegram_id,
             phone="+79991234567",
             specialization="Стиральные машины",
-            is_approved=True
+            is_approved=True,
         )
 
         # Создаём заявку
@@ -161,7 +155,7 @@ class TestDatabase:
             client_name="Иван Иванов",
             client_address="ул. Ленина, 1",
             client_phone="+79991234567",
-            dispatcher_id=dispatcher_id
+            dispatcher_id=dispatcher_id,
         )
 
         # Назначаем мастера
@@ -187,7 +181,7 @@ class TestDatabase:
             client_name="Иван Иванов",
             client_address="ул. Ленина, 1",
             client_phone="+79991234567",
-            dispatcher_id=dispatcher_id
+            dispatcher_id=dispatcher_id,
         )
 
         # Обновляем статус
@@ -220,7 +214,7 @@ class TestDatabase:
                 telegram_id=telegram_id,
                 phone=f"+7999123456{i}",
                 specialization="Стиральные машины",
-                is_approved=True
+                is_approved=True,
             )
 
         # Получаем всех
@@ -242,11 +236,10 @@ class TestDatabase:
                 client_name="Клиент",
                 client_address="Адрес",
                 client_phone="+79991234567",
-                dispatcher_id=dispatcher_id
+                dispatcher_id=dispatcher_id,
             )
 
         # Получаем статистику
         stats = await db.get_statistics()
         assert "total_orders" in stats
         assert stats["total_orders"] >= 5
-

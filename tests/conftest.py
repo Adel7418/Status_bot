@@ -1,6 +1,7 @@
 """
 Pytest fixtures и конфигурация для тестов
 """
+
 import asyncio
 import sys
 from collections.abc import AsyncGenerator, Generator
@@ -104,4 +105,3 @@ def mock_config(admin_id: int, dispatcher_id: int, monkeypatch) -> None:
     monkeypatch.setattr(Config, "DISPATCHER_IDS", [dispatcher_id])
     monkeypatch.setattr(Config, "BOT_TOKEN", "test_token")
     monkeypatch.setattr(Config, "DATABASE_PATH", ":memory:")
-

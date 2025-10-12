@@ -1,6 +1,7 @@
 """
 Фильтры для работы с группами
 """
+
 from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
@@ -56,6 +57,7 @@ class IsOrderRelatedMessage(BaseFilter):
 
         # Проверяем, содержит ли сообщение номер заказа
         import re
+
         order_pattern = r"#?\d+"
         return bool(re.search(order_pattern, text))
 
@@ -96,7 +98,7 @@ class IsGroupOrderCallback(BaseFilter):
             "group_refuse_order",
             "group_onsite_order",
             "group_complete_order",
-            "group_dr_order"
+            "group_dr_order",
         ]
 
         return any(action in callback.data for action in group_actions)

@@ -1,6 +1,7 @@
 """
 Тесты для моделей данных
 """
+
 from datetime import datetime
 
 from app.config import OrderStatus, UserRole
@@ -19,7 +20,7 @@ class TestUserModel:
             first_name="Test",
             last_name="User",
             role=UserRole.ADMIN,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
         assert user.telegram_id == 123456789
@@ -34,7 +35,7 @@ class TestUserModel:
             username="test_user",
             first_name="Test",
             last_name="User",
-            role=UserRole.ADMIN
+            role=UserRole.ADMIN,
         )
 
         assert user.get_display_name() == "@test_user"
@@ -47,29 +48,21 @@ class TestUserModel:
             username=None,
             first_name="Test",
             last_name="User",
-            role=UserRole.ADMIN
+            role=UserRole.ADMIN,
         )
 
         assert user.get_display_name() == "Test User"
 
     def test_get_roles_single(self):
         """Тест получения одной роли"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=UserRole.ADMIN
-        )
+        user = User(id=1, telegram_id=123, role=UserRole.ADMIN)
 
         roles = user.get_roles()
         assert roles == [UserRole.ADMIN]
 
     def test_get_roles_multiple(self):
         """Тест получения множественных ролей"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}"
-        )
+        user = User(id=1, telegram_id=123, role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}")
 
         roles = user.get_roles()
         assert UserRole.ADMIN in roles
@@ -77,11 +70,7 @@ class TestUserModel:
 
     def test_has_role(self):
         """Тест проверки наличия роли"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}"
-        )
+        user = User(id=1, telegram_id=123, role=f"{UserRole.ADMIN},{UserRole.DISPATCHER}")
 
         assert user.has_role(UserRole.ADMIN) is True
         assert user.has_role(UserRole.DISPATCHER) is True
@@ -89,11 +78,7 @@ class TestUserModel:
 
     def test_add_role(self):
         """Тест добавления роли"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=UserRole.DISPATCHER
-        )
+        user = User(id=1, telegram_id=123, role=UserRole.DISPATCHER)
 
         new_roles = user.add_role(UserRole.MASTER)
         assert UserRole.DISPATCHER in new_roles
@@ -101,11 +86,7 @@ class TestUserModel:
 
     def test_remove_role(self):
         """Тест удаления роли"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=f"{UserRole.DISPATCHER},{UserRole.MASTER}"
-        )
+        user = User(id=1, telegram_id=123, role=f"{UserRole.DISPATCHER},{UserRole.MASTER}")
 
         new_roles = user.remove_role(UserRole.MASTER)
         assert UserRole.DISPATCHER in new_roles
@@ -113,21 +94,13 @@ class TestUserModel:
 
     def test_get_primary_role_single(self):
         """Тест получения основной роли (одна роль)"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=UserRole.ADMIN
-        )
+        user = User(id=1, telegram_id=123, role=UserRole.ADMIN)
 
         assert user.get_primary_role() == UserRole.ADMIN
 
     def test_get_primary_role_multiple(self):
         """Тест получения основной роли (множественные)"""
-        user = User(
-            id=1,
-            telegram_id=123,
-            role=f"{UserRole.DISPATCHER},{UserRole.MASTER}"
-        )
+        user = User(id=1, telegram_id=123, role=f"{UserRole.DISPATCHER},{UserRole.MASTER}")
 
         # Должна вернуться первая роль
         assert user.get_primary_role() == UserRole.DISPATCHER
@@ -145,7 +118,7 @@ class TestMasterModel:
             specialization="Стиральные машины",
             is_active=True,
             is_approved=True,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
         assert master.telegram_id == 123456789
@@ -161,7 +134,7 @@ class TestMasterModel:
             phone="+79991234567",
             specialization="Стиральные машины",
             first_name="Иван",
-            last_name="Иванов"
+            last_name="Иванов",
         )
 
         assert master.get_display_name() == "Иван Иванов"
@@ -182,7 +155,7 @@ class TestOrderModel:
             status=OrderStatus.NEW,
             dispatcher_id=123,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         assert order.equipment_type == "Стиральные машины"
@@ -202,9 +175,8 @@ class TestOrderModel:
             assigned_master_id=999,
             dispatcher_id=123,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         assert order.assigned_master_id == 999
         assert order.status == OrderStatus.ASSIGNED
-

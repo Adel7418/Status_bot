@@ -1,6 +1,7 @@
 """
 Обработчики для мастеров
 """
+
 import logging
 from datetime import datetime
 
@@ -41,9 +42,7 @@ async def btn_my_orders(message: Message, state: FSMContext):
         master = await db.get_master_by_telegram_id(message.from_user.id)
 
         if not master:
-            await message.answer(
-                "❌ Вы не зарегистрированы как мастер в системе."
-            )
+            await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
             return
 
         # Получаем заявки мастера
@@ -51,8 +50,7 @@ async def btn_my_orders(message: Message, state: FSMContext):
 
         if not orders:
             await message.answer(
-                "📭 У вас пока нет активных заявок.\n\n"
-                "Заявки будут назначаться диспетчером."
+                "📭 У вас пока нет активных заявок.\n\n" "Заявки будут назначаться диспетчером."
             )
             return
 
@@ -70,7 +68,7 @@ async def btn_my_orders(message: Message, state: FSMContext):
             OrderStatus.ASSIGNED,
             OrderStatus.ACCEPTED,
             OrderStatus.ONSITE,
-            OrderStatus.DR
+            OrderStatus.DR,
         ]
 
         for status in status_order:
@@ -87,11 +85,7 @@ async def btn_my_orders(message: Message, state: FSMContext):
 
         keyboard = get_order_list_keyboard(orders, for_master=True)
 
-        await message.answer(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -155,8 +149,7 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
             )
         else:
             text += (
-                "<i>Контактная информация клиента будет доступна\n"
-                "после принятия заявки.</i>\n\n"
+                "<i>Контактная информация клиента будет доступна\n" "после принятия заявки.</i>\n\n"
             )
 
         if order.notes:
@@ -167,11 +160,7 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
 
         keyboard = get_order_actions_keyboard(order, UserRole.MASTER)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -208,7 +197,7 @@ async def callback_accept_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ACCEPT_ORDER",
-            details=f"Accepted order #{order_id}"
+            details=f"Accepted order #{order_id}",
         )
 
         # Уведомляем диспетчера
@@ -217,7 +206,7 @@ async def callback_accept_order(callback: CallbackQuery):
                 await callback.bot.send_message(
                     order.dispatcher_id,
                     f"✅ Мастер {master.get_display_name()} принял заявку #{order_id}",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
@@ -226,7 +215,7 @@ async def callback_accept_order(callback: CallbackQuery):
             f"✅ <b>Заявка #{order_id} принята!</b>\n\n"
             f"Теперь вы можете просмотреть контактную информацию клиента.\n"
             f"Когда будете на объекте, обновите статус заявки.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "ACCEPT_ORDER", f"Order #{order_id}")
@@ -262,7 +251,7 @@ async def callback_refuse_order_master(callback: CallbackQuery):
         # Возвращаем статус в NEW и убираем мастера
         await db.connection.execute(
             "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id)
+            (OrderStatus.NEW, order_id),
         )
         await db.connection.commit()
 
@@ -270,7 +259,7 @@ async def callback_refuse_order_master(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="REFUSE_ORDER_MASTER",
-            details=f"Master refused order #{order_id}"
+            details=f"Master refused order #{order_id}",
         )
 
         # Уведомляем диспетчера
@@ -280,14 +269,13 @@ async def callback_refuse_order_master(callback: CallbackQuery):
                     order.dispatcher_id,
                     f"❌ Мастер {master.get_display_name()} отклонил заявку #{order_id}\n"
                     f"Необходимо назначить другого мастера.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
 
         await callback.message.edit_text(
-            f"❌ Заявка #{order_id} отклонена.\n\n"
-            f"Диспетчер получил уведомление."
+            f"❌ Заявка #{order_id} отклонена.\n\n" f"Диспетчер получил уведомление."
         )
 
         log_action(callback.from_user.id, "REFUSE_ORDER_MASTER", f"Order #{order_id}")
@@ -327,7 +315,7 @@ async def callback_onsite_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ONSITE_ORDER",
-            details=f"Master on site for order #{order_id}"
+            details=f"Master on site for order #{order_id}",
         )
 
         # Уведомляем диспетчера
@@ -336,7 +324,7 @@ async def callback_onsite_order(callback: CallbackQuery):
                 await callback.bot.send_message(
                     order.dispatcher_id,
                     f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
@@ -345,7 +333,7 @@ async def callback_onsite_order(callback: CallbackQuery):
             f"🏠 <b>Статус обновлен!</b>\n\n"
             f"Заявка #{order_id} - вы на объекте.\n"
             f"После завершения работы не забудьте закрыть заявку.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "ONSITE_ORDER", f"Order #{order_id}")
@@ -384,13 +372,14 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
 
         # Переходим в состояние запроса общей суммы
         from app.states import CompleteOrderStates
+
         await state.set_state(CompleteOrderStates.enter_total_amount)
 
         await callback.message.edit_text(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000 или 5000.50",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "START_COMPLETE_ORDER", f"Order #{order_id}")
@@ -430,7 +419,7 @@ async def callback_dr_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="DR_ORDER",
-            details=f"Order #{order_id} marked as long-term repair"
+            details=f"Order #{order_id} marked as long-term repair",
         )
 
         # Уведомляем диспетчера
@@ -440,15 +429,14 @@ async def callback_dr_order(callback: CallbackQuery):
                     order.dispatcher_id,
                     f"⏳ Заявка #{order_id} переведена в длительный ремонт\n"
                     f"Мастер: {master.get_display_name()}",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
 
         await callback.message.edit_text(
-            f"⏳ <b>Статус обновлен!</b>\n\n"
-            f"Заявка #{order_id} переведена в длительный ремонт.",
-            parse_mode="HTML"
+            f"⏳ <b>Статус обновлен!</b>\n\n" f"Заявка #{order_id} переведена в длительный ремонт.",
+            parse_mode="HTML",
         )
 
         log_action(callback.from_user.id, "DR_ORDER", f"Order #{order_id}")
@@ -474,9 +462,7 @@ async def btn_my_stats(message: Message):
         master = await db.get_master_by_telegram_id(message.from_user.id)
 
         if not master:
-            await message.answer(
-                "❌ Вы не зарегистрированы как мастер в системе."
-            )
+            await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
             return
 
         # Получаем все заявки мастера
@@ -490,7 +476,10 @@ async def btn_my_stats(message: Message):
             by_status[order.status] = by_status.get(order.status, 0) + 1
 
         completed = by_status.get(OrderStatus.CLOSED, 0)
-        active = sum(by_status.get(s, 0) for s in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE])
+        active = sum(
+            by_status.get(s, 0)
+            for s in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]
+        )
         dr = by_status.get(OrderStatus.DR, 0)
 
         text = (
@@ -529,14 +518,12 @@ async def process_total_amount(message: Message, state: FSMContext):
         total_amount = float(message.text.replace(",", ".").strip())
         if total_amount <= 0:
             await message.reply(
-                "❌ Сумма должна быть положительным числом.\n"
-                "Попробуйте еще раз:"
+                "❌ Сумма должна быть положительным числом.\n" "Попробуйте еще раз:"
             )
             return
     except ValueError:
         await message.reply(
-            "❌ Неверный формат суммы.\n"
-            "Пожалуйста, введите число (например: 5000 или 5000.50):"
+            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 5000 или 5000.50):"
         )
         return
 
@@ -551,7 +538,7 @@ async def process_total_amount(message: Message, state: FSMContext):
         f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
         f"Например: 1500 или 1500.50\n\n"
         f"Если расходного материала не было, введите: 0",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
 
@@ -575,8 +562,7 @@ async def process_materials_cost(message: Message, state: FSMContext):
             return
     except ValueError:
         await message.reply(
-            "❌ Неверный формат суммы.\n"
-            "Пожалуйста, введите число (например: 1500 или 0):"
+            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):"
         )
         return
 
@@ -593,7 +579,7 @@ async def process_materials_cost(message: Message, state: FSMContext):
         f"Ответьте:\n"
         f"• <b>Да</b> - если взяли отзыв\n"
         f"• <b>Нет</b> - если не взяли",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
 
@@ -614,10 +600,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
     elif answer in ["нет", "no", "ytn", "-"]:
         has_review = False
     else:
-        await message.reply(
-            "❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>",
-            parse_mode="HTML"
-        )
+        await message.reply("❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>", parse_mode="HTML")
         return
 
     # Получаем данные из состояния
@@ -639,7 +622,9 @@ async def process_review_confirmation(message: Message, state: FSMContext):
             return
 
         # Рассчитываем распределение прибыли с учетом отзыва
-        master_profit, company_profit = calculate_profit_split(total_amount, materials_cost, has_review)
+        master_profit, company_profit = calculate_profit_split(
+            total_amount, materials_cost, has_review
+        )
         net_profit = total_amount - materials_cost
 
         # Определяем процентную ставку для отображения
@@ -653,7 +638,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
             materials_cost=materials_cost,
             master_profit=master_profit,
             company_profit=company_profit,
-            has_review=has_review
+            has_review=has_review,
         )
 
         # Обновляем статус на CLOSED
@@ -663,7 +648,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="COMPLETE_ORDER",
-            details=f"Completed order #{order_id}, total: {total_amount}, materials: {materials_cost}"
+            details=f"Completed order #{order_id}, total: {total_amount}, materials: {materials_cost}",
         )
 
         # Обновляем сообщение в группе, если заказ был завершен оттуда
@@ -696,7 +681,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
                         f"• Компания: <b>{company_profit:.2f} ₽</b>\n\n"
                         f"🎉 Работа успешно выполнена!"
                     ),
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to update group message: {e}")
@@ -715,13 +700,15 @@ async def process_review_confirmation(message: Message, state: FSMContext):
                     f"📊 <b>Распределение ({profit_rate}{review_bonus_text}):</b>\n"
                     f"👨‍🔧 Мастер: <b>{master_profit:.2f} ₽</b>\n"
                     f"🏢 Компания: <b>{company_profit:.2f} ₽</b>",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
 
         # Отправляем итоговое сообщение (reply для групп, answer для личных чатов)
-        review_text = "⭐ <b>Отзыв взят!</b> Вы получили дополнительные +10%\n" if has_review else ""
+        review_text = (
+            "⭐ <b>Отзыв взят!</b> Вы получили дополнительные +10%\n" if has_review else ""
+        )
         completion_message = (
             f"✅ <b>Заявка #{order_id} успешно завершена!</b>\n\n"
             f"{review_text}"
@@ -762,9 +749,7 @@ async def btn_settings_master(message: Message):
         master = await db.get_master_by_telegram_id(message.from_user.id)
 
         if not master:
-            await message.answer(
-                "❌ Вы не зарегистрированы как мастер в системе."
-            )
+            await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
             return
 
         user = await db.get_user_by_telegram_id(message.from_user.id)
@@ -774,7 +759,7 @@ async def btn_settings_master(message: Message):
             UserRole.ADMIN: "Администратор",
             UserRole.DISPATCHER: "Диспетчер",
             UserRole.MASTER: "Мастер",
-            UserRole.UNKNOWN: "Неизвестно"
+            UserRole.UNKNOWN: "Неизвестно",
         }
 
         if user:

@@ -31,6 +31,11 @@
 - **Влияние:** Потенциальные ошибки в runtime
 - **Статус:** ✅ Исправлено
 
+### 4. ❌ Форматирование кода (Black)
+- **Проблема:** 35 файлов требовали переформатирования с помощью Black
+- **Влияние:** Workflow `Tests` и `Lint` падают из-за несоответствия форматирования
+- **Статус:** ✅ Исправлено
+
 ---
 
 ## ✅ Выполненные исправления
@@ -110,9 +115,51 @@ ignore = [
 + "tests/conftest.py" = ["E402"]  # импорты после sys.path манипуляции
 ```
 
+### 4. Форматирование всего кода с помощью Black
+
+#### `app/config.py`
+```diff
++ from typing import ClassVar
+
+- ADMIN_IDS: list[int] = [...]
++ ADMIN_IDS: ClassVar[list[int]] = [...]
+
+- DISPATCHER_IDS: list[int] = [...]
++ DISPATCHER_IDS: ClassVar[list[int]] = [...]
+```
+
+#### `app/decorators.py`
+```diff
+- logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
++ logger.exception("Error in %s: %s", func.__name__, e)
+
+- logger.error(f"Database error in {func.__name__}: {e}", exc_info=True)
++ logger.exception("Database error in %s: %s", func.__name__, e)
+```
+
+#### `app/filters/role_filter.py`
+```diff
+- async def __call__(self, event: Message | CallbackQuery, **kwargs) -> bool:
++ async def __call__(self, _event: Message | CallbackQuery, **kwargs) -> bool:
+```
+
+#### `pyproject.toml` - per-file ignores
+```diff
++ "tests/conftest.py" = ["E402"]  # импорты после sys.path манипуляции
+```
+
 ---
 
 ## 🧪 Результаты тестирования
+
+### ✅ Black (форматирование)
+```bash
+$ black --check .
+All done! ✨ 🍰 ✨
+35 files would be left unchanged.
+```
+
+**Результат:** Все файлы отформатированы корректно ✅
 
 ### ✅ Линтер (Ruff)
 ```bash
@@ -120,15 +167,15 @@ $ ruff check .
 All checks passed!
 ```
 
-**Результат:** 0 ошибок (было 2500+)
+**Результат:** 0 ошибок (было 2500+) ✅
 
 ### ✅ Тесты (Pytest)
 ```bash
 $ pytest -v
-============================= 39 passed in 1.75s ==============================
+============================= 39 passed in 2.10s ==============================
 ```
 
-**Результат:** 39/39 тестов пройдено  
+**Результат:** 39/39 тестов пройдено ✅  
 **Покрытие:** 11.67%
 
 ### ✅ Совместимость версий
@@ -159,9 +206,10 @@ pydantic: 2.9.2
 
 ### Основные файлы:
 - ✅ `pyproject.toml` - обновлены версии и правила линтера
-- ✅ `app/config.py` - добавлен ClassVar
-- ✅ `app/decorators.py` - исправлено логирование
-- ✅ `app/filters/role_filter.py` - добавлен префикс _ для неиспользуемого аргумента
+- ✅ `app/config.py` - добавлен ClassVar, отформатирован
+- ✅ `app/decorators.py` - исправлено логирование, отформатирован
+- ✅ `app/filters/role_filter.py` - добавлен префикс _, отформатирован
+- ✅ **35 файлов** - автоматически отформатированы с помощью Black
 
 ### Workflows (не изменялись, но теперь будут работать):
 - `.github/workflows/test.yml`
@@ -178,7 +226,7 @@ pydantic: 2.9.2
 
 ```bash
 git add .
-git commit -m "fix: resolve linter issues and dependency conflicts for GitHub Actions
+git commit -m "fix: resolve all linter issues, format code, and fix dependency conflicts
 
 - Fix pydantic version compatibility (2.4.0-2.12.0)
 - Configure ruff to ignore non-critical errors for Russian project
@@ -186,8 +234,9 @@ git commit -m "fix: resolve linter issues and dependency conflicts for GitHub Ac
 - Fix G201: use logger.exception instead of logger.error with exc_info
 - Fix ARG002: prefix unused method argument with underscore
 - Add per-file ignores for E402 in tests/conftest.py
+- Format all files with black (35 files reformatted)
 
-All tests pass (39/39) and linter checks pass without errors."
+All tests pass (39/39), linter checks pass, and black formatting is correct."
 
 git push origin main
 ```
@@ -211,6 +260,7 @@ git push origin v1.2.3
 |---------|------|-------|-----------|
 | **Ошибки линтера** | 2500+ | 0 | ✅ -100% |
 | **Критические ошибки** | 9 | 0 | ✅ -100% |
+| **Black форматирование** | 35 файлов требуют форматирования | 0 | ✅ -100% |
 | **Пройденные тесты** | 39/39 | 39/39 | ✅ 100% |
 | **Совместимость зависимостей** | ❌ Конфликт | ✅ Совместимо | ✅ Исправлено |
 
@@ -224,7 +274,8 @@ git push origin v1.2.3
 - ✅ Исправлены конфликты зависимостей
 - ✅ Настроен линтер для русского проекта
 - ✅ Исправлены все критические ошибки кода
-- ✅ Все тесты проходят
+- ✅ Весь код отформатирован с помощью Black
+- ✅ Все тесты проходят (39/39)
 - ✅ Код готов к production deployment
 
 ### Совместимость:

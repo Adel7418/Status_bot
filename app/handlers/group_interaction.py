@@ -1,6 +1,7 @@
 """
 Обработчики для взаимодействия с заказами в группах
 """
+
 import logging
 from datetime import datetime
 
@@ -50,7 +51,7 @@ async def callback_group_accept_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ACCEPT_ORDER_GROUP",
-            details=f"Accepted order #{order_id} in group"
+            details=f"Accepted order #{order_id} in group",
         )
 
         # Обновляем сообщение в группе
@@ -67,7 +68,7 @@ async def callback_group_accept_order(callback: CallbackQuery):
             f"📞 Телефон: <i>Будет доступен после прибытия на объект</i>\n\n"
             f"Когда будете на объекте, нажмите кнопку ниже.",
             parse_mode="HTML",
-            reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED)
+            reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED),
         )
 
         # Уведомляем диспетчера
@@ -76,7 +77,7 @@ async def callback_group_accept_order(callback: CallbackQuery):
                 await callback.bot.send_message(
                     order.dispatcher_id,
                     f"✅ Мастер {master.get_display_name()} принял заявку #{order_id} в группе",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
@@ -114,7 +115,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
         # Возвращаем статус в NEW и убираем мастера
         await db.connection.execute(
             "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id)
+            (OrderStatus.NEW, order_id),
         )
         await db.connection.commit()
 
@@ -122,7 +123,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="REFUSE_ORDER_GROUP",
-            details=f"Master refused order #{order_id} in group"
+            details=f"Master refused order #{order_id} in group",
         )
 
         # Обновляем сообщение в группе (номер телефона скрыт, т.к. заявка отклонена до прибытия на объект)
@@ -137,7 +138,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n\n"
             f"Диспетчер получил уведомление для назначения другого мастера.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         # Уведомляем диспетчера
@@ -147,7 +148,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
                     order.dispatcher_id,
                     f"❌ Мастер {master.get_display_name()} отклонил заявку #{order_id} в группе\n"
                     f"Необходимо назначить другого мастера.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
@@ -189,7 +190,7 @@ async def callback_group_onsite_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="ONSITE_ORDER_GROUP",
-            details=f"Master on site for order #{order_id} in group"
+            details=f"Master on site for order #{order_id} in group",
         )
 
         # Обновляем сообщение в группе
@@ -207,7 +208,7 @@ async def callback_group_onsite_order(callback: CallbackQuery):
             f"📞 Телефон: {order.client_phone}\n\n"
             f"После завершения работы нажмите кнопку ниже.",
             parse_mode="HTML",
-            reply_markup=get_group_order_keyboard(order, OrderStatus.ONSITE)
+            reply_markup=get_group_order_keyboard(order, OrderStatus.ONSITE),
         )
 
         # Уведомляем диспетчера
@@ -216,7 +217,7 @@ async def callback_group_onsite_order(callback: CallbackQuery):
                 await callback.bot.send_message(
                     order.dispatcher_id,
                     f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
@@ -256,11 +257,12 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
         await state.update_data(
             order_id=order_id,
             group_chat_id=callback.message.chat.id,
-            group_message_id=callback.message.message_id
+            group_message_id=callback.message.message_id,
         )
 
         # Переходим в состояние запроса общей суммы
         from app.states import CompleteOrderStates
+
         await state.set_state(CompleteOrderStates.enter_total_amount)
 
         # Запрашиваем сумму прямо в группе
@@ -269,7 +271,7 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000 или 5000.50",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         await callback.answer("Введите общую сумму заказа")
@@ -309,7 +311,7 @@ async def callback_group_dr_order(callback: CallbackQuery):
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="DR_ORDER_GROUP",
-            details=f"Order #{order_id} moved to long repair in group"
+            details=f"Order #{order_id} moved to long repair in group",
         )
 
         # Обновляем сообщение в группе
@@ -326,7 +328,7 @@ async def callback_group_dr_order(callback: CallbackQuery):
             f"📍 Адрес: {order.client_address}\n"
             f"📞 Телефон: {order.client_phone}\n\n"
             f"Заявка требует длительного ремонта.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         # Уведомляем диспетчера
@@ -335,7 +337,7 @@ async def callback_group_dr_order(callback: CallbackQuery):
                 await callback.bot.send_message(
                     order.dispatcher_id,
                     f"⏳ Мастер {master.get_display_name()} перевел заявку #{order_id} в длительный ремонт",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")

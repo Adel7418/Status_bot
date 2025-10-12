@@ -1,6 +1,7 @@
 """
 Скрипт для быстрой проверки данных в базе
 """
+
 import io
 import sqlite3
 import sys
@@ -17,39 +18,44 @@ def check_database():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-
     # Проверка пользователей
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT id, telegram_id, username, first_name, last_name, role, created_at
         FROM users
         ORDER BY created_at DESC
-    """)
+    """
+    )
     users = cursor.fetchall()
 
     if users:
         users_data = []
         for user in users:
-            users_data.append([
-                user["id"],
-                user["telegram_id"],
-                user["username"] or "-",
-                user["first_name"] or "-",
-                user["last_name"] or "-",
-                user["role"]  # Теперь может быть "DISPATCHER,MASTER"
-            ])
+            users_data.append(
+                [
+                    user["id"],
+                    user["telegram_id"],
+                    user["username"] or "-",
+                    user["first_name"] or "-",
+                    user["last_name"] or "-",
+                    user["role"],  # Теперь может быть "DISPATCHER,MASTER"
+                ]
+            )
 
     else:
         pass
 
     # Проверка мастеров
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT m.id, m.telegram_id, u.first_name, u.last_name,
                m.phone, m.specialization, m.is_active, m.is_approved,
                m.work_chat_id
         FROM masters m
         LEFT JOIN users u ON m.telegram_id = u.telegram_id
         ORDER BY m.created_at DESC
-    """)
+    """
+    )
     masters = cursor.fetchall()
 
     if masters:
@@ -60,21 +66,24 @@ def check_database():
             active = "🟢" if master["is_active"] else "🔴"
             work_chat = master["work_chat_id"] if master["work_chat_id"] else "-"
 
-            masters_data.append([
-                master["id"],
-                master["telegram_id"],
-                name,
-                master["phone"],
-                master["specialization"],
-                f"{status} {active}",
-                work_chat
-            ])
+            masters_data.append(
+                [
+                    master["id"],
+                    master["telegram_id"],
+                    name,
+                    master["phone"],
+                    master["specialization"],
+                    f"{status} {active}",
+                    work_chat,
+                ]
+            )
 
     else:
         pass
 
     # Проверка заявок
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT o.id, o.equipment_type, o.client_name, o.status,
                u1.first_name || ' ' || u1.last_name as dispatcher_name,
                u2.first_name || ' ' || u2.last_name as master_name,
@@ -85,7 +94,8 @@ def check_database():
         LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
         ORDER BY o.created_at DESC
         LIMIT 20
-    """)
+    """
+    )
     orders = cursor.fetchall()
 
     if orders:
@@ -98,29 +108,33 @@ def check_database():
                 "ONSITE": "🏠",
                 "CLOSED": "💰",
                 "REFUSED": "❌",
-                "DR": "⏳"
+                "DR": "⏳",
             }.get(order["status"], "❓")
 
-            orders_data.append([
-                order["id"],
-                order["equipment_type"][:20],
-                order["client_name"][:15],
-                f"{status_emoji} {order['status']}",
-                (order["dispatcher_name"] or "-")[:15],
-                (order["master_name"] or "-")[:15],
-                f"{order['total_amount']:.0f} ₽" if order["total_amount"] else "-"
-            ])
+            orders_data.append(
+                [
+                    order["id"],
+                    order["equipment_type"][:20],
+                    order["client_name"][:15],
+                    f"{status_emoji} {order['status']}",
+                    (order["dispatcher_name"] or "-")[:15],
+                    (order["master_name"] or "-")[:15],
+                    f"{order['total_amount']:.0f} ₽" if order["total_amount"] else "-",
+                ]
+            )
 
     else:
         pass
 
     # Статистика по заявкам
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT status, COUNT(*) as count
         FROM orders
         GROUP BY status
         ORDER BY count DESC
-    """)
+    """
+    )
     stats = cursor.fetchall()
 
     if stats:
@@ -133,21 +147,19 @@ def check_database():
                 "ONSITE": "На объекте",
                 "CLOSED": "Завершены",
                 "REFUSED": "Отклонены",
-                "DR": "Длительный ремонт"
+                "DR": "Длительный ремонт",
             }
-            stats_data.append([
-                status_names.get(stat["status"], stat["status"]),
-                stat["count"]
-            ])
-
+            stats_data.append([status_names.get(stat["status"], stat["status"]), stat["count"]])
 
     # Проверка пользователей с множественными ролями
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT telegram_id, username, first_name, last_name, role
         FROM users
         WHERE role LIKE '%,%'
         ORDER BY created_at DESC
-    """)
+    """
+    )
     multi_role_users = cursor.fetchall()
 
     if multi_role_users:
@@ -159,16 +171,11 @@ def check_database():
                 "ADMIN": "Администратор",
                 "DISPATCHER": "Диспетчер",
                 "MASTER": "Мастер",
-                "UNKNOWN": "Неизвестно"
+                "UNKNOWN": "Неизвестно",
             }
             roles_str = ", ".join([role_names.get(r.strip(), r) for r in roles])
 
-            multi_data.append([
-                user["telegram_id"],
-                user["username"] or "-",
-                name,
-                roles_str
-            ])
+            multi_data.append([user["telegram_id"], user["username"] or "-", name, roles_str])
 
     else:
         pass
@@ -176,11 +183,10 @@ def check_database():
     conn.close()
 
 
-
 if __name__ == "__main__":
     try:
         check_database()
     except Exception:
         import traceback
-        traceback.print_exc()
 
+        traceback.print_exc()

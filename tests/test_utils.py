@@ -1,6 +1,7 @@
 """
 Тесты для утилит
 """
+
 from app.utils import format_phone, validate_phone
 
 
@@ -30,4 +31,3 @@ class TestPhoneUtils:
     def test_format_phone_without_plus(self):
         """Тест форматирования номера без +"""
         assert format_phone("79991234567") == "+79991234567"
-
