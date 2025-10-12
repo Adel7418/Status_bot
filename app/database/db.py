@@ -31,7 +31,7 @@ class Database:
         """Подключение к базе данных"""
         self.connection = await aiosqlite.connect(self.db_path)
         self.connection.row_factory = aiosqlite.Row
-        logger.info(f"Подключено к базе данных: {self.db_path}")
+        logger.info("Подключено к базе данных: %s", self.db_path)
 
     async def disconnect(self):
         """Отключение от базы данных"""
@@ -258,7 +258,7 @@ class Database:
             created_at=datetime.now()
         )
 
-        logger.info(f"Создан новый пользователь: {telegram_id} с ролью {role}")
+        logger.info("Создан новый пользователь: %s с ролью %s", telegram_id, role)
         return user
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
@@ -305,7 +305,7 @@ class Database:
             (role, telegram_id)
         )
         await self.connection.commit()
-        logger.info(f"Роль пользователя {telegram_id} изменена на {role}")
+        logger.info("Роль пользователя %s изменена на %s", telegram_id, role)
         return True
 
     async def add_user_role(self, telegram_id: int, role: str) -> bool:
@@ -332,7 +332,7 @@ class Database:
             (new_roles, telegram_id)
         )
         await self.connection.commit()
-        logger.info(f"Роль {role} добавлена пользователю {telegram_id}. Роли: {new_roles}")
+        logger.info("Роль %s добавлена пользователю %s. Роли: %s", role, telegram_id, new_roles)
         return True
 
     async def remove_user_role(self, telegram_id: int, role: str) -> bool:

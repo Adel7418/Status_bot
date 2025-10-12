@@ -2,7 +2,7 @@
 Сервис генерации отчетов
 """
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 from aiogram.types import BufferedInputFile
@@ -216,7 +216,7 @@ class ReportsService:
         wb.save(excel_file)
         excel_file.seek(0)
 
-        filename = f"report_{report_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"report_{report_type}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return BufferedInputFile(excel_file.read(), filename=filename)
 
