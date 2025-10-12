@@ -153,7 +153,12 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     await state.update_data(description=description)
     await state.set_state(CreateOrderStates.client_name)
 
-    await message.answer("👤 Шаг 3/6: Введите ФИО клиента:", reply_markup=get_cancel_keyboard())
+    await message.answer(
+        "👤 Шаг 3/6: Введите имя клиента:\n"
+        "<i>(минимум 5 символов)</i>",
+        parse_mode="HTML",
+        reply_markup=get_cancel_keyboard()
+    )
 
 
 @router.message(CreateOrderStates.client_name, F.text != "❌ Отмена")
@@ -184,17 +189,14 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
             @classmethod
             def validate_client_name(cls, v: str) -> str:
                 v = v.strip()
-                parts = v.split()
                 
-                if len(parts) < 2:
-                    raise ValueError("ФИО должно содержать минимум имя и фамилию")
-                
-                for part in parts:
-                    if not re.match(r"^[А-Яа-яЁёA-Za-z\-]+$", part):
-                        raise ValueError("ФИО должно содержать только буквы, пробелы и дефисы")
-                
+                # Минимум 5 символов
                 if len(v) < 5:
-                    raise ValueError("ФИО слишком короткое")
+                    raise ValueError("Имя клиента слишком короткое (минимум 5 символов)")
+                
+                # Проверяем что содержит хотя бы одну букву
+                if not re.search(r"[А-Яа-яЁёA-Za-z]", v):
+                    raise ValueError("Имя должно содержать буквы")
                 
                 return v
         

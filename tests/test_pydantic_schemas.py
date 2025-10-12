@@ -13,7 +13,7 @@ class TestOrderCreateSchema:
         order_data = {
             "equipment_type": "Стиральные машины",
             "description": "Машинка не включается, нужна диагностика",
-            "client_name": "Иванов Иван Петрович",
+            "client_name": "Иванов Иван Петрович",  # Можно и ФИО, и просто имя ≥5 символов
             "client_address": "ул. Ленина, дом 10, квартира 5",
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
@@ -22,6 +22,7 @@ class TestOrderCreateSchema:
         order = OrderCreateSchema(**order_data)
         assert order.equipment_type == "Стиральные машины"
         assert order.client_phone == "+79001234567"
+        assert len(order.client_name) >= 5
     
     def test_phone_formatting(self):
         """Тест автоматического форматирования телефона"""
@@ -84,11 +85,11 @@ class TestOrderCreateSchema:
         assert "недопустимые символы" in str(exc_info.value).lower()
     
     def test_invalid_client_name(self):
-        """Тест невалидного ФИО (одно слово)"""
+        """Тест невалидного имени (слишком короткое)"""
         order_data = {
             "equipment_type": "Духовой шкаф",
             "description": "Не включается духовка",
-            "client_name": "Иван",  # нет фамилии
+            "client_name": "Иван",  # меньше 5 символов
             "client_address": "ул. Ленина, 10",
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
@@ -97,7 +98,22 @@ class TestOrderCreateSchema:
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
         
-        assert "минимум имя и фамилию" in str(exc_info.value).lower()
+        assert "минимум 5 символов" in str(exc_info.value).lower()
+    
+    def test_valid_single_name(self):
+        """Тест валидного имени (одно слово, 5+ символов)"""
+        order_data = {
+            "equipment_type": "Стиральные машины",
+            "description": "Машинка не работает, нужна диагностика",
+            "client_name": "Александр",  # Одно слово, но 9 символов - валидно
+            "client_address": "ул. Ленина, 10, кв. 5",
+            "client_phone": "+79001234567",
+            "dispatcher_id": 123456789,
+        }
+        
+        order = OrderCreateSchema(**order_data)
+        assert order.client_name == "Александр"
+        assert len(order.client_name) >= 5
     
     def test_address_without_number(self):
         """Тест адреса без номера дома"""
