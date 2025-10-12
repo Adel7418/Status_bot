@@ -1,24 +1,37 @@
 """
 Reply клавиатуры
 """
+from typing import Union, List
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, KeyboardButtonRequestChat
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from app.config import UserRole
 
 
-def get_main_menu_keyboard(role: str) -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(role: Union[str, List[str]]) -> ReplyKeyboardMarkup:
     """
     Получение главного меню в зависимости от роли
     
     Args:
-        role: Роль пользователя
+        role: Роль пользователя (строка или список ролей)
         
     Returns:
         ReplyKeyboardMarkup
     """
     builder = ReplyKeyboardBuilder()
     
-    if role == UserRole.ADMIN:
+    # Преобразуем в список ролей
+    if isinstance(role, str):
+        roles = [role]
+    else:
+        roles = role
+    
+    # Определяем, какие кнопки добавить
+    has_admin = UserRole.ADMIN in roles
+    has_dispatcher = UserRole.DISPATCHER in roles
+    has_master = UserRole.MASTER in roles
+    
+    if has_admin:
+        # Администратор видит все
         builder.row(
             KeyboardButton(text="📋 Все заявки"),
             KeyboardButton(text="➕ Создать заявку")
@@ -32,24 +45,33 @@ def get_main_menu_keyboard(role: str) -> ReplyKeyboardMarkup:
             KeyboardButton(text="⚙️ Настройки")
         )
     
-    elif role == UserRole.DISPATCHER:
-        builder.row(
-            KeyboardButton(text="📋 Все заявки"),
-            KeyboardButton(text="➕ Создать заявку")
-        )
-        builder.row(
-            KeyboardButton(text="👥 Мастера"),
-            KeyboardButton(text="📊 Отчеты")
-        )
-        builder.row(
-            KeyboardButton(text="⚙️ Настройки")
-        )
-    
-    elif role == UserRole.MASTER:
-        builder.row(
-            KeyboardButton(text="📋 Мои заявки"),
-            KeyboardButton(text="📊 Моя статистика")
-        )
+    elif has_dispatcher or has_master:
+        # Комбинированное меню для диспетчера и/или мастера
+        buttons_added = set()
+        
+        # Кнопки диспетчера
+        if has_dispatcher:
+            builder.row(
+                KeyboardButton(text="📋 Все заявки"),
+                KeyboardButton(text="➕ Создать заявку")
+            )
+            buttons_added.add("dispatcher_orders")
+            
+        # Кнопки мастера
+        if has_master:
+            builder.row(
+                KeyboardButton(text="📋 Мои заявки"),
+                KeyboardButton(text="📊 Моя статистика")
+            )
+            buttons_added.add("master_orders")
+        
+        # Общие кнопки
+        if has_dispatcher:
+            builder.row(
+                KeyboardButton(text="👥 Мастера"),
+                KeyboardButton(text="📊 Отчеты")
+            )
+        
         builder.row(
             KeyboardButton(text="⚙️ Настройки")
         )

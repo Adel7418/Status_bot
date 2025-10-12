@@ -19,19 +19,20 @@ router = Router(name='common')
 
 @router.message(CommandStart())
 @handle_errors
-async def cmd_start(message: Message, user: User, user_role: str):
+async def cmd_start(message: Message, user: User, user_role: str, user_roles: list):
     """
     Обработчик команды /start
     
     Args:
         message: Сообщение
         user: Пользователь из БД
-        user_role: Роль пользователя
+        user_role: Основная роль пользователя (для обратной совместимости)
+        user_roles: Список всех ролей пользователя
     """
     logger.info(f"START command received from user {message.from_user.id}")
-    logger.info(f"User role: {user_role}, User object: {user}")
+    logger.info(f"User roles: {user_roles}, User object: {user}")
     
-    # Выбираем приветственное сообщение в зависимости от роли
+    # Выбираем приветственное сообщение в зависимости от ролей
     welcome_messages = {
         UserRole.ADMIN: Messages.WELCOME_ADMIN,
         UserRole.DISPATCHER: Messages.WELCOME_DISPATCHER,
@@ -39,28 +40,44 @@ async def cmd_start(message: Message, user: User, user_role: str):
         UserRole.UNKNOWN: Messages.WELCOME_UNKNOWN
     }
     
-    welcome_text = welcome_messages.get(user_role, Messages.WELCOME_UNKNOWN)
+    # Если у пользователя несколько ролей, формируем комбинированное приветствие
+    if UserRole.ADMIN in user_roles:
+        welcome_text = welcome_messages[UserRole.ADMIN]
+    elif UserRole.DISPATCHER in user_roles and UserRole.MASTER in user_roles:
+        welcome_text = (
+            "👋 Добро пожаловать!\n\n"
+            "У вас есть доступ как диспетчера, так и мастера.\n"
+            "Вы можете создавать заявки, назначать их мастерам и выполнять их самостоятельно.\n"
+            "Используйте меню ниже для навигации."
+        )
+    elif UserRole.DISPATCHER in user_roles:
+        welcome_text = welcome_messages[UserRole.DISPATCHER]
+    elif UserRole.MASTER in user_roles:
+        welcome_text = welcome_messages[UserRole.MASTER]
+    else:
+        welcome_text = welcome_messages.get(UserRole.UNKNOWN, Messages.WELCOME_UNKNOWN)
     
     logger.info(f"Sending welcome message...")
     
-    # Отправляем приветствие с клавиатурой
+    # Отправляем приветствие с клавиатурой (передаем список ролей)
     await message.answer(
         welcome_text,
-        reply_markup=get_main_menu_keyboard(user_role)
+        reply_markup=get_main_menu_keyboard(user_roles)
     )
     
-    logger.info(f"User {message.from_user.id} ({user_role}) started the bot")
+    logger.info(f"User {message.from_user.id} ({', '.join(user_roles)}) started the bot")
 
 
 @router.message(Command("help"))
 @handle_errors
-async def cmd_help(message: Message, user_role: str):
+async def cmd_help(message: Message, user_role: str, user_roles: list):
     """
     Обработчик команды /help
     
     Args:
         message: Сообщение
-        user_role: Роль пользователя
+        user_role: Основная роль пользователя
+        user_roles: Список всех ролей пользователя
     """
     help_texts = {
         UserRole.ADMIN: (
@@ -116,7 +133,26 @@ async def cmd_help(message: Message, user_role: str):
         )
     }
     
-    help_text = help_texts.get(user_role, help_texts[UserRole.UNKNOWN])
+    # Формируем справку для пользователей с несколькими ролями
+    if UserRole.ADMIN in user_roles:
+        help_text = help_texts[UserRole.ADMIN]
+    elif UserRole.DISPATCHER in user_roles and UserRole.MASTER in user_roles:
+        help_text = (
+            "📚 <b>Помощь (Диспетчер + Мастер)</b>\n\n"
+            "Доступные функции:\n"
+            "• 📋 Все заявки - просмотр всех заявок\n"
+            "• ➕ Создать заявку - создание новой заявки\n"
+            "• 📋 Мои заявки - просмотр назначенных вам заявок\n"
+            "• 👥 Мастера - просмотр списка мастеров\n"
+            "• 📊 Отчеты - просмотр отчетов\n"
+            "• 📊 Моя статистика - ваша статистика работы\n\n"
+            "Команды:\n"
+            "/start - главное меню\n"
+            "/help - эта справка\n"
+            "/cancel - отмена текущего действия"
+        )
+    else:
+        help_text = help_texts.get(user_role, help_texts[UserRole.UNKNOWN])
     
     await message.answer(help_text, parse_mode="HTML")
     
@@ -125,21 +161,22 @@ async def cmd_help(message: Message, user_role: str):
 
 @router.message(Command("cancel"))
 @handle_errors
-async def cmd_cancel(message: Message, state: FSMContext, user_role: str):
+async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_roles: list):
     """
     Обработчик команды /cancel - отмена текущего действия
     
     Args:
         message: Сообщение
         state: FSM контекст
-        user_role: Роль пользователя
+        user_role: Основная роль пользователя
+        user_roles: Список всех ролей пользователя
     """
     # Очищаем состояние
     await state.clear()
     
     await message.answer(
         "❌ Действие отменено.",
-        reply_markup=get_main_menu_keyboard(user_role)
+        reply_markup=get_main_menu_keyboard(user_roles)
     )
     
     logger.info(f"User {message.from_user.id} cancelled action")
@@ -147,16 +184,17 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str):
 
 @router.message(F.text == "❌ Отмена")
 @handle_errors
-async def btn_cancel(message: Message, state: FSMContext, user_role: str):
+async def btn_cancel(message: Message, state: FSMContext, user_role: str, user_roles: list):
     """
     Обработчик кнопки отмены
     
     Args:
         message: Сообщение
         state: FSM контекст
-        user_role: Роль пользователя
+        user_role: Основная роль пользователя
+        user_roles: Список всех ролей пользователя
     """
-    await cmd_cancel(message, state, user_role)
+    await cmd_cancel(message, state, user_role, user_roles)
 
 
 @router.message(F.text == "⚙️ Настройки")
@@ -169,11 +207,24 @@ async def btn_settings(message: Message, user: User):
         message: Сообщение
         user: Пользователь
     """
+    # Получаем список ролей
+    roles = user.get_roles()
+    
+    # Форматируем роли для отображения
+    role_names = {
+        UserRole.ADMIN: "Администратор",
+        UserRole.DISPATCHER: "Диспетчер",
+        UserRole.MASTER: "Мастер",
+        UserRole.UNKNOWN: "Неизвестно"
+    }
+    
+    roles_display = ", ".join([role_names.get(r, r) for r in roles])
+    
     settings_text = (
         f"⚙️ <b>Настройки профиля</b>\n\n"
         f"👤 <b>Имя:</b> {user.get_full_name()}\n"
         f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n"
-        f"👔 <b>Роль:</b> {user.role}\n"
+        f"👔 <b>Роли:</b> {roles_display}\n"
     )
     
     if user.username:

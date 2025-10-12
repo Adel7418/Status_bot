@@ -52,11 +52,12 @@ class RoleCheckMiddleware(BaseMiddleware):
                 last_name=user.last_name
             )
             
-            # Добавляем пользователя и его роль в данные
+            # Добавляем пользователя и его роли в данные
             data['user'] = db_user
-            data['user_role'] = db_user.role
+            data['user_role'] = db_user.get_primary_role()  # Основная роль для обратной совместимости
+            data['user_roles'] = db_user.get_roles()  # Список всех ролей
             
-            logger.debug(f"User {user.id} with role {db_user.role} processed")
+            logger.debug(f"User {user.id} with roles {db_user.get_roles()} processed")
         
         # Вызываем следующий handler
         return await handler(event, data)

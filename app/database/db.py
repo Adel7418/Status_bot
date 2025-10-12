@@ -288,7 +288,7 @@ class Database:
     
     async def update_user_role(self, telegram_id: int, role: str) -> bool:
         """
-        Обновление роли пользователя
+        Обновление роли пользователя (устанавливает одну роль, заменяя все существующие)
         
         Args:
             telegram_id: Telegram ID
@@ -303,6 +303,84 @@ class Database:
         )
         await self.connection.commit()
         logger.info(f"Роль пользователя {telegram_id} изменена на {role}")
+        return True
+    
+    async def add_user_role(self, telegram_id: int, role: str) -> bool:
+        """
+        Добавление роли пользователю (не удаляя существующие)
+        
+        Args:
+            telegram_id: Telegram ID
+            role: Роль для добавления
+            
+        Returns:
+            True если успешно
+        """
+        user = await self.get_user_by_telegram_id(telegram_id)
+        if not user:
+            logger.error(f"Пользователь {telegram_id} не найден")
+            return False
+        
+        # Используем метод модели для добавления роли
+        new_roles = user.add_role(role)
+        
+        await self.connection.execute(
+            "UPDATE users SET role = ? WHERE telegram_id = ?",
+            (new_roles, telegram_id)
+        )
+        await self.connection.commit()
+        logger.info(f"Роль {role} добавлена пользователю {telegram_id}. Роли: {new_roles}")
+        return True
+    
+    async def remove_user_role(self, telegram_id: int, role: str) -> bool:
+        """
+        Удаление роли у пользователя
+        
+        Args:
+            telegram_id: Telegram ID
+            role: Роль для удаления
+            
+        Returns:
+            True если успешно
+        """
+        user = await self.get_user_by_telegram_id(telegram_id)
+        if not user:
+            logger.error(f"Пользователь {telegram_id} не найден")
+            return False
+        
+        # Используем метод модели для удаления роли
+        new_roles = user.remove_role(role)
+        
+        await self.connection.execute(
+            "UPDATE users SET role = ? WHERE telegram_id = ?",
+            (new_roles, telegram_id)
+        )
+        await self.connection.commit()
+        logger.info(f"Роль {role} удалена у пользователя {telegram_id}. Роли: {new_roles}")
+        return True
+    
+    async def set_user_roles(self, telegram_id: int, roles: List[str]) -> bool:
+        """
+        Установка списка ролей пользователю (заменяет все существующие)
+        
+        Args:
+            telegram_id: Telegram ID
+            roles: Список ролей
+            
+        Returns:
+            True если успешно
+        """
+        if not roles:
+            roles = ["UNKNOWN"]
+        
+        roles_str = ",".join(sorted(set(roles)))
+        
+        await self.connection.execute(
+            "UPDATE users SET role = ? WHERE telegram_id = ?",
+            (roles_str, telegram_id)
+        )
+        await self.connection.commit()
+        logger.info(f"Роли пользователя {telegram_id} установлены: {roles_str}")
         return True
     
     async def get_all_users(self) -> List[User]:

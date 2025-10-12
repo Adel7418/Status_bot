@@ -764,13 +764,27 @@ async def btn_settings_master(message: Message):
         
         user = await db.get_user_by_telegram_id(message.from_user.id)
         
+        # Получаем список ролей
+        role_names = {
+            UserRole.ADMIN: "Администратор",
+            UserRole.DISPATCHER: "Диспетчер",
+            UserRole.MASTER: "Мастер",
+            UserRole.UNKNOWN: "Неизвестно"
+        }
+        
+        if user:
+            user_roles = user.get_roles()
+            roles_display = ", ".join([role_names.get(r, r) for r in user_roles])
+        else:
+            roles_display = role_names[UserRole.MASTER]
+        
         settings_text = (
             f"⚙️ <b>Настройки профиля</b>\n\n"
             f"👤 <b>Имя:</b> {master.get_display_name()}\n"
             f"🆔 <b>Telegram ID:</b> <code>{master.telegram_id}</code>\n"
             f"📞 <b>Телефон:</b> {master.phone}\n"
             f"🔧 <b>Специализация:</b> {master.specialization}\n"
-            f"👔 <b>Роль:</b> {user.role if user else 'MASTER'}\n"
+            f"👔 <b>Роли:</b> {roles_display}\n"
         )
         
         if user and user.username:

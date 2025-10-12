@@ -473,8 +473,8 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             is_approved=True  # Администратор добавляет сразу с одобрением
         )
         
-        # Обновляем роль пользователя
-        await db.update_user_role(data['telegram_id'], UserRole.MASTER)
+        # Добавляем роль мастера (не удаляя существующие роли)
+        await db.add_user_role(data['telegram_id'], UserRole.MASTER)
         
         # Добавляем в лог
         await db.add_audit_log(
@@ -734,6 +734,14 @@ async def btn_users(message: Message, user_role: str):
             by_role[user.role].append(user)
         
         role_names = {
+            UserRole.ADMIN: "Администратор",
+            UserRole.DISPATCHER: "Диспетчер",
+            UserRole.MASTER: "Мастер",
+            UserRole.UNKNOWN: "Неизвестно"
+        }
+        
+        # Отображаем пользователей с группировкой
+        role_headers = {
             UserRole.ADMIN: "Администраторы",
             UserRole.DISPATCHER: "Диспетчеры",
             UserRole.MASTER: "Мастера",
@@ -741,10 +749,13 @@ async def btn_users(message: Message, user_role: str):
         }
         
         for role, role_users in by_role.items():
-            text += f"<b>{role_names.get(role, role)}:</b>\n"
+            text += f"<b>{role_headers.get(role, role)}:</b>\n"
             for user in role_users:
                 display_name = user.get_full_name()
-                text += f"  • {display_name} (ID: {user.telegram_id})\n"
+                # Показываем все роли пользователя
+                user_roles = user.get_roles()
+                roles_str = ", ".join([role_names.get(r, r) for r in user_roles])
+                text += f"  • {display_name} (ID: {user.telegram_id}) - {roles_str}\n"
             text += "\n"
         
         await message.answer(text, parse_mode="HTML")

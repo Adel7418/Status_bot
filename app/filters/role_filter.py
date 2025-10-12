@@ -35,14 +35,16 @@ class RoleFilter(BaseFilter):
         
         Args:
             event: Событие
-            **kwargs: Дополнительные данные, включая user_role из middleware
+            **kwargs: Дополнительные данные, включая user_roles из middleware
             
         Returns:
             True если роль подходит
         """
-        # Получаем роль из kwargs (добавляется middleware)
-        user_role = kwargs.get('user_role', UserRole.UNKNOWN)
-        result = user_role in self.roles
+        # Получаем список ролей из kwargs (добавляется middleware)
+        user_roles = kwargs.get('user_roles', [UserRole.UNKNOWN])
+        
+        # Проверяем, есть ли хотя бы одна из требуемых ролей у пользователя
+        result = any(role in user_roles for role in self.roles)
         
         return result
 
