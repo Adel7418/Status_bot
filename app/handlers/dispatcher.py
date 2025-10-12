@@ -523,7 +523,7 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
 @router.callback_query(F.data.startswith("view_order:"))
 async def callback_view_order(callback: CallbackQuery, user_role: str):
     """
-    Просмотр детальной информации о заявке
+    Просмотр детальной информации о заявке (для диспетчеров/админов)
     
     Args:
         callback: Callback query

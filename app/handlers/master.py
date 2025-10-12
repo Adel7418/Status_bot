@@ -85,7 +85,7 @@ async def btn_my_orders(message: Message, state: FSMContext):
                 
                 text += "\n"
         
-        keyboard = get_order_list_keyboard(orders)
+        keyboard = get_order_list_keyboard(orders, for_master=True)
         
         await message.answer(
             text,
@@ -97,14 +97,20 @@ async def btn_my_orders(message: Message, state: FSMContext):
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("view_order:"), IsMaster())
-async def callback_view_order_master(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("view_order_master:"))
+async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
     """
     Просмотр детальной информации о заявке для мастера
     
     Args:
         callback: Callback query
+        user_roles: Список ролей пользователя
     """
+    # Проверяем роль мастера
+    if UserRole.MASTER not in user_roles:
+        await callback.answer("У вас нет доступа к этой функции", show_alert=True)
+        return
+    
     order_id = int(callback.data.split(":")[1])
     
     db = Database()
@@ -159,7 +165,6 @@ async def callback_view_order_master(callback: CallbackQuery):
         if order.created_at:
             text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
         
-        from app.config import UserRole
         keyboard = get_order_actions_keyboard(order, UserRole.MASTER)
         
         await callback.message.edit_text(

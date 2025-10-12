@@ -297,17 +297,21 @@ def get_orders_filter_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_order_list_keyboard(orders: List[Order]) -> InlineKeyboardMarkup:
+def get_order_list_keyboard(orders: List[Order], for_master: bool = False) -> InlineKeyboardMarkup:
     """
     Клавиатура со списком заявок
     
     Args:
         orders: Список заявок
+        for_master: True если клавиатура для мастера (для раздела "Мои заявки")
         
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
+    
+    # Используем разные callback_data для мастеров и диспетчеров
+    callback_prefix = "view_order_master" if for_master else "view_order"
     
     for order in orders:
         status_emoji = OrderStatus.get_status_emoji(order.status)
@@ -316,7 +320,7 @@ def get_order_list_keyboard(orders: List[Order]) -> InlineKeyboardMarkup:
         builder.row(
             InlineKeyboardButton(
                 text=text,
-                callback_data=create_callback_data("view_order", order.id)
+                callback_data=create_callback_data(callback_prefix, order.id)
             )
         )
     
