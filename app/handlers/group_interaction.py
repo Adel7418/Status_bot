@@ -54,8 +54,8 @@ async def callback_group_accept_order(callback: CallbackQuery):
             details=f"Accepted order #{order_id} in group",
         )
 
-        # Обновляем сообщение в группе
-        await callback.message.edit_text(
+        # Формируем текст с деталями заявки
+        acceptance_text = (
             f"✅ <b>Заявка #{order_id} принята!</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.ACCEPTED)}\n"
@@ -65,8 +65,22 @@ async def callback_group_accept_order(callback: CallbackQuery):
             f"📝 Описание: {order.description}\n"
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n"
-            f"📞 Телефон: <i>Будет доступен после прибытия на объект</i>\n\n"
-            f"Когда будете на объекте, нажмите кнопку ниже.",
+            f"📞 Телефон: <i>Будет доступен после прибытия на объект</i>\n"
+        )
+        
+        # Добавляем заметки если есть
+        if order.notes:
+            acceptance_text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
+        
+        # Добавляем время прибытия если указано
+        if order.scheduled_time:
+            acceptance_text += f"\n⏰ <b>Время прибытия к клиенту:</b> {order.scheduled_time}\n"
+        
+        acceptance_text += f"\n<b>Когда будете на объекте, нажмите кнопку ниже.</b>"
+        
+        # Обновляем сообщение в группе
+        await callback.message.edit_text(
+            acceptance_text,
             parse_mode="HTML",
             reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED),
         )

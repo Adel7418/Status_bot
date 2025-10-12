@@ -214,10 +214,31 @@ async def callback_accept_order(callback: CallbackQuery):
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
 
-        await callback.message.edit_text(
+        # Формируем текст с деталями заявки
+        acceptance_text = (
             f"✅ <b>Заявка #{order_id} принята!</b>\n\n"
-            f"Теперь вы можете просмотреть контактную информацию клиента.\n"
-            f"Когда будете на объекте, обновите статус заявки.",
+            f"🔧 <b>Детали заявки:</b>\n"
+            f"📱 Тип техники: {order.equipment_type}\n"
+            f"📝 Описание: {order.description}\n"
+            f"👤 Клиент: {order.client_name}\n"
+            f"📍 Адрес: {order.client_address}\n"
+        )
+        
+        # Добавляем заметки если есть
+        if order.notes:
+            acceptance_text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
+        
+        # Добавляем время прибытия если указано
+        if order.scheduled_time:
+            acceptance_text += f"\n⏰ <b>Время прибытия к клиенту:</b> {order.scheduled_time}\n"
+        
+        acceptance_text += (
+            f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>\n"
+            f"Когда будете на месте, обновите статус заявки."
+        )
+        
+        await callback.message.edit_text(
+            acceptance_text,
             parse_mode="HTML",
         )
 
