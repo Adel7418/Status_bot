@@ -3,6 +3,7 @@
 """
 
 import logging
+import re
 from datetime import datetime
 
 from aiogram import F, Router
@@ -444,28 +445,43 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
 
     scheduled_time = message.text.strip()
 
-    # Валидация времени через Pydantic валидатор
-    try:
-        from app.schemas.order import OrderCreateSchema
-        # Используем только валидатор поля scheduled_time
-        validator = OrderCreateSchema.model_fields["scheduled_time"].metadata
-        # Применяем валидацию вручную вызывая валидатор
-        validated_time = OrderCreateSchema.validate_scheduled_time(scheduled_time)
-        scheduled_time = validated_time
-    except ValueError as e:
-        await message.answer(
-            f"❌ {e!s}\n\n"
-            "Попробуйте еще раз:",
-            reply_markup=get_skip_cancel_keyboard(),
-        )
-        return
-    except Exception as e:
-        await message.answer(
-            f"❌ Ошибка валидации: {e!s}\n\n"
-            "Попробуйте еще раз:",
-            reply_markup=get_skip_cancel_keyboard(),
-        )
-        return
+    # Валидация времени прибытия
+    if scheduled_time:
+        # Проверка длины (минимум 3 символа, максимум 100)
+        if len(scheduled_time) < 3:
+            await message.answer(
+                "❌ Время/инструкция слишком короткие (минимум 3 символа)\n\n"
+                "Попробуйте еще раз:",
+                reply_markup=get_skip_cancel_keyboard(),
+            )
+            return
+        
+        if len(scheduled_time) > 100:
+            await message.answer(
+                "❌ Время/инструкция слишком длинные (максимум 100 символов)\n\n"
+                "Попробуйте еще раз:",
+                reply_markup=get_skip_cancel_keyboard(),
+            )
+            return
+        
+        # Проверка на опасные символы и SQL injection
+        dangerous_patterns = [
+            r"\b(drop|delete|truncate|insert|update|alter)\b.*\b(table|from|into|database|set|where)\b",
+            r";\s*(drop|delete|truncate|insert|update|alter)\s+",
+            r"--",
+            r"/\*.*\*/",
+            r"\bxp_",
+            r"\bsp_",
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, scheduled_time, re.IGNORECASE):
+                await message.answer(
+                    "❌ Недопустимые символы в тексте\n\n"
+                    "Попробуйте еще раз:",
+                    reply_markup=get_skip_cancel_keyboard(),
+                )
+                return
 
     await state.update_data(scheduled_time=scheduled_time)
     await show_order_confirmation(message, state)
