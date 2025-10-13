@@ -1,0 +1,1322 @@
+{
+  "export_date": "2025-10-13T19:27:24.886441",
+  "database_path": "bot_database.db",
+  "tables": {
+    "users": [
+      {
+        "id": 1,
+        "telegram_id": 5765136457,
+        "username": "re_techmanager",
+        "first_name": "Адель",
+        "last_name": null,
+        "role": "ADMIN",
+        "created_at": "2025-10-11 18:28:37"
+      },
+      {
+        "id": 2,
+        "telegram_id": 8192622236,
+        "username": null,
+        "first_name": "Дисп",
+        "last_name": null,
+        "role": "DISPATCHER,MASTER",
+        "created_at": "2025-10-11 22:01:55"
+      },
+      {
+        "id": 3,
+        "telegram_id": 1343997297,
+        "username": "OBM999",
+        "first_name": "Валерий",
+        "last_name": null,
+        "role": "ADMIN",
+        "created_at": "2025-10-12 10:06:46"
+      },
+      {
+        "id": 4,
+        "telegram_id": 7316156411,
+        "username": "ildar_nuriahmetov",
+        "first_name": "Ильдар535",
+        "last_name": null,
+        "role": "DISPATCHER,MASTER",
+        "created_at": "2025-10-12 10:08:58"
+      },
+      {
+        "id": 5,
+        "telegram_id": 5598318947,
+        "username": null,
+        "first_name": "Равиль",
+        "last_name": null,
+        "role": "MASTER",
+        "created_at": "2025-10-12 10:28:21"
+      },
+      {
+        "id": 6,
+        "telegram_id": 990454973,
+        "username": null,
+        "first_name": "Алик",
+        "last_name": null,
+        "role": "MASTER",
+        "created_at": "2025-10-12 10:36:46"
+      },
+      {
+        "id": 7,
+        "telegram_id": 1609149337,
+        "username": "furyobey",
+        "first_name": "CALIPS0",
+        "last_name": null,
+        "role": "MASTER",
+        "created_at": "2025-10-12 11:16:01"
+      },
+      {
+        "id": 8,
+        "telegram_id": 5967248266,
+        "username": "foxkids19",
+        "first_name": "век",
+        "last_name": null,
+        "role": "MASTER",
+        "created_at": "2025-10-12 11:23:45"
+      },
+      {
+        "id": 9,
+        "telegram_id": 7138430206,
+        "username": null,
+        "first_name": "Ильдар ретех",
+        "last_name": null,
+        "role": "UNKNOWN",
+        "created_at": "2025-10-12 11:57:53"
+      },
+      {
+        "id": 10,
+        "telegram_id": 1087968824,
+        "username": "GroupAnonymousBot",
+        "first_name": "Group",
+        "last_name": null,
+        "role": "UNKNOWN",
+        "created_at": "2025-10-12 12:56:23"
+      }
+    ],
+    "masters": [
+      {
+        "id": 2,
+        "telegram_id": 5598318947,
+        "phone": "+79274513471",
+        "specialization": "Бытовая техника",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 10:30:06",
+        "work_chat_id": -1002845048672
+      },
+      {
+        "id": 3,
+        "telegram_id": 990454973,
+        "phone": "+79297718081",
+        "specialization": "Бытовая техника",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 11:12:29",
+        "work_chat_id": -1003036094516
+      },
+      {
+        "id": 4,
+        "telegram_id": 5967248266,
+        "phone": "+79871754851",
+        "specialization": "Телевизоры",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 11:41:13",
+        "work_chat_id": -1002568983005
+      },
+      {
+        "id": 5,
+        "telegram_id": 1609149337,
+        "phone": "+79178828431",
+        "specialization": "Бытовая техника",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 11:43:04",
+        "work_chat_id": -1002775637748
+      },
+      {
+        "id": 6,
+        "telegram_id": 7316156411,
+        "phone": "+79393059967",
+        "specialization": "Бытовая техники",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 11:55:09",
+        "work_chat_id": -1002634992740
+      },
+      {
+        "id": 7,
+        "telegram_id": 8192622236,
+        "phone": "+79870050646",
+        "specialization": "Test",
+        "is_active": 1,
+        "is_approved": 1,
+        "created_at": "2025-10-12 19:30:48",
+        "work_chat_id": null
+      }
+    ],
+    "orders": [
+      {
+        "id": 9,
+        "equipment_type": "Посудомоечная машина",
+        "description": "Горит датчик протечки \nПм горение 5лет",
+        "client_name": "Людмила н",
+        "client_address": "Маяковского 63 18 (Альметьевск)",
+        "client_phone": "+79872074304",
+        "status": "DR",
+        "assigned_master_id": 5,
+        "dispatcher_id": 5765136457,
+        "notes": "До 17:00 желательно раньше",
+        "created_at": "2025-10-12 10:25:37",
+        "updated_at": "2025-10-12 12:48:23",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      },
+      {
+        "id": 10,
+        "equipment_type": "Посудомоечная машина",
+        "description": "Ошибка по протечек",
+        "client_name": "Данияр Р",
+        "client_address": "Урсала тюгаева 16",
+        "client_phone": "+79625749886",
+        "status": "DR",
+        "assigned_master_id": 3,
+        "dispatcher_id": 7316156411,
+        "notes": "Час полтора",
+        "created_at": "2025-10-12 10:35:13",
+        "updated_at": "2025-10-12 13:18:43",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      },
+      {
+        "id": 12,
+        "equipment_type": "Телевизоры",
+        "description": "Не включается",
+        "client_name": "Альбина М",
+        "client_address": "Альметьевск Чехова 40",
+        "client_phone": "+79173943125",
+        "status": "ONSITE",
+        "assigned_master_id": 6,
+        "dispatcher_id": 7316156411,
+        "notes": "Тв в офис привезли",
+        "created_at": "2025-10-12 11:54:09",
+        "updated_at": "2025-10-12 15:36:01",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      },
+      {
+        "id": 13,
+        "equipment_type": "Посудомоечная машина",
+        "description": "Не приходит питание (не вкл)",
+        "client_name": "Айнур Т",
+        "client_address": "Автомобилистов 11 кв84",
+        "client_phone": "+79274503392",
+        "status": "DR",
+        "assigned_master_id": 3,
+        "dispatcher_id": 5765136457,
+        "notes": "Клиент ожидает после 18:00",
+        "created_at": "2025-10-12 12:52:56",
+        "updated_at": "2025-10-12 13:19:33",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      },
+      {
+        "id": 14,
+        "equipment_type": "Стиральные машины",
+        "description": "набирает воду и сливает",
+        "client_name": "Максим М",
+        "client_address": "Улица бигаш 56",
+        "client_phone": "+79518912929",
+        "status": "ONSITE",
+        "assigned_master_id": 2,
+        "dispatcher_id": 5765136457,
+        "notes": "в 10:00 набрать договорится по времени",
+        "created_at": "2025-10-12 15:12:53",
+        "updated_at": "2025-10-13 06:58:12",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      },
+      {
+        "id": 17,
+        "equipment_type": "Телевизоры",
+        "description": "Нет изображения звук есть.",
+        "client_name": "Алексей",
+        "client_address": "Советская 151 кВ 40",
+        "client_phone": "+79196445647",
+        "status": "NEW",
+        "assigned_master_id": null,
+        "dispatcher_id": 5765136457,
+        "notes": null,
+        "created_at": "2025-10-13 05:30:09",
+        "updated_at": "2025-10-13 05:30:09",
+        "total_amount": null,
+        "materials_cost": null,
+        "master_profit": null,
+        "company_profit": null,
+        "has_review": 0,
+        "scheduled_time": null
+      }
+    ],
+    "audit_log": [
+      {
+        "id": 1,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 8192622236",
+        "timestamp": "2025-10-11 22:04:00"
+      },
+      {
+        "id": 2,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #1",
+        "timestamp": "2025-10-12 07:52:09"
+      },
+      {
+        "id": 3,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #1",
+        "timestamp": "2025-10-12 07:52:44"
+      },
+      {
+        "id": 4,
+        "user_id": 5765136457,
+        "action": "REFUSE_ORDER",
+        "details": "Refused order #1",
+        "timestamp": "2025-10-12 08:11:37"
+      },
+      {
+        "id": 5,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #2",
+        "timestamp": "2025-10-12 08:13:12"
+      },
+      {
+        "id": 6,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #2",
+        "timestamp": "2025-10-12 08:13:27"
+      },
+      {
+        "id": 7,
+        "user_id": 8192622236,
+        "action": "REFUSE_ORDER_MASTER",
+        "details": "Master refused order #2",
+        "timestamp": "2025-10-12 08:14:05"
+      },
+      {
+        "id": 8,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #2",
+        "timestamp": "2025-10-12 08:14:51"
+      },
+      {
+        "id": 9,
+        "user_id": 5765136457,
+        "action": "REFUSE_ORDER",
+        "details": "Refused order #2",
+        "timestamp": "2025-10-12 08:17:08"
+      },
+      {
+        "id": 10,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #3",
+        "timestamp": "2025-10-12 08:30:47"
+      },
+      {
+        "id": 11,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #3",
+        "timestamp": "2025-10-12 08:31:00"
+      },
+      {
+        "id": 12,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #3 in group",
+        "timestamp": "2025-10-12 08:43:56"
+      },
+      {
+        "id": 13,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #3 in group",
+        "timestamp": "2025-10-12 08:44:02"
+      },
+      {
+        "id": 14,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER_GROUP",
+        "details": "Completed order #3 in group",
+        "timestamp": "2025-10-12 08:44:07"
+      },
+      {
+        "id": 15,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #4",
+        "timestamp": "2025-10-12 08:47:15"
+      },
+      {
+        "id": 16,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #4",
+        "timestamp": "2025-10-12 08:47:34"
+      },
+      {
+        "id": 17,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #5",
+        "timestamp": "2025-10-12 08:48:18"
+      },
+      {
+        "id": 18,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #6",
+        "timestamp": "2025-10-12 08:52:59"
+      },
+      {
+        "id": 19,
+        "user_id": 5765136457,
+        "action": "REFUSE_ORDER",
+        "details": "Refused order #6",
+        "timestamp": "2025-10-12 08:54:59"
+      },
+      {
+        "id": 20,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #7",
+        "timestamp": "2025-10-12 08:56:39"
+      },
+      {
+        "id": 21,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #7",
+        "timestamp": "2025-10-12 08:56:47"
+      },
+      {
+        "id": 22,
+        "user_id": 5765136457,
+        "action": "REFUSE_ORDER",
+        "details": "Refused order #7",
+        "timestamp": "2025-10-12 09:14:02"
+      },
+      {
+        "id": 23,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #5",
+        "timestamp": "2025-10-12 09:14:13"
+      },
+      {
+        "id": 24,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 1 from order #4",
+        "timestamp": "2025-10-12 09:14:26"
+      },
+      {
+        "id": 25,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #4",
+        "timestamp": "2025-10-12 09:21:43"
+      },
+      {
+        "id": 26,
+        "user_id": 8192622236,
+        "action": "REFUSE_ORDER_GROUP",
+        "details": "Master refused order #4 in group",
+        "timestamp": "2025-10-12 10:04:40"
+      },
+      {
+        "id": 27,
+        "user_id": 8192622236,
+        "action": "REFUSE_ORDER_GROUP",
+        "details": "Master refused order #7 in group",
+        "timestamp": "2025-10-12 10:04:48"
+      },
+      {
+        "id": 28,
+        "user_id": 1343997297,
+        "action": "CREATE_ORDER",
+        "details": "Created order #8",
+        "timestamp": "2025-10-12 10:08:29"
+      },
+      {
+        "id": 29,
+        "user_id": 1343997297,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #8",
+        "timestamp": "2025-10-12 10:08:47"
+      },
+      {
+        "id": 30,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #8 in group",
+        "timestamp": "2025-10-12 10:08:55"
+      },
+      {
+        "id": 31,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 1 from order #5",
+        "timestamp": "2025-10-12 10:14:47"
+      },
+      {
+        "id": 32,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 1 from order #8",
+        "timestamp": "2025-10-12 10:15:29"
+      },
+      {
+        "id": 33,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #5",
+        "timestamp": "2025-10-12 10:19:23"
+      },
+      {
+        "id": 34,
+        "user_id": 8192622236,
+        "action": "REFUSE_ORDER_GROUP",
+        "details": "Master refused order #5 in group",
+        "timestamp": "2025-10-12 10:20:31"
+      },
+      {
+        "id": 35,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #5",
+        "timestamp": "2025-10-12 10:21:13"
+      },
+      {
+        "id": 36,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #5 in group",
+        "timestamp": "2025-10-12 10:21:21"
+      },
+      {
+        "id": 37,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #5 in group",
+        "timestamp": "2025-10-12 10:21:24"
+      },
+      {
+        "id": 38,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER_GROUP",
+        "details": "Completed order #5 in group",
+        "timestamp": "2025-10-12 10:21:32"
+      },
+      {
+        "id": 39,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #9",
+        "timestamp": "2025-10-12 10:25:37"
+      },
+      {
+        "id": 40,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 5598318947",
+        "timestamp": "2025-10-12 10:30:06"
+      },
+      {
+        "id": 41,
+        "user_id": 7316156411,
+        "action": "CREATE_ORDER",
+        "details": "Created order #10",
+        "timestamp": "2025-10-12 10:35:13"
+      },
+      {
+        "id": 42,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #7",
+        "timestamp": "2025-10-12 10:38:54"
+      },
+      {
+        "id": 43,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #7 in group",
+        "timestamp": "2025-10-12 10:39:19"
+      },
+      {
+        "id": 44,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #7 in group",
+        "timestamp": "2025-10-12 10:39:24"
+      },
+      {
+        "id": 45,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER_GROUP",
+        "details": "Completed order #7 in group",
+        "timestamp": "2025-10-12 10:40:22"
+      },
+      {
+        "id": 46,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #4",
+        "timestamp": "2025-10-12 10:44:32"
+      },
+      {
+        "id": 47,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #4 in group",
+        "timestamp": "2025-10-12 10:44:37"
+      },
+      {
+        "id": 48,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #4 in group",
+        "timestamp": "2025-10-12 10:44:39"
+      },
+      {
+        "id": 49,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER",
+        "details": "Completed order #4, total: 5000.0, materials: 1500.0",
+        "timestamp": "2025-10-12 10:46:02"
+      },
+      {
+        "id": 50,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #8",
+        "timestamp": "2025-10-12 10:47:20"
+      },
+      {
+        "id": 51,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #8 in group",
+        "timestamp": "2025-10-12 10:47:34"
+      },
+      {
+        "id": 52,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #8 in group",
+        "timestamp": "2025-10-12 10:47:36"
+      },
+      {
+        "id": 53,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER",
+        "details": "Completed order #8, total: 5000.0, materials: 1500.0",
+        "timestamp": "2025-10-12 10:47:46"
+      },
+      {
+        "id": 54,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #11",
+        "timestamp": "2025-10-12 11:06:22"
+      },
+      {
+        "id": 55,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 1 to order #11",
+        "timestamp": "2025-10-12 11:06:25"
+      },
+      {
+        "id": 56,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #11 in group",
+        "timestamp": "2025-10-12 11:06:34"
+      },
+      {
+        "id": 57,
+        "user_id": 8192622236,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #11 in group",
+        "timestamp": "2025-10-12 11:06:35"
+      },
+      {
+        "id": 58,
+        "user_id": 8192622236,
+        "action": "COMPLETE_ORDER",
+        "details": "Completed order #11, total: 5000.0, materials: 1500.0",
+        "timestamp": "2025-10-12 11:06:49"
+      },
+      {
+        "id": 59,
+        "user_id": 7316156411,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 2 to order #9",
+        "timestamp": "2025-10-12 11:08:10"
+      },
+      {
+        "id": 60,
+        "user_id": 5598318947,
+        "action": "REFUSE_ORDER_GROUP",
+        "details": "Master refused order #9 in group",
+        "timestamp": "2025-10-12 11:11:59"
+      },
+      {
+        "id": 61,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 990454973",
+        "timestamp": "2025-10-12 11:12:29"
+      },
+      {
+        "id": 62,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 5967248266",
+        "timestamp": "2025-10-12 11:41:13"
+      },
+      {
+        "id": 63,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 1609149337",
+        "timestamp": "2025-10-12 11:43:04"
+      },
+      {
+        "id": 64,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 5 to order #9",
+        "timestamp": "2025-10-12 11:44:16"
+      },
+      {
+        "id": 65,
+        "user_id": 1609149337,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #9 in group",
+        "timestamp": "2025-10-12 11:44:20"
+      },
+      {
+        "id": 66,
+        "user_id": 7316156411,
+        "action": "CREATE_ORDER",
+        "details": "Created order #12",
+        "timestamp": "2025-10-12 11:54:09"
+      },
+      {
+        "id": 67,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 7316156411",
+        "timestamp": "2025-10-12 11:55:09"
+      },
+      {
+        "id": 68,
+        "user_id": 1609149337,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #9 in group",
+        "timestamp": "2025-10-12 12:20:06"
+      },
+      {
+        "id": 69,
+        "user_id": 1609149337,
+        "action": "DR_ORDER_GROUP",
+        "details": "Order #9 moved to long repair in group",
+        "timestamp": "2025-10-12 12:48:23"
+      },
+      {
+        "id": 70,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #13",
+        "timestamp": "2025-10-12 12:52:56"
+      },
+      {
+        "id": 71,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 3 to order #13",
+        "timestamp": "2025-10-12 12:53:23"
+      },
+      {
+        "id": 72,
+        "user_id": 990454973,
+        "action": "ACCEPT_ORDER",
+        "details": "Accepted order #13",
+        "timestamp": "2025-10-12 12:58:19"
+      },
+      {
+        "id": 73,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 3 to order #10",
+        "timestamp": "2025-10-12 12:59:07"
+      },
+      {
+        "id": 74,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 3 from order #10",
+        "timestamp": "2025-10-12 13:00:12"
+      },
+      {
+        "id": 75,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 3 to order #10",
+        "timestamp": "2025-10-12 13:00:22"
+      },
+      {
+        "id": 76,
+        "user_id": 5765136457,
+        "action": "DEACTIVATE_MASTER",
+        "details": "Deactivated master 8192622236",
+        "timestamp": "2025-10-12 13:02:32"
+      },
+      {
+        "id": 77,
+        "user_id": 7316156411,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 6 to order #12",
+        "timestamp": "2025-10-12 13:11:10"
+      },
+      {
+        "id": 78,
+        "user_id": 7316156411,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 6 from order #12",
+        "timestamp": "2025-10-12 13:14:36"
+      },
+      {
+        "id": 79,
+        "user_id": 7316156411,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 6 to order #12",
+        "timestamp": "2025-10-12 13:14:58"
+      },
+      {
+        "id": 80,
+        "user_id": 990454973,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #10 in group",
+        "timestamp": "2025-10-12 13:18:19"
+      },
+      {
+        "id": 81,
+        "user_id": 990454973,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #10 in group",
+        "timestamp": "2025-10-12 13:18:28"
+      },
+      {
+        "id": 82,
+        "user_id": 990454973,
+        "action": "DR_ORDER_GROUP",
+        "details": "Order #10 moved to long repair in group",
+        "timestamp": "2025-10-12 13:18:43"
+      },
+      {
+        "id": 83,
+        "user_id": 990454973,
+        "action": "ONSITE_ORDER",
+        "details": "Master on site for order #13",
+        "timestamp": "2025-10-12 13:19:13"
+      },
+      {
+        "id": 84,
+        "user_id": 990454973,
+        "action": "DR_ORDER",
+        "details": "Order #13 marked as long-term repair",
+        "timestamp": "2025-10-12 13:19:33"
+      },
+      {
+        "id": 85,
+        "user_id": 5765136457,
+        "action": "DEACTIVATE_MASTER",
+        "details": "Deactivated master 8192622236",
+        "timestamp": "2025-10-12 13:21:29"
+      },
+      {
+        "id": 86,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #14",
+        "timestamp": "2025-10-12 15:12:53"
+      },
+      {
+        "id": 87,
+        "user_id": 7316156411,
+        "action": "ACCEPT_ORDER",
+        "details": "Accepted order #12",
+        "timestamp": "2025-10-12 15:21:19"
+      },
+      {
+        "id": 88,
+        "user_id": 7316156411,
+        "action": "ONSITE_ORDER",
+        "details": "Master on site for order #12",
+        "timestamp": "2025-10-12 15:36:01"
+      },
+      {
+        "id": 89,
+        "user_id": 7316156411,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 2 to order #14",
+        "timestamp": "2025-10-12 15:51:04"
+      },
+      {
+        "id": 90,
+        "user_id": 5598318947,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #14 in group",
+        "timestamp": "2025-10-12 15:52:04"
+      },
+      {
+        "id": 91,
+        "user_id": 5765136457,
+        "action": "ADD_MASTER",
+        "details": "Added master 8192622236",
+        "timestamp": "2025-10-12 19:30:48"
+      },
+      {
+        "id": 92,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #15",
+        "timestamp": "2025-10-12 19:50:01"
+      },
+      {
+        "id": 93,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 7 to order #15",
+        "timestamp": "2025-10-12 19:50:10"
+      },
+      {
+        "id": 94,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 7 from order #15",
+        "timestamp": "2025-10-12 19:50:51"
+      },
+      {
+        "id": 95,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 7 to order #15",
+        "timestamp": "2025-10-12 19:50:59"
+      },
+      {
+        "id": 96,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 7 from order #15",
+        "timestamp": "2025-10-12 19:53:06"
+      },
+      {
+        "id": 97,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 7 to order #15",
+        "timestamp": "2025-10-12 19:53:15"
+      },
+      {
+        "id": 98,
+        "user_id": 5765136457,
+        "action": "UNASSIGN_MASTER",
+        "details": "Unassigned master 7 from order #15",
+        "timestamp": "2025-10-12 19:56:23"
+      },
+      {
+        "id": 99,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 7 to order #15",
+        "timestamp": "2025-10-12 19:56:31"
+      },
+      {
+        "id": 100,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #15 in group",
+        "timestamp": "2025-10-12 19:56:37"
+      },
+      {
+        "id": 101,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #16",
+        "timestamp": "2025-10-12 20:31:55"
+      },
+      {
+        "id": 102,
+        "user_id": 5765136457,
+        "action": "ASSIGN_MASTER",
+        "details": "Assigned master 7 to order #16",
+        "timestamp": "2025-10-12 20:31:59"
+      },
+      {
+        "id": 103,
+        "user_id": 8192622236,
+        "action": "ACCEPT_ORDER_GROUP",
+        "details": "Accepted order #16 in group",
+        "timestamp": "2025-10-12 20:32:12"
+      },
+      {
+        "id": 104,
+        "user_id": 5765136457,
+        "action": "CREATE_ORDER",
+        "details": "Created order #17",
+        "timestamp": "2025-10-13 05:30:09"
+      },
+      {
+        "id": 105,
+        "user_id": 5598318947,
+        "action": "ONSITE_ORDER_GROUP",
+        "details": "Master on site for order #14 in group",
+        "timestamp": "2025-10-13 06:58:12"
+      }
+    ],
+    "order_status_history": [
+      {
+        "id": 1,
+        "order_id": 14,
+        "old_status": "ACCEPTED",
+        "new_status": "ONSITE",
+        "changed_by": 5598318947,
+        "changed_at": "2025-10-13 06:58:12",
+        "notes": null
+      }
+    ]
+  },
+  "metadata": {
+    "users": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": true
+        },
+        {
+          "name": "telegram_id",
+          "type": "INTEGER",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "username",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "first_name",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "last_name",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        }
+      ]
+    },
+    "masters": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": true
+        },
+        {
+          "name": "telegram_id",
+          "type": "INTEGER",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "phone",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "specialization",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "is_approved",
+          "type": "BOOLEAN",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "work_chat_id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        }
+      ]
+    },
+    "orders": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": true
+        },
+        {
+          "name": "equipment_type",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "client_name",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "client_address",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "client_phone",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "assigned_master_id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "dispatcher_id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "notes",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "total_amount",
+          "type": "REAL",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "materials_cost",
+          "type": "REAL",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "master_profit",
+          "type": "REAL",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "company_profit",
+          "type": "REAL",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "has_review",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "scheduled_time",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        }
+      ]
+    },
+    "audit_log": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": true
+        },
+        {
+          "name": "user_id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "action",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "details",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "timestamp",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        }
+      ]
+    },
+    "order_status_history": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": true
+        },
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "old_status",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "new_status",
+          "type": "TEXT",
+          "notnull": true,
+          "pk": false
+        },
+        {
+          "name": "changed_by",
+          "type": "INTEGER",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "changed_at",
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "pk": false
+        },
+        {
+          "name": "notes",
+          "type": "TEXT",
+          "notnull": false,
+          "pk": false
+        }
+      ]
+    }
+  }
+}

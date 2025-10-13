@@ -56,9 +56,8 @@ Thumbs.db
 *.xlsx
 reports/
 
-# Backup
+# Backup (исключаем data/backups - она отслеживается)
 backup/
-backups/
 *.bak
 
 # Testing & Coverage
@@ -73,10 +72,18 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
-# CI/CD artifacts (не должны быть в репо)
+# CI/CD artifacts
 .github/workflows/*.log
 
 # Temporary files
 *.tmp
 *.temp
 .~lock.*
+_temp_*
+temp_*
+
+# Migration data (держим структуру, но игнорируем содержимое старых миграций)
+# data/migrations/*.json уже в репо - оставляем для истории
+
+# Alembic
+alembic/versions/__pycache__/
