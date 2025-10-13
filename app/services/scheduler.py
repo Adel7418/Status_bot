@@ -20,20 +20,21 @@ logger = logging.getLogger(__name__)
 class TaskScheduler:
     """Планировщик задач для бота"""
 
-    def __init__(self, bot):
+    def __init__(self, bot, db: Database):
         """
         Инициализация планировщика
 
         Args:
             bot: Экземпляр бота
+            db: Shared Database instance (избегаем race conditions)
         """
         self.bot = bot
         self.scheduler = AsyncIOScheduler()
-        self.db = Database()
+        self.db = db
 
     async def start(self):
         """Запуск планировщика"""
-        await self.db.connect()
+        # БД уже подключена в main(), не создаем новое соединение
 
         # Проверка SLA заявок (каждые 30 минут)
         self.scheduler.add_job(
@@ -67,8 +68,8 @@ class TaskScheduler:
 
     async def stop(self):
         """Остановка планировщика"""
-        self.scheduler.shutdown()
-        await self.db.disconnect()
+        self.scheduler.shutdown(wait=True)  # Ждем завершения всех джоб
+        # БД будет отключена в main(), не закрываем здесь
         logger.info("Планировщик задач остановлен")
 
     async def check_order_sla(self):

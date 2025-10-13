@@ -8,7 +8,6 @@ from datetime import datetime
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-
 from pydantic import ValidationError
 
 from app.config import MAX_DESCRIPTION_LENGTH, MAX_NOTES_LENGTH, OrderStatus, UserRole
@@ -24,7 +23,12 @@ from app.keyboards.inline import (
 from app.keyboards.reply import get_cancel_keyboard, get_confirm_keyboard, get_skip_cancel_keyboard
 from app.schemas import OrderCreateSchema
 from app.states import CreateOrderStates
-from app.utils import format_datetime, format_phone, log_action, safe_send_message, validate_phone
+from app.utils import (
+    escape_html,
+    format_datetime,
+    log_action,
+    safe_send_message,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +60,7 @@ async def btn_create_order(message: Message, state: FSMContext, user_role: str):
     await state.set_state(CreateOrderStates.equipment_type)
 
     await message.answer(
-        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/6: Выберите тип техники:",
+        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/7: Выберите тип техники:",
         parse_mode="HTML",
         reply_markup=get_equipment_types_keyboard(),
     )
@@ -82,7 +86,7 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await state.set_state(CreateOrderStates.description)
 
     await callback.message.edit_text(
-        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/6: Опишите проблему:", parse_mode="HTML"
+        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/7: Опишите проблему:", parse_mode="HTML"
     )
 
     await callback.message.answer(
@@ -114,18 +118,18 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     try:
         # Создаем временную схему для валидации только description
         from pydantic import BaseModel, Field, field_validator
-        
+
         class DescriptionValidator(BaseModel):
             description: str = Field(..., min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
-            
-            @field_validator('description')
+
+            @field_validator("description")
             @classmethod
             def validate_description(cls, v: str) -> str:
                 import re
                 v = v.strip()
                 if len(v) < 10:
                     raise ValueError("Описание слишком короткое. Минимум 10 символов")
-                
+
                 # Базовая защита от SQL injection
                 suspicious_patterns = [
                     r";\s*(DROP|DELETE|UPDATE|INSERT|ALTER)\s+",
@@ -136,14 +140,14 @@ async def process_description(message: Message, state: FSMContext, user_role: st
                 for pattern in suspicious_patterns:
                     if re.search(pattern, v, re.IGNORECASE):
                         raise ValueError("Описание содержит недопустимые символы")
-                
+
                 return v
-        
+
         validated = DescriptionValidator(description=description)
         description = validated.description
-        
+
     except ValidationError as e:
-        error_msg = e.errors()[0]['msg']
+        error_msg = e.errors()[0]["msg"]
         await message.answer(
             f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
@@ -179,32 +183,33 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
 
     # Валидация через Pydantic
     try:
-        from pydantic import BaseModel, Field, field_validator
         import re
-        
+
+        from pydantic import BaseModel, Field, field_validator
+
         class ClientNameValidator(BaseModel):
             client_name: str = Field(..., min_length=5, max_length=200)
-            
-            @field_validator('client_name')
+
+            @field_validator("client_name")
             @classmethod
             def validate_client_name(cls, v: str) -> str:
                 v = v.strip()
-                
+
                 # Минимум 5 символов
                 if len(v) < 5:
                     raise ValueError("Имя клиента слишком короткое (минимум 5 символов)")
-                
+
                 # Проверяем что содержит хотя бы одну букву
                 if not re.search(r"[А-Яа-яЁёA-Za-z]", v):
                     raise ValueError("Имя должно содержать буквы")
-                
+
                 return v
-        
+
         validated = ClientNameValidator(client_name=client_name)
         client_name = validated.client_name
-        
+
     except ValidationError as e:
-        error_msg = e.errors()[0]['msg']
+        error_msg = e.errors()[0]["msg"]
         await message.answer(
             f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
@@ -214,7 +219,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     await state.update_data(client_name=client_name)
     await state.set_state(CreateOrderStates.client_address)
 
-    await message.answer("📍 Шаг 4/6: Введите адрес клиента:", reply_markup=get_cancel_keyboard())
+    await message.answer("📍 Шаг 4/7: Введите адрес клиента:", reply_markup=get_cancel_keyboard())
 
 
 @router.message(CreateOrderStates.client_address, F.text != "❌ Отмена")
@@ -235,31 +240,32 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
 
     # Валидация через Pydantic
     try:
-        from pydantic import BaseModel, Field, field_validator
         import re
-        
+
+        from pydantic import BaseModel, Field, field_validator
+
         class ClientAddressValidator(BaseModel):
             client_address: str = Field(..., min_length=10, max_length=500)
-            
-            @field_validator('client_address')
+
+            @field_validator("client_address")
             @classmethod
             def validate_client_address(cls, v: str) -> str:
                 v = v.strip()
-                
+
                 if len(v) < 10:
                     raise ValueError("Адрес слишком короткий. Минимум 10 символов")
-                
+
                 # Проверка что адрес содержит хотя бы одну цифру (номер дома)
                 if not re.search(r"\d", v):
                     raise ValueError("Адрес должен содержать номер дома")
-                
+
                 return v
-        
+
         validated = ClientAddressValidator(client_address=client_address)
         client_address = validated.client_address
-        
+
     except ValidationError as e:
-        error_msg = e.errors()[0]['msg']
+        error_msg = e.errors()[0]["msg"]
         await message.answer(
             f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
@@ -270,7 +276,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     await state.set_state(CreateOrderStates.client_phone)
 
     await message.answer(
-        "📞 Шаг 5/6: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
+        "📞 Шаг 5/7: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
     )
@@ -294,34 +300,35 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
     # Валидация через Pydantic (использует те же правила что и в схеме)
     try:
-        from pydantic import BaseModel, Field, field_validator
         import re
-        
+
+        from pydantic import BaseModel, Field, field_validator
+
         class ClientPhoneValidator(BaseModel):
             client_phone: str = Field(..., min_length=10, max_length=20)
-            
-            @field_validator('client_phone')
+
+            @field_validator("client_phone")
             @classmethod
             def validate_client_phone(cls, v: str) -> str:
                 cleaned = re.sub(r"[^\d+]", "", v.strip())
                 patterns = [r"^\+7\d{10}$", r"^8\d{10}$", r"^7\d{10}$"]
-                
+
                 if not any(re.match(pattern, cleaned) for pattern in patterns):
                     raise ValueError("Неверный формат телефона. Ожидается: +7XXXXXXXXXX")
-                
+
                 # Форматируем
                 if cleaned.startswith("8") and len(cleaned) == 11:
                     cleaned = "+7" + cleaned[1:]
                 elif cleaned.startswith("7") and len(cleaned) == 11:
                     cleaned = "+" + cleaned
-                
+
                 return cleaned
-        
+
         validated = ClientPhoneValidator(client_phone=phone)
         phone = validated.client_phone
-        
+
     except ValidationError as e:
-        error_msg = e.errors()[0]['msg']
+        error_msg = e.errors()[0]["msg"]
         await message.answer(
             f"❌ {error_msg}\n\nПопробуйте еще раз:",
             reply_markup=get_cancel_keyboard(),
@@ -332,9 +339,9 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
     await state.set_state(CreateOrderStates.notes)
 
     await message.answer(
-        "📝 Шаг 6/6: Введите дополнительные заметки (необязательно):\n"
+        "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
         f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
-        "Или нажмите 'Пропустить' для завершения.",
+        "Или нажмите 'Пропустить'.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
@@ -344,7 +351,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 @handle_errors
 async def skip_notes(message: Message, state: FSMContext, user_role: str):
     """
-    Пропуск заметок
+    Пропуск заметок и переход к времени прибытия
 
     Args:
         message: Сообщение
@@ -355,7 +362,25 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
         return
 
     await state.update_data(notes=None)
-    await show_order_confirmation(message, state)
+    
+    # Переходим к вводу времени прибытия (не пропускаем этот шаг!)
+    await state.set_state(CreateOrderStates.scheduled_time)
+    await message.answer(
+        "⏰ <b>Время прибытия к клиенту</b>\n\n"
+        "Укажите время или инструкцию для мастера:\n\n"
+        "<b>Примеры времени:</b>\n"
+        "• 14:30\n"
+        "• завтра 10:00\n"
+        "• 15.10.2025 16:00\n\n"
+        "<b>Примеры инструкций:</b>\n"
+        "• Набрать клиенту\n"
+        "• После 14:00\n"
+        "• Уточнить у клиента\n"
+        "• В течение дня\n\n"
+        "Или нажмите '⏭️ Пропустить' если не требуется.",
+        parse_mode="HTML",
+        reply_markup=get_skip_cancel_keyboard(),
+    )
 
 
 @router.message(CreateOrderStates.notes, F.text != "❌ Отмена")
@@ -382,7 +407,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
         return
 
     await state.update_data(notes=notes)
-    
+
     # Переходим к вводу времени прибытия
     await state.set_state(CreateOrderStates.scheduled_time)
     await message.answer(
@@ -423,20 +448,20 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
     try:
         from app.schemas.order import OrderCreateSchema
         # Используем только валидатор поля scheduled_time
-        validator = OrderCreateSchema.model_fields['scheduled_time'].metadata
+        validator = OrderCreateSchema.model_fields["scheduled_time"].metadata
         # Применяем валидацию вручную вызывая валидатор
         validated_time = OrderCreateSchema.validate_scheduled_time(scheduled_time)
         scheduled_time = validated_time
     except ValueError as e:
         await message.answer(
-            f"❌ {str(e)}\n\n"
+            f"❌ {e!s}\n\n"
             "Попробуйте еще раз:",
             reply_markup=get_skip_cancel_keyboard(),
         )
         return
     except Exception as e:
         await message.answer(
-            f"❌ Ошибка валидации: {str(e)}\n\n"
+            f"❌ Ошибка валидации: {e!s}\n\n"
             "Попробуйте еще раз:",
             reply_markup=get_skip_cancel_keyboard(),
         )
@@ -495,24 +520,24 @@ async def show_order_confirmation(message: Message, state: FSMContext):
 
     Args:
         message: Сообщение
-        state: FSM контекст
+        state: FSMContext контекст
     """
     data = await state.get_data()
 
     text = (
         "📋 <b>Проверьте данные заявки:</b>\n\n"
-        f"🔧 <b>Тип техники:</b> {data['equipment_type']}\n"
-        f"📝 <b>Описание:</b> {data['description']}\n\n"
-        f"👤 <b>Клиент:</b> {data['client_name']}\n"
-        f"📍 <b>Адрес:</b> {data['client_address']}\n"
-        f"📞 <b>Телефон:</b> {data['client_phone']}\n"
+        f"🔧 <b>Тип техники:</b> {escape_html(data['equipment_type'])}\n"
+        f"📝 <b>Описание:</b> {escape_html(data['description'])}\n\n"
+        f"👤 <b>Клиент:</b> {escape_html(data['client_name'])}\n"
+        f"📍 <b>Адрес:</b> {escape_html(data['client_address'])}\n"
+        f"📞 <b>Телефон:</b> {escape_html(data['client_phone'])}\n"
     )
 
     if data.get("notes"):
-        text += f"\n📝 <b>Заметки:</b> {data['notes']}\n"
-    
+        text += f"\n📝 <b>Заметки:</b> {escape_html(data['notes'])}\n"
+
     if data.get("scheduled_time"):
-        text += f"⏰ <b>Время прибытия:</b> {data['scheduled_time']}\n"
+        text += f"⏰ <b>Время прибытия:</b> {escape_html(data['scheduled_time'])}\n"
 
     await state.set_state(CreateOrderStates.confirm)
 
@@ -531,42 +556,43 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         user_role: Роль пользователя
     """
     data = await state.get_data()
-
-    # КРИТИЧНО: Финальная валидация всех данных через Pydantic перед сохранением в БД
-    try:
-        order_data = OrderCreateSchema(
-            equipment_type=data["equipment_type"],
-            description=data["description"],
-            client_name=data["client_name"],
-            client_address=data["client_address"],
-            client_phone=data["client_phone"],
-            dispatcher_id=message.from_user.id,
-            notes=data.get("notes"),
-            scheduled_time=data.get("scheduled_time"),
-        )
-        logger.info(
-            f"Order data validated successfully for dispatcher {message.from_user.id}"
-        )
-    except ValidationError as e:
-        # Если валидация не прошла - отменяем создание
-        logger.error(f"Order validation failed: {e}")
-        await state.clear()
-        
-        from app.keyboards.reply import get_main_menu_keyboard
-        
-        error_details = "\n".join([f"• {err['msg']}" for err in e.errors()])
-        await message.answer(
-            f"❌ <b>Ошибка валидации данных заявки:</b>\n\n{error_details}\n\n"
-            "Пожалуйста, начните создание заявки заново.",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(user_role)
-        )
-        return
-
-    db = Database()
-    await db.connect()
+    db = None
+    order = None
 
     try:
+        # КРИТИЧНО: Финальная валидация всех данных через Pydantic перед сохранением в БД
+        try:
+            order_data = OrderCreateSchema(
+                equipment_type=data["equipment_type"],
+                description=data["description"],
+                client_name=data["client_name"],
+                client_address=data["client_address"],
+                client_phone=data["client_phone"],
+                dispatcher_id=message.from_user.id,
+                notes=data.get("notes"),
+                scheduled_time=data.get("scheduled_time"),
+            )
+            logger.info(
+                f"Order data validated successfully for dispatcher {message.from_user.id}"
+            )
+        except ValidationError as e:
+            # Если валидация не прошла - отменяем создание
+            logger.error(f"Order validation failed: {e}")
+
+            from app.keyboards.reply import get_main_menu_keyboard
+
+            error_details = "\n".join([f"• {err['msg']}" for err in e.errors()])
+            await message.answer(
+                f"❌ <b>Ошибка валидации данных заявки:</b>\n\n{error_details}\n\n"
+                "Пожалуйста, начните создание заявки заново.",
+                parse_mode="HTML",
+                reply_markup=get_main_menu_keyboard(user_role)
+            )
+            return
+
+        db = Database()
+        await db.connect()
+
         # Создаем заявку с валидированными данными
         order = await db.create_order(
             equipment_type=order_data.equipment_type,
@@ -589,9 +615,11 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
 
     finally:
-        await db.disconnect()
-
-    await state.clear()
+        # Гарантированная очистка ресурсов
+        if db:
+            await db.disconnect()
+        # ВСЕГДА очищаем FSM state
+        await state.clear()
 
     # Создаем inline кнопки для назначения мастера
     from aiogram.types import InlineKeyboardButton
@@ -688,12 +716,12 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
 
             text += (
                 f"{status_emoji} <b>Заявка #{order.id}</b>\n"
-                f"   🔧 {order.equipment_type}\n"
+                f"   🔧 {escape_html(order.equipment_type)}\n"
                 f"   📊 {status_name}\n"
             )
 
             if order.master_name:
-                text += f"   👨‍🔧 {order.master_name}\n"
+                text += f"   👨‍🔧 {escape_html(order.master_name)}\n"
 
             text += "\n"
 
@@ -738,11 +766,11 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
         text = (
             f"📋 <b>Заявка #{order.id}</b>\n\n"
             f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-            f"👤 <b>Клиент:</b> {order.client_name}\n"
-            f"📍 <b>Адрес:</b> {order.client_address}\n"
-            f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+            f"🔧 <b>Тип техники:</b> {escape_html(order.equipment_type)}\n"
+            f"📝 <b>Описание:</b> {escape_html(order.description)}\n\n"
+            f"👤 <b>Клиент:</b> {escape_html(order.client_name)}\n"
+            f"📍 <b>Адрес:</b> {escape_html(order.client_address)}\n"
+            f"📞 <b>Телефон:</b> {escape_html(order.client_phone)}\n\n"
         )
 
         if order.master_name:
@@ -883,7 +911,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
 
             if order.notes:
                 notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-            
+
             if order.scheduled_time:
                 notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
@@ -930,7 +958,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
 
             if order.notes:
                 notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-            
+
             if order.scheduled_time:
                 notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 

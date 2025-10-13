@@ -5,15 +5,10 @@
 import logging
 import re
 from datetime import datetime
+from html import escape
+
 
 # Импорт retry механизма
-from app.utils.retry import (
-    retry_on_telegram_error,
-    safe_answer_callback,
-    safe_delete_message,
-    safe_edit_message,
-    safe_send_message,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -107,15 +102,37 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     return text[: max_length - len(suffix)] + suffix
 
 
+def escape_html(text: str | None) -> str:
+    """
+    Экранирование специальных символов для HTML
+    
+    Защита от HTML injection при использовании parse_mode="HTML"
+    
+    Args:
+        text: Исходный текст
+        
+    Returns:
+        Экранированный текст безопасный для HTML
+    """
+    if text is None:
+        return ""
+    return escape(str(text))
+
+
 def escape_markdown(text: str) -> str:
     """
     Экранирование специальных символов для Markdown
+    
+    ⚠️ DEPRECATED: Используйте escape_html() если parse_mode="HTML"
+    
+    Эта функция оставлена для обратной совместимости, но не используется в текущем проекте.
+    Весь проект использует parse_mode="HTML", поэтому нужен escape_html().
 
     Args:
         text: Исходный текст
 
     Returns:
-        Экранированный текст
+        Экранированный текст для MarkdownV2
     """
     special_chars = [
         "_",

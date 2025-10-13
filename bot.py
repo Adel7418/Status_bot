@@ -5,24 +5,47 @@
 import asyncio
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from aiogram.enums import ParseMode, UpdateType
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config import Config
 from app.database import Database
 from app.handlers import routers
-from app.middlewares import RoleCheckMiddleware, global_error_handler
+from app.middlewares import LoggingMiddleware, RoleCheckMiddleware, global_error_handler
 from app.services.scheduler import TaskScheduler
+from app.utils.sentry import init_sentry
 
 
-# Настройка логирования
+# Создаем директорию для логов если не существует
+Path("logs").mkdir(exist_ok=True)
+
+# Настройка логирования с ротацией
+log_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+# Rotating file handler (макс 10MB, хранить 5 файлов)
+file_handler = RotatingFileHandler(
+    "logs/bot.log",
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=5,
+    encoding="utf-8"
+)
+file_handler.setFormatter(log_formatter)
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+
+# Настройка root logger
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("bot.log", encoding="utf-8"), logging.StreamHandler(sys.stdout)],
+    handlers=[file_handler, console_handler],
 )
 
 logger = logging.getLogger(__name__)
@@ -92,65 +115,114 @@ async def on_shutdown(bot: Bot, db: Database, scheduler: TaskScheduler):
 async def main():
     """Основная функция запуска бота"""
 
-    # Валидация конфигурации
+    bot = None
+    db = None
+    scheduler = None
+    dp = None
+
     try:
-        Config.validate()
-    except ValueError as e:
-        logger.error("Ошибка конфигурации: %s", e)
-        sys.exit(1)
+        # Инициализация Sentry (опционально)
+        init_sentry()
 
-    # Инициализация бота
-    bot = Bot(token=Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        # Валидация конфигурации
+        try:
+            Config.validate()
+        except ValueError as e:
+            logger.error("Ошибка конфигурации: %s", e)
+            sys.exit(1)
 
-    # Инициализация хранилища состояний
-    storage = MemoryStorage()
+        # Инициализация бота
+        bot = Bot(token=Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-    # Инициализация диспетчера
-    dp = Dispatcher(storage=storage)
+        # Инициализация хранилища состояний
+        storage = MemoryStorage()
 
-    # Инициализация базы данных
-    db = Database()
-    await db.connect()
+        # Инициализация диспетчера
+        dp = Dispatcher(storage=storage)
 
-    # ВАЖНО: Инициализируем БД ДО подключения middleware
-    logger.info("Инициализация базы данных...")
-    await db.init_db()
-    logger.info("База данных инициализирована")
+        # Инициализация базы данных
+        db = Database()
+        await db.connect()
 
-    # Инициализация планировщика
-    scheduler = TaskScheduler(bot)
+        # ВАЖНО: Инициализируем БД ДО подключения middleware
+        logger.info("Инициализация базы данных...")
+        await db.init_db()
+        logger.info("База данных инициализирована")
 
-    # Подключение middleware (после инициализации БД)
-    role_middleware = RoleCheckMiddleware(db)
-    dp.message.middleware(role_middleware)
-    dp.callback_query.middleware(role_middleware)
+        # Инициализация планировщика (передаем shared DB instance)
+        scheduler = TaskScheduler(bot, db)
 
-    # Подключение роутеров
-    for router in routers:
-        dp.include_router(router)
+        # Подключение middleware (после инициализации БД)
+        # 1. Logging middleware (первым - логирует все входящие события)
+        logging_middleware = LoggingMiddleware()
+        dp.message.middleware(logging_middleware)
+        dp.callback_query.middleware(logging_middleware)
 
-    logger.info("Подключено %s роутеров", len(routers))
+        # 2. Role check middleware (проверяет роли и регистрирует пользователей)
+        role_middleware = RoleCheckMiddleware(db)
+        dp.message.middleware(role_middleware)
+        dp.callback_query.middleware(role_middleware)
 
-    # Регистрация глобального error handler
-    dp.errors.register(global_error_handler)
+        # Подключение роутеров
+        for router in routers:
+            dp.include_router(router)
 
-    # Вызов startup функции перед запуском
-    await on_startup(bot, db, scheduler)
+        logger.info("Подключено %s роутеров", len(routers))
 
-    # Запуск бота
-    try:
+        # Регистрация глобального error handler
+        dp.errors.register(global_error_handler)
+
+        # Вызов startup функции перед запуском
+        await on_startup(bot, db, scheduler)
+
+        # Запуск бота
         logger.info("Запуск бота...")
+
+        # Явно указываем только используемые типы updates
+        allowed_updates_list = [
+            UpdateType.MESSAGE,
+            UpdateType.CALLBACK_QUERY,
+            # Не получаем лишние update types:
+            # - edited_message, channel_post и т.д. не используются
+        ]
+
         await dp.start_polling(
             bot,
-            allowed_updates=dp.resolve_used_update_types(),
+            allowed_updates=allowed_updates_list,
             drop_pending_updates=True,
         )
+
+    except KeyboardInterrupt:
+        logger.info("Получен сигнал остановки (Ctrl+C)")
     except Exception as e:
-        logger.error("Критическая ошибка: %s", e)
+        logger.error("Критическая ошибка: %s", e, exc_info=True)
     finally:
-        # Вызов shutdown функции при завершении
-        await on_shutdown(bot, db, scheduler)
-        await bot.session.close()
+        # Гарантированная очистка ресурсов
+        logger.info("Начало процедуры остановки...")
+
+        # Остановка планировщика
+        if scheduler:
+            try:
+                await scheduler.stop()
+            except Exception as e:
+                logger.error("Ошибка при остановке scheduler: %s", e)
+
+        # Закрытие соединения с БД
+        if db:
+            try:
+                await db.disconnect()
+            except Exception as e:
+                logger.error("Ошибка при отключении БД: %s", e)
+
+        # Закрытие bot session (критично!)
+        if bot:
+            try:
+                await bot.session.close()
+                logger.info("Bot session закрыта")
+            except Exception as e:
+                logger.error("Ошибка при закрытии bot session: %s", e)
+
+        logger.info("Бот полностью остановлен")
 
 
 if __name__ == "__main__":

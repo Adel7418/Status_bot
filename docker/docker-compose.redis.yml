@@ -1,0 +1,49 @@
+version: '3.8'
+
+# ========================================
+# OPTIONAL: Redis для FSM Storage (Production)
+# Использование: docker-compose -f docker-compose.yml -f docker-compose.redis.yml up -d
+# ========================================
+
+services:
+  bot:
+    environment:
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      - USE_REDIS_STORAGE=true
+    depends_on:
+      - redis
+
+  # Redis для FSM storage
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_bot_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bot_network:
+    external: true
+
+volumes:
+  redis_data:
+    driver: local
+
+
+

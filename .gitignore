@@ -38,11 +38,15 @@ env/
 
 # Database
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+bot_database.db
 
 # Logs
 *.log
+bot.log
+logs/
 
 # OS
 .DS_Store
@@ -54,5 +58,25 @@ reports/
 
 # Backup
 backup/
+backups/
 *.bak
 
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# CI/CD artifacts (не должны быть в репо)
+.github/workflows/*.log
+
+# Temporary files
+*.tmp
+*.temp
+.~lock.*

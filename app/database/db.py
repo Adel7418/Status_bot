@@ -41,11 +41,45 @@ class Database:
             logger.info("Отключено от базы данных")
 
     async def init_db(self):
-        """Инициализация базы данных"""
+        """
+        Инициализация базы данных
+        
+        ВАЖНО: Схема БД управляется через Alembic миграции!
+        Этот метод только проверяет существование таблиц для обратной совместимости.
+        
+        Для применения миграций используйте:
+        $ alembic upgrade head
+        """
         if not self.connection:
             await self.connect()
 
-        # Создание таблицы users
+        # Проверяем существование основной таблицы users
+        cursor = await self.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+        )
+        table_exists = await cursor.fetchone()
+
+        if not table_exists:
+            logger.warning(
+                "⚠️  Таблицы БД не найдены! "
+                "Запустите миграции: alembic upgrade head"
+            )
+            # Создаем базовую схему для обратной совместимости
+            await self._create_legacy_schema()
+        else:
+            logger.info("[OK] База данных инициализирована (схема существует)")
+
+        # Создание индексов для оптимизации запросов
+        await self._create_indexes()
+
+    async def _create_legacy_schema(self):
+        """
+        Создание базовой схемы для обратной совместимости
+        DEPRECATED: Используйте Alembic миграции!
+        """
+        logger.warning("⚠️  Создание legacy схемы. Рекомендуется использовать Alembic!")
+        
+        # Минимальная схема для работы
         await self.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -60,7 +94,6 @@ class Database:
         """
         )
 
-        # Создание таблицы masters
         await self.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS masters (
@@ -77,94 +110,6 @@ class Database:
         """
         )
 
-        # Добавление поля work_chat_id в существующую таблицу (если его нет)
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE masters ADD COLUMN work_chat_id INTEGER
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле work_chat_id в таблицу masters")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        # Добавление полей для сумм в таблицу orders (если их нет)
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN total_amount REAL
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле total_amount в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN materials_cost REAL
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле materials_cost в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN master_profit REAL
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле master_profit в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN company_profit REAL
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле company_profit в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN has_review INTEGER DEFAULT 0
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле has_review в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        # Добавление поля scheduled_time в таблицу orders (если его нет)
-        try:
-            await self.connection.execute(
-                """
-                ALTER TABLE orders ADD COLUMN scheduled_time TEXT
-            """
-            )
-            await self.connection.commit()
-            logger.info("Добавлено поле scheduled_time в таблицу orders")
-        except Exception:
-            # Поле уже существует, игнорируем ошибку
-            pass
-
-        # Создание таблицы orders
         await self.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS orders (
@@ -179,6 +124,11 @@ class Database:
                 dispatcher_id INTEGER,
                 notes TEXT,
                 scheduled_time TEXT,
+                total_amount REAL,
+                materials_cost REAL,
+                master_profit REAL,
+                company_profit REAL,
+                has_review INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (assigned_master_id) REFERENCES masters(id),
@@ -187,7 +137,6 @@ class Database:
         """
         )
 
-        # Создание таблицы audit_log
         await self.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS audit_log (
@@ -201,7 +150,6 @@ class Database:
         """
         )
 
-        # Создание таблицы order_status_history для отслеживания изменений статусов
         await self.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS order_status_history (
@@ -219,10 +167,7 @@ class Database:
         )
 
         await self.connection.commit()
-        logger.info("База данных инициализирована")
-
-        # Создание индексов для оптимизации запросов
-        await self._create_indexes()
+        logger.info("[OK] Legacy схема создана")
 
     async def _create_indexes(self):
         """Создание индексов для оптимизации"""

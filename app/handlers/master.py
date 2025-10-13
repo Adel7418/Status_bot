@@ -648,8 +648,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
 
         if not master or not order or order.assigned_master_id != master.id:
             await message.answer("❌ Ошибка: заявка не найдена или не принадлежит вам.")
-            await state.clear()
-            return
+            return  # state.clear() в finally
 
         # Рассчитываем распределение прибыли с учетом отзыва
         master_profit, company_profit = calculate_profit_split(
@@ -762,7 +761,10 @@ async def process_review_confirmation(message: Message, state: FSMContext):
         log_action(message.from_user.id, "COMPLETE_ORDER", f"Order #{order_id}")
 
     finally:
-        await db.disconnect()
+        # Гарантированная очистка ресурсов
+        if db:
+            await db.disconnect()
+        # ВСЕГДА очищаем FSM state
         await state.clear()
 
 

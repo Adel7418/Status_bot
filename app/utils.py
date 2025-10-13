@@ -98,9 +98,30 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
     return text[: max_length - len(suffix)] + suffix
 
 
+def escape_html(text: str | None) -> str:
+    """
+    Экранирование специальных символов для HTML
+    
+    Защита от HTML injection при использовании parse_mode="HTML"
+    
+    Args:
+        text: Исходный текст
+        
+    Returns:
+        Экранированный текст безопасный для HTML
+    """
+    from html import escape
+    
+    if text is None:
+        return ""
+    return escape(str(text))
+
+
 def escape_markdown(text: str) -> str:
     """
     Экранирование специальных символов для Markdown
+    
+    DEPRECATED: Используйте escape_html() если parse_mode="HTML"
 
     Args:
         text: Исходный текст

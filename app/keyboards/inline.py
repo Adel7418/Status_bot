@@ -119,12 +119,13 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
-            builder.row(
-                InlineKeyboardButton(
-                    text="✏️ Редактировать",
-                    callback_data=create_callback_data("edit_order", order.id),
-                )
-            )
+            # TODO: Реализовать функционал редактирования заявок
+            # builder.row(
+            #     InlineKeyboardButton(
+            #         text="✏️ Редактировать",
+            #         callback_data=create_callback_data("edit_order", order.id),
+            #     )
+            # )
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Закрыть заявку",

@@ -1,0 +1,97 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+backups/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (не нужны в образе)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+.pre-commit-config.yaml
+
+# Docker
+docker/
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Dev dependencies
+requirements-dev.txt
+Makefile
+.editorconfig
+
+# Test files
+tests/
+test_*.py
+conftest.py
+
+# Migrations (включаем только код, не версии для dev)
+migrations/versions/*.pyc
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+.~lock.*
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Environment
+.env.example
+env.example
+
+
+
