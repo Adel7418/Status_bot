@@ -23,7 +23,7 @@ pydantic==2.10.3  # Updated from 2.9.2, fixed compatibility
 # Date/Time Utilities
 python-dateutil==2.9.0.post0
 
-alembic==1.13.1
+alembic==1.17.0
 
 # ========================================
 # OPTIONAL: Redis для production FSM storage
