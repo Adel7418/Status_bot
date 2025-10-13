@@ -6,7 +6,7 @@
 aiogram==3.16.0  # Updated from 3.14.0
 
 # Async SQLite
-aiosqlite==0.20.0
+aiosqlite==0.21.0
 
 # Task Scheduler
 APScheduler==3.11.0  # Stable version (4.x имеет breaking changes)
