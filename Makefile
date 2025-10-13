@@ -1,6 +1,6 @@
 # Makefile для упрощения команд разработки
 
-.PHONY: help install install-dev test lint format clean run docker-build docker-up docker-down
+.PHONY: help install install-dev test lint format clean run migrate migrate-create docker-build docker-up docker-down docker-migrate
 
 help:  ## Показать эту справку
 	@echo "Доступные команды:"
@@ -48,6 +48,21 @@ clean:  ## Очистить временные файлы
 run:  ## Запустить бота
 	python bot.py
 
+migrate:  ## Применить миграции БД
+	alembic upgrade head
+
+migrate-create:  ## Создать новую миграцию (использование: make migrate-create MSG="описание")
+	alembic revision --autogenerate -m "$(MSG)"
+
+migrate-history:  ## Показать историю миграций
+	alembic history
+
+migrate-current:  ## Показать текущую версию БД
+	alembic current
+
+migrate-downgrade:  ## Откатить одну миграцию
+	alembic downgrade -1
+
 backup:  ## Создать backup базы данных
 	python backup_db.py
 
@@ -74,6 +89,12 @@ docker-logs:  ## Показать логи Docker
 
 docker-restart:  ## Перезапустить Docker контейнеры
 	docker-compose -f docker/docker-compose.yml restart
+
+docker-migrate:  ## Применить миграции через Docker
+	docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
+
+docker-migrate-prod:  ## Применить миграции на production
+	docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
 
 docker-clean:  ## Очистить Docker (удалить контейнеры и volumes)
 	docker-compose -f docker/docker-compose.yml down -v

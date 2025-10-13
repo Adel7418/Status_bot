@@ -66,6 +66,6 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import os; exit(0 if os.path.exists('bot_database.db') else 1)"
 
-# Точка входа
-ENTRYPOINT ["python", "bot.py"]
+# Команда по умолчанию (можно переопределить)
+CMD ["python", "bot.py"]
 
