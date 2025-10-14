@@ -35,7 +35,7 @@ docker-compose up -d
 docker-compose logs -f bot
 ```
 
-📖 Подробнее: [docs/deployment/DOCKER_USAGE.md](docs/deployment/DOCKER_USAGE.md)
+📖 Подробнее: [docs/DOCKER_USAGE.md](docs/DOCKER_USAGE.md)
 
 ### Вариант 2: Локальная установка
 
@@ -57,6 +57,68 @@ python -c "from app.database import Database; import asyncio; asyncio.run(Databa
 
 # 5. Запустите бота
 python bot.py
+```
+
+## 🔄 Workflow разработки: DEV → STAGING → PROD
+
+Для безопасной разработки без риска для production, проект использует трехуровневую систему окружений:
+
+```
+Local (Cursor) → Staging (Test) → Production (Live)
+```
+
+### Быстрые команды
+
+```bash
+# Локальная разработка
+make test              # Запустить тесты
+make lint              # Проверить код
+make run               # Запустить бота локально
+
+# Деплой в staging (тестирование)
+make staging-deploy    # Автоматический деплой в staging
+make staging-logs      # Просмотр логов staging
+
+# Деплой в production (после проверки в staging)
+make prod-deploy       # Деплой в production (с подтверждением!)
+make prod-logs         # Просмотр логов production
+make prod-status       # Статус production
+```
+
+### Процесс обновления бота
+
+1. **Разработка локально** (в Cursor):
+   ```bash
+   # Внести изменения, протестировать
+   make test && make lint
+   git add . && git commit -m "feat: новая функция"
+   git push origin main
+   ```
+
+2. **Деплой в Staging** (проверка):
+   ```bash
+   make staging-deploy  # Автоматически: SSH → git pull → rebuild → migrate
+   make staging-logs    # Проверить логи
+   ```
+
+3. **Деплой в Production** (если все ОК):
+   ```bash
+   make prod-deploy     # С подтверждением и backup
+   make prod-logs       # Проверить что все работает
+   ```
+
+📖 **Детальная документация:** [docs/STAGING_WORKFLOW.md](docs/STAGING_WORKFLOW.md)
+
+### Настройка переменных для автоматического деплоя
+
+Создайте `.env` в корне проекта или экспортируйте переменные:
+
+```bash
+# Windows PowerShell
+$env:SSH_SERVER="root@your-server-ip"
+
+# Linux/Mac
+export SSH_SERVER="root@your-server-ip"
 ```
 
 ## 🏗️ Структура проекта
@@ -127,15 +189,17 @@ telegram_repair_bot/
 - 📖 [Начало работы](docs/user-guides/START_AFTER_FIXES.md)
 
 ### Деплой
+- 🚀 **[Staging Workflow](docs/STAGING_WORKFLOW.md)** - Безопасная разработка DEV→STAGING→PROD
 - 🚀 [Деплой на VPS Linux](docs/deployment/DEPLOY_VPS_LINUX_GUIDE.md)
 - 🚀 [Инструкции по деплою](docs/deployment/DEPLOYMENT_INSTRUCTIONS.md)
 - 🚀 [Production Ready Guide](docs/deployment/PRODUCTION_READY_GUIDE.md)
 - 🚀 [Быстрые команды деплоя](docs/deployment/QUICK_DEPLOY_COMMANDS.md)
 
 ### Разработка
+- 💻 **[Staging Workflow](docs/STAGING_WORKFLOW.md)** - Процесс разработки и деплоя
 - 💻 [Структура проекта](docs/development/STRUCTURE_UPDATE.md)
 - 💻 [Следующие шаги](docs/development/NEXT_STEPS.md)
-- 💻 [Docker Usage](docs/deployment/DOCKER_USAGE.md)
+- 💻 [Docker Usage](docs/DOCKER_USAGE.md)
 
 ### Миграция
 - 🔄 [Гайд по миграции](docs/migration/MIGRATION_GUIDE.md)
@@ -169,15 +233,33 @@ make coverage           # С отчетом покрытия
 ## 🛠️ Полезные команды (Makefile)
 
 ```bash
+# Основные команды
 make help              # Показать все команды
-make install          # Установить зависимости
-make run              # Запустить бота
-make test             # Запустить тесты
-make lint             # Проверить код
-make format           # Форматировать код
-make docker-build     # Собрать Docker образ
-make docker-up        # Запустить в Docker
-make backup           # Создать бэкап БД
+make install           # Установить production зависимости
+make install-dev       # Установить dev зависимости
+make run               # Запустить бота локально
+make test              # Запустить тесты
+make lint              # Проверить код
+make format            # Форматировать код
+
+# Docker (локальная разработка)
+make docker-build      # Собрать Docker образ
+make docker-up         # Запустить в Docker (dev)
+make docker-up-dev     # Запустить в dev режиме
+make docker-down       # Остановить контейнеры
+make docker-logs       # Показать логи
+
+# Деплой (staging/production)
+make staging-deploy    # Деплой в staging
+make staging-logs      # Логи staging
+make prod-deploy       # Деплой в production
+make prod-logs         # Логи production
+make prod-status       # Статус production
+
+# Базы данных
+make migrate           # Применить миграции
+make migrate-create    # Создать миграцию
+make backup            # Создать бэкап БД
 ```
 
 ## 📦 Основные возможности

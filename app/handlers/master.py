@@ -672,7 +672,7 @@ async def process_review_confirmation(message: Message, state: FSMContext):
 
         # Обновляем статус на CLOSED
         await db.update_order_status(
-            order_id, OrderStatus.CLOSED, changed_by=callback.from_user.id
+            order_id, OrderStatus.CLOSED, changed_by=message.from_user.id
         )
 
         # Добавляем в лог

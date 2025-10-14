@@ -75,29 +75,26 @@ sync-roles:  ## Синхронизировать роли из .env
 docker-build:  ## Собрать Docker образ
 	docker build -f docker/Dockerfile -t telegram-repair-bot:latest .
 
-docker-up:  ## Запустить через Docker Compose
-	docker-compose -f docker/docker-compose.yml up -d
+docker-up:  ## Запустить через Docker Compose (dev)
+	cd docker && docker compose -f docker-compose.yml up -d
 
 docker-up-dev:  ## Запустить в dev режиме
-	docker-compose -f docker/docker-compose.dev.yml up
+	cd docker && docker compose -f docker-compose.dev.yml up
 
-docker-down:  ## Остановить Docker контейнеры
-	docker-compose -f docker/docker-compose.yml down
+docker-down:  ## Остановить Docker контейнеры (dev)
+	cd docker && docker compose -f docker-compose.yml down
 
-docker-logs:  ## Показать логи Docker
-	docker-compose -f docker/docker-compose.yml logs -f bot
+docker-logs:  ## Показать логи Docker (dev)
+	cd docker && docker compose -f docker-compose.yml logs -f bot
 
-docker-restart:  ## Перезапустить Docker контейнеры
-	docker-compose -f docker/docker-compose.yml restart
+docker-restart:  ## Перезапустить Docker контейнеры (dev)
+	cd docker && docker compose -f docker-compose.yml restart
 
 docker-migrate:  ## Применить миграции через Docker
-	docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
-
-docker-migrate-prod:  ## Применить миграции на production
-	docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
+	cd docker && docker compose -f docker-compose.migrate.yml run --rm migrate
 
 docker-clean:  ## Очистить Docker (удалить контейнеры и volumes)
-	docker-compose -f docker/docker-compose.yml down -v
+	cd docker && docker compose -f docker-compose.yml down -v
 	docker system prune -f
 
 venv:  ## Создать виртуальное окружение
@@ -117,6 +114,30 @@ security-check:  ## Проверка безопасности зависимос
 	pip install safety
 	safety check
 	bandit -r app/
+
+# ========================================
+# STAGING & PRODUCTION DEPLOYMENT
+# ========================================
+
+staging-deploy:  ## Деплой в staging (требует настройки SSH_SERVER в .env или переменной окружения)
+	@echo "🚀 Deploying to STAGING..."
+	@bash scripts/deploy_staging.sh
+
+staging-logs:  ## Показать логи staging
+	@echo "📋 Fetching STAGING logs..."
+	@bash scripts/staging_logs.sh
+
+prod-deploy:  ## Деплой в production (с подтверждением!)
+	@echo "⚠️  PRODUCTION DEPLOYMENT"
+	@bash scripts/deploy_prod.sh
+
+prod-logs:  ## Показать логи production
+	@echo "📋 Fetching PRODUCTION logs..."
+	@bash scripts/prod_logs.sh
+
+prod-status:  ## Статус production
+	@echo "🔍 Checking PRODUCTION status..."
+	@bash scripts/prod_status.sh
 
 all: clean install-dev lint test  ## Выполнить всё: очистка, установка, линт, тесты
 

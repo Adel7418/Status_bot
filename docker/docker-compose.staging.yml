@@ -1,0 +1,85 @@
+# ========================================
+# Docker Compose для STAGING
+# Изолированное окружение для тестирования перед prod
+# Использование: docker compose -f docker-compose.staging.yml up -d
+# ========================================
+
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: telegram_repair_bot_staging
+    restart: always
+    env_file:
+      - ../.env.staging
+    environment:
+      - DATABASE_PATH=/app/data/bot_database.db
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=staging
+    volumes:
+      - bot_data_staging:/app/data
+      - bot_logs_staging:/app/logs
+      - bot_backups_staging:/app/backups
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network_staging
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/data/bot_database.db') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_bot_redis_staging
+    restart: always
+    volumes:
+      - redis_data_staging:/data
+    networks:
+      - bot_network_staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bot_network_staging:
+    driver: bridge
+
+volumes:
+  bot_data_staging:
+    driver: local
+  bot_logs_staging:
+    driver: local
+  bot_backups_staging:
+    driver: local
+  redis_data_staging:
+    driver: local
+
