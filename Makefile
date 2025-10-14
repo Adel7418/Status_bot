@@ -116,28 +116,15 @@ security-check:  ## Проверка безопасности зависимос
 	bandit -r app/
 
 # ========================================
-# STAGING & PRODUCTION DEPLOYMENT
+# SERVER MANAGEMENT (опционально, для автоматизации)
 # ========================================
+# Если вы делаете SSH на сервер вручную - эта секция НЕ НУЖНА!
+# Команды ниже автоматизируют деплой с локальной машины
+# Используйте их только если хотите избежать ручного SSH
 
-staging-deploy:  ## Деплой в staging (требует настройки SSH_SERVER в .env или переменной окружения)
-	@echo "🚀 Deploying to STAGING..."
-	@bash scripts/deploy_staging.sh
-
-staging-logs:  ## Показать логи staging
-	@echo "📋 Fetching STAGING logs..."
-	@bash scripts/staging_logs.sh
-
-prod-deploy:  ## Деплой в production (с подтверждением!)
-	@echo "⚠️  PRODUCTION DEPLOYMENT"
-	@bash scripts/deploy_prod.sh
-
-prod-logs:  ## Показать логи production
-	@echo "📋 Fetching PRODUCTION logs..."
-	@bash scripts/prod_logs.sh
-
-prod-status:  ## Статус production
-	@echo "🔍 Checking PRODUCTION status..."
-	@bash scripts/prod_status.sh
+# prod-deploy-simple:  ## Деплой в production (автоматический)
+# 	@echo "⚠️  PRODUCTION DEPLOYMENT"
+# 	@bash scripts/deploy_prod_simple.sh
 
 all: clean install-dev lint test  ## Выполнить всё: очистка, установка, линт, тесты
 
