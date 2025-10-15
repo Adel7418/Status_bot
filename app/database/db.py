@@ -569,6 +569,47 @@ class Database:
             )
         return None
 
+    async def get_master_by_work_chat_id(self, work_chat_id: int) -> Master | None:
+        """
+        Получение мастера по ID рабочей группы
+
+        Args:
+            work_chat_id: ID рабочей группы
+
+        Returns:
+            Объект Master или None
+        """
+        cursor = await self.connection.execute(
+            """
+            SELECT m.*, u.username, u.first_name, u.last_name
+            FROM masters m
+            LEFT JOIN users u ON m.telegram_id = u.telegram_id
+            WHERE m.work_chat_id = ?
+            """,
+            (work_chat_id,),
+        )
+        row = await cursor.fetchone()
+
+        if row:
+            return Master(
+                id=row["id"],
+                telegram_id=row["telegram_id"],
+                phone=row["phone"],
+                specialization=row["specialization"],
+                is_active=bool(row["is_active"]),
+                is_approved=bool(row["is_approved"]),
+                work_chat_id=(
+                    row["work_chat_id"]
+                    if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
+                    else None
+                ),
+                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+                username=row["username"],
+                first_name=row["first_name"],
+                last_name=row["last_name"],
+            )
+        return None
+
     async def get_all_masters(
         self, only_approved: bool = False, only_active: bool = False
     ) -> list[Master]:

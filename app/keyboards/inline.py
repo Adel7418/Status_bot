@@ -126,6 +126,41 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("client_waiting", order.id),
                     )
                 )
+        
+        # Добавляем кнопки действий мастера для админа (только если мастер назначен)
+        if user_role == UserRole.ADMIN and order.assigned_master_id:
+            if order.status == OrderStatus.ASSIGNED:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="✅ Принять (за мастера)",
+                        callback_data=create_callback_data("admin_accept_order", order.id),
+                    )
+                )
+            elif order.status == OrderStatus.ACCEPTED:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="🏠 На объекте (за мастера)",
+                        callback_data=create_callback_data("admin_onsite_order", order.id),
+                    )
+                )
+            elif order.status == OrderStatus.ONSITE:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="💰 Завершить (за мастера)",
+                        callback_data=create_callback_data("admin_complete_order", order.id),
+                    ),
+                    InlineKeyboardButton(
+                        text="⏳ DR (за мастера)",
+                        callback_data=create_callback_data("admin_dr_order", order.id),
+                    ),
+                )
+            elif order.status == OrderStatus.DR:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="💰 Завершить ремонт (за мастера)",
+                        callback_data=create_callback_data("admin_complete_order", order.id),
+                    )
+                )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
             # TODO: Реализовать функционал редактирования заявок

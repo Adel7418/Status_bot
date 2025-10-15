@@ -910,13 +910,23 @@ async def process_out_of_city_confirmation(message: Message, state: FSMContext):
     total_amount = data.get("total_amount")
     materials_cost = data.get("materials_cost")
     has_review = data.get("has_review")
+    acting_as_master_id = data.get("acting_as_master_id")  # ID мастера, если админ действует от его имени
 
     db = Database()
     await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
-        master = await db.get_master_by_telegram_id(message.from_user.id)
+        
+        # Если админ действует от имени мастера
+        if acting_as_master_id:
+            master = await db.get_master_by_telegram_id(acting_as_master_id)
+            is_admin_acting = True
+            admin_id = message.from_user.id
+        else:
+            master = await db.get_master_by_telegram_id(message.from_user.id)
+            is_admin_acting = False
+            admin_id = None
 
         if not master or not order or order.assigned_master_id != master.id:
             await message.answer("❌ Ошибка: заявка не найдена или не принадлежит вам.")

@@ -1094,3 +1094,354 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
     )
 
     await state.clear()
+
+
+# ==================== АДМИН ДЕЙСТВУЕТ ОТ ИМЕНИ МАСТЕРА ====================
+
+
+@router.callback_query(F.data.startswith("admin_accept_order:"))
+async def callback_admin_accept_order(callback: CallbackQuery, user_role: str):
+    """
+    Принятие заявки админом от имени мастера
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("У вас нет доступа к этой функции", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        if not order.assigned_master_id:
+            await callback.answer("Мастер не назначен на эту заявку", show_alert=True)
+            return
+
+        master = await db.get_master_by_id(order.assigned_master_id)
+
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Обновляем статус
+        await db.update_order_status(
+            order_id, OrderStatus.ACCEPTED, changed_by=callback.from_user.id
+        )
+
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="ADMIN_ACCEPT_ORDER_FOR_MASTER",
+            details=f"Admin accepted order #{order_id} on behalf of master {master.telegram_id}",
+        )
+
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            try:
+                await callback.bot.send_message(
+                    order.dispatcher_id,
+                    f"✅ Мастер {master.get_display_name()} принял заявку #{order_id}",
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+
+        # Уведомляем мастера
+        try:
+            await callback.bot.send_message(
+                master.telegram_id,
+                f"✅ <b>Заявка #{order_id} принята администратором от вашего имени!</b>\n\n"
+                f"🔧 <b>Детали заявки:</b>\n"
+                f"📱 Тип техники: {order.equipment_type}\n"
+                f"📝 Описание: {order.description}\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📍 Адрес: {order.client_address}\n"
+                + (f"\n📝 <b>Заметки:</b> {order.notes}\n" if order.notes else "")
+                + (f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n" if order.scheduled_time else "")
+                + f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+
+        await callback.answer("Заявка принята от имени мастера!")
+
+        # Обновляем сообщение
+        from app.keyboards.inline import get_order_actions_keyboard
+        
+        status_emoji = OrderStatus.get_status_emoji(OrderStatus.ACCEPTED)
+        status_name = OrderStatus.get_status_name(OrderStatus.ACCEPTED)
+
+        text = (
+            f"📋 <b>Заявка #{order.id}</b>\n\n"
+            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
+            f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n"
+            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+            f"📝 <b>Описание:</b> {order.description}\n\n"
+            f"👤 <b>Клиент:</b> {order.client_name}\n"
+            f"📍 <b>Адрес:</b> {order.client_address}\n"
+            f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+        )
+
+        if order.notes:
+            text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
+
+        if order.scheduled_time:
+            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
+
+        text += f"<i>✅ Заявка принята администратором от имени мастера</i>"
+
+        keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
+
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+        log_action(callback.from_user.id, "ADMIN_ACCEPT_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+
+    finally:
+        await db.disconnect()
+
+
+@router.callback_query(F.data.startswith("admin_onsite_order:"))
+async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str):
+    """
+    Отметка 'На объекте' админом от имени мастера
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("У вас нет доступа к этой функции", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        if not order.assigned_master_id:
+            await callback.answer("Мастер не назначен на эту заявку", show_alert=True)
+            return
+
+        master = await db.get_master_by_id(order.assigned_master_id)
+
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Обновляем статус
+        await db.update_order_status(
+            order_id, OrderStatus.ONSITE, changed_by=callback.from_user.id
+        )
+
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="ADMIN_ONSITE_ORDER_FOR_MASTER",
+            details=f"Admin marked order #{order_id} as onsite on behalf of master {master.telegram_id}",
+        )
+
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            try:
+                await callback.bot.send_message(
+                    order.dispatcher_id,
+                    f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+
+        # Уведомляем мастера
+        try:
+            await callback.bot.send_message(
+                master.telegram_id,
+                f"🏠 <b>Статус заявки #{order_id} обновлен администратором!</b>\n\n"
+                f"Заявка отмечена как 'На объекте' от вашего имени.\n\n"
+                f"📞 <b>Телефон клиента:</b> {order.client_phone}",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+
+        await callback.answer("Статус обновлен от имени мастера!")
+
+        # Обновляем сообщение
+        from app.keyboards.inline import get_order_actions_keyboard
+        
+        status_emoji = OrderStatus.get_status_emoji(OrderStatus.ONSITE)
+        status_name = OrderStatus.get_status_name(OrderStatus.ONSITE)
+
+        text = (
+            f"📋 <b>Заявка #{order.id}</b>\n\n"
+            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
+            f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n"
+            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+            f"📝 <b>Описание:</b> {order.description}\n\n"
+            f"👤 <b>Клиент:</b> {order.client_name}\n"
+            f"📍 <b>Адрес:</b> {order.client_address}\n"
+            f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+        )
+
+        if order.notes:
+            text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
+
+        if order.scheduled_time:
+            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
+
+        text += f"<i>🏠 Статус обновлен администратором от имени мастера</i>"
+
+        keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
+
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+        log_action(callback.from_user.id, "ADMIN_ONSITE_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+
+    finally:
+        await db.disconnect()
+
+
+@router.callback_query(F.data.startswith("admin_complete_order:"))
+async def callback_admin_complete_order(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """
+    Начало процесса завершения заявки админом от имени мастера
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("У вас нет доступа к этой функции", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        if not order.assigned_master_id:
+            await callback.answer("Мастер не назначен на эту заявку", show_alert=True)
+            return
+
+        master = await db.get_master_by_id(order.assigned_master_id)
+
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Сохраняем ID заказа и мастера в состоянии FSM
+        await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)
+
+        # Переходим в состояние запроса общей суммы
+        from app.states import CompleteOrderStates
+
+        await state.set_state(CompleteOrderStates.enter_total_amount)
+
+        await callback.message.answer(
+            f"💰 <b>Завершение заявки #{order_id} от имени мастера {master.get_display_name()}</b>\n\n"
+            f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
+            f"Например: 5000, 5000.50 или 0",
+            parse_mode="HTML",
+        )
+
+        log_action(callback.from_user.id, "ADMIN_START_COMPLETE_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_dr_order:"))
+async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """
+    Длительный ремонт - админ от имени мастера
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("У вас нет доступа к этой функции", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[1])
+    
+    logger.debug(f"[DR] Admin starting DR process for order #{order_id}")
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+
+        if not order.assigned_master_id:
+            await callback.answer("Мастер не назначен на эту заявку", show_alert=True)
+            return
+
+        master = await db.get_master_by_id(order.assigned_master_id)
+
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        logger.debug(f"[DR] Order found, Master: {master.get_display_name()}")
+
+        # Сохраняем order_id и мастера в state
+        await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)
+        
+        logger.debug(f"[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
+        
+        # Переходим к вводу срока окончания и предоплаты
+        from app.states import LongRepairStates
+        await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
+        
+        await callback.message.answer(
+            f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n"
+            f"<b>От имени мастера:</b> {master.get_display_name()}\n\n"
+            f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
+            f"<b>Примеры:</b>\n"
+            f"• <code>20.10.2025</code>\n"
+            f"• <code>20.10.2025 предоплата 2000</code>\n"
+            f"• <code>через 3 дня</code>\n"
+            f"• <code>завтра, предоплата 1500</code>\n"
+            f"• <code>неделя</code>\n\n"
+            f"<i>Если предоплаты не было - просто укажите срок.</i>",
+            parse_mode="HTML"
+        )
+        
+        await callback.answer()
+
+    finally:
+        await db.disconnect()
