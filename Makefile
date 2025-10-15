@@ -157,20 +157,23 @@ prod-logs:  ## Показать логи production (Docker)
 prod-status:  ## Статус production контейнеров (Docker)
 	cd docker && docker-compose -f docker-compose.prod.yml ps
 
-prod-full-update:  ## Полное обновление: backup + git pull + rebuild + migrate + restart
-	@echo "🚀 ПОЛНОЕ ОБНОВЛЕНИЕ PRODUCTION"
-	@echo "1️⃣ Создание backup..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py || echo "⚠️  Backup пропущен"
-	@echo "2️⃣ Обновление кода..."
-	git pull origin main
-	@echo "3️⃣ Пересборка образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
-	@echo "4️⃣ Применение миграций..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
-	@echo "5️⃣ Перезапуск..."
-	cd docker && docker-compose -f docker-compose.prod.yml up -d
-	@echo "✅ Обновление завершено!"
-	@echo "📊 Проверьте логи: make prod-logs"
+prod-deploy:  ## Полный деплой с миграциями (ГЛАВНАЯ КОМАНДА - используйте эту!)
+	@echo "🚀 Запуск автоматического деплоя..."
+	chmod +x scripts/deploy_with_migrations.sh
+	./scripts/deploy_with_migrations.sh
+
+prod-diagnose:  ## Диагностика проблем обновления
+	@echo "🔍 Запуск диагностики..."
+	chmod +x scripts/diagnose_update.sh
+	./scripts/diagnose_update.sh
+
+prod-full-update:  ## [УСТАРЕЛО] Используйте prod-deploy
+	@echo "⚠️  ВНИМАНИЕ: Эта команда устарела!"
+	@echo "ℹ️  Используйте вместо неё: make prod-deploy"
+	@echo ""
+	@echo "Запускаю prod-deploy через 3 секунды..."
+	@sleep 3
+	@make prod-deploy
 
 all: clean install-dev lint test  ## Выполнить всё: очистка, установка, линт, тесты
 
