@@ -59,66 +59,40 @@ python -c "from app.database import Database; import asyncio; asyncio.run(Databa
 python bot.py
 ```
 
-## 🔄 Workflow разработки: DEV → STAGING → PROD
+## 🚀 Деплой на Production
 
-Для безопасной разработки без риска для production, проект использует трехуровневую систему окружений:
-
-```
-Local (Cursor) → Staging (Test) → Production (Live)
-```
-
-### Быстрые команды
+### Быстрый деплой (3 команды)
 
 ```bash
-# Локальная разработка
-make test              # Запустить тесты
-make lint              # Проверить код
-make run               # Запустить бота локально
+# 1. На сервере
+git clone https://github.com/your-username/telegram_repair_bot.git
+cd telegram_repair_bot
 
-# Деплой в staging (тестирование)
-make staging-deploy    # Автоматический деплой в staging
-make staging-logs      # Просмотр логов staging
+# 2. Настройка
+cp env.example .env
+nano .env  # Заполнить BOT_TOKEN, ADMIN_IDS, GROUP_CHAT_ID, DEV_MODE=false
 
-# Деплой в production (после проверки в staging)
-make prod-deploy       # Деплой в production (с подтверждением!)
-make prod-logs         # Просмотр логов production
-make prod-status       # Статус production
+# 3. Запуск
+cd docker
+docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
-### Процесс обновления бота
+📖 **Полная инструкция:** [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md)
 
-1. **Разработка локально** (в Cursor):
-   ```bash
-   # Внести изменения, протестировать
-   make test && make lint
-   git add . && git commit -m "feat: новая функция"
-   git push origin main
-   ```
-
-2. **Деплой в Staging** (проверка):
-   ```bash
-   make staging-deploy  # Автоматически: SSH → git pull → rebuild → migrate
-   make staging-logs    # Проверить логи
-   ```
-
-3. **Деплой в Production** (если все ОК):
-   ```bash
-   make prod-deploy     # С подтверждением и backup
-   make prod-logs       # Проверить что все работает
-   ```
-
-📖 **Детальная документация:** [docs/STAGING_WORKFLOW.md](docs/STAGING_WORKFLOW.md)
-
-### Настройка переменных для автоматического деплоя
-
-Создайте `.env` в корне проекта или экспортируйте переменные:
+### Локальная разработка
 
 ```bash
-# Windows PowerShell
-$env:SSH_SERVER="root@your-server-ip"
+# Установка зависимостей
+make install-dev
 
-# Linux/Mac
-export SSH_SERVER="root@your-server-ip"
+# Запуск тестов
+make test
+
+# Проверка кода
+make lint
+
+# Запуск бота локально
+make run
 ```
 
 ## 🏗️ Структура проекта

@@ -14,12 +14,43 @@ from app.config import OrderStatus
 from app.database import Database
 from app.filters import IsGroupChat, IsGroupOrderCallback, IsMasterInGroup
 from app.keyboards.inline import get_group_order_keyboard
-from app.utils import format_datetime, log_action
+from app.utils import format_datetime, get_now, log_action
 
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="group_interaction")
+
+
+async def check_master_work_group(master, callback: CallbackQuery) -> bool:
+    """
+    Проверка, что у мастера настроена рабочая группа и он работает в ней
+    
+    Args:
+        master: Объект мастера
+        callback: Callback query
+        
+    Returns:
+        True если проверка пройдена, False если нет
+    """
+    # Проверяем наличие рабочей группы
+    if not master.work_chat_id:
+        await callback.answer(
+            "❌ У вас не настроена рабочая группа!\n"
+            "Обратитесь к администратору для настройки.",
+            show_alert=True
+        )
+        return False
+    
+    # Проверяем, что действие выполняется в правильной группе
+    if callback.message.chat.id != master.work_chat_id:
+        await callback.answer(
+            "❌ Вы можете работать только в своей рабочей группе!",
+            show_alert=True
+        )
+        return False
+    
+    return True
 
 
 @router.callback_query(F.data.startswith("group_accept_order:"))
@@ -44,6 +75,10 @@ async def callback_group_accept_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
+        # Проверяем рабочую группу
+        if not await check_master_work_group(master, callback):
+            return
+
         # Обновляем статус
         await db.update_order_status(
             order_id, OrderStatus.ACCEPTED, changed_by=callback.from_user.id
@@ -61,7 +96,7 @@ async def callback_group_accept_order(callback: CallbackQuery):
             f"✅ <b>Заявка #{order_id} принята!</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.ACCEPTED)}\n"
-            f"⏰ Время принятия: {format_datetime(datetime.now())}\n\n"
+            f"⏰ Время принятия: {format_datetime(get_now())}\n\n"
             f"🔧 <b>Детали заявки:</b>\n"
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
@@ -128,6 +163,10 @@ async def callback_group_refuse_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
+        # Проверяем рабочую группу
+        if not await check_master_work_group(master, callback):
+            return
+
         # Возвращаем статус в NEW и убираем мастера
         await db.connection.execute(
             "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
@@ -147,7 +186,7 @@ async def callback_group_refuse_order(callback: CallbackQuery):
             f"❌ <b>Заявка #{order_id} отклонена</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Статус: Требует нового назначения\n"
-            f"⏰ Время отклонения: {format_datetime(datetime.now())}\n\n"
+            f"⏰ Время отклонения: {format_datetime(get_now())}\n\n"
             f"🔧 <b>Детали заявки:</b>\n"
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
@@ -199,6 +238,10 @@ async def callback_group_onsite_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
+        # Проверяем рабочую группу
+        if not await check_master_work_group(master, callback):
+            return
+
         # Обновляем статус
         await db.update_order_status(
             order_id, OrderStatus.ONSITE, changed_by=callback.from_user.id
@@ -217,7 +260,7 @@ async def callback_group_onsite_order(callback: CallbackQuery):
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Заявка #{order_id}\n"
             f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.ONSITE)}\n"
-            f"⏰ Время прибытия: {format_datetime(datetime.now())}\n\n"
+            f"⏰ Время прибытия: {format_datetime(get_now())}\n\n"
             f"🔧 <b>Детали заявки:</b>\n"
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
@@ -271,6 +314,10 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
+        # Проверяем рабочую группу
+        if not await check_master_work_group(master, callback):
+            return
+
         # Сохраняем ID заказа и ID сообщения в группе для обновления позже
         await state.update_data(
             order_id=order_id,
@@ -322,6 +369,10 @@ async def callback_group_dr_order(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
+        # Проверяем рабочую группу
+        if not await check_master_work_group(master, callback):
+            return
+
         # Обновляем статус
         await db.update_order_status(
             order_id, OrderStatus.DR, changed_by=callback.from_user.id
@@ -340,7 +391,7 @@ async def callback_group_dr_order(callback: CallbackQuery):
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Заявка #{order_id}\n"
             f"📋 Статус: {OrderStatus.get_status_name(OrderStatus.DR)}\n"
-            f"⏰ Время перевода: {format_datetime(datetime.now())}\n\n"
+            f"⏰ Время перевода: {format_datetime(get_now())}\n\n"
             f"🔧 <b>Детали заявки:</b>\n"
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"

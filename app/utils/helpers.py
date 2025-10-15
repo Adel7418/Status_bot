@@ -4,7 +4,7 @@
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from html import escape
 
 
@@ -12,6 +12,20 @@ from html import escape
 
 
 logger = logging.getLogger(__name__)
+
+
+# Московский часовой пояс (UTC+3)
+MOSCOW_TZ = timezone(timedelta(hours=3))
+
+
+def get_now() -> datetime:
+    """
+    Получить текущее время в московском часовом поясе
+    
+    Returns:
+        datetime объект с московским timezone
+    """
+    return datetime.now(MOSCOW_TZ)
 
 
 def validate_phone(phone: str) -> bool:
@@ -235,7 +249,7 @@ def log_action(user_id: int, action: str, details: str | None = None):
 
 
 def calculate_profit_split(
-    total_amount: float, materials_cost: float, has_review: bool = False
+    total_amount: float, materials_cost: float, has_review: bool = False, out_of_city: bool = False
 ) -> tuple[float, float]:
     """
     Расчет распределения прибыли между мастером и компанией
@@ -244,11 +258,13 @@ def calculate_profit_split(
     - Чистая прибыль >= 7000: 50% мастеру, 50% компании
     - Чистая прибыль < 7000: 40% мастеру, 60% компании
     - Если взят отзыв: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
+    - Если выезд за город: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
 
     Args:
         total_amount: Общая сумма заказа
         materials_cost: Сумма расходного материала
         has_review: Взял ли мастер отзыв у клиента
+        out_of_city: Был ли выезд за город
 
     Returns:
         Кортеж (прибыль мастера, прибыль компании)
@@ -271,5 +287,11 @@ def calculate_profit_split(
         review_bonus = net_profit * 0.1
         master_profit += review_bonus
         company_profit -= review_bonus
+
+    # Если выезд за город - добавляем 10% к прибыли мастера
+    if out_of_city:
+        out_of_city_bonus = net_profit * 0.1
+        master_profit += out_of_city_bonus
+        company_profit -= out_of_city_bonus
 
     return (master_profit, company_profit)

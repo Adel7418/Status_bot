@@ -164,6 +164,9 @@ class Order:
     master_profit: float | None = None  # Прибыль мастера
     company_profit: float | None = None  # Прибыль компании
     has_review: bool | None = None  # Взял ли мастер отзыв у клиента
+    out_of_city: bool | None = None  # Был ли выезд за город
+    estimated_completion_date: str | None = None  # Примерный срок окончания ремонта (для DR)
+    prepayment_amount: float | None = None  # Сумма предоплаты (для DR)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -181,3 +184,40 @@ class AuditLog:
     action: str = ""
     details: str | None = None
     timestamp: datetime | None = None
+
+
+@dataclass
+class FinancialReport:
+    """Модель финансового отчета"""
+
+    id: int | None = None
+    report_type: str = ""  # DAILY, WEEKLY, MONTHLY
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    total_orders: int = 0
+    total_amount: float = 0.0
+    total_materials_cost: float = 0.0
+    total_net_profit: float = 0.0
+    total_company_profit: float = 0.0
+    total_master_profit: float = 0.0
+    average_check: float = 0.0
+    created_at: datetime | None = None
+
+
+@dataclass
+class MasterFinancialReport:
+    """Модель отчета по мастеру"""
+
+    id: int | None = None
+    report_id: int | None = None
+    master_id: int | None = None
+    master_name: str = ""
+    orders_count: int = 0
+    total_amount: float = 0.0
+    total_materials_cost: float = 0.0
+    total_net_profit: float = 0.0
+    total_master_profit: float = 0.0
+    total_company_profit: float = 0.0
+    average_check: float = 0.0
+    reviews_count: int = 0
+    out_of_city_count: int = 0

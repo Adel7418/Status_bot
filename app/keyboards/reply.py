@@ -8,12 +8,13 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from app.config import UserRole
 
 
-def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(role: str | list[str], new_orders_count: int = 0) -> ReplyKeyboardMarkup:
     """
     Получение главного меню в зависимости от роли
 
     Args:
         role: Роль пользователя (строка или список ролей)
+        new_orders_count: Количество новых заявок для отображения счетчика
 
     Returns:
         ReplyKeyboardMarkup
@@ -28,9 +29,12 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
     has_dispatcher = UserRole.DISPATCHER in roles
     has_master = UserRole.MASTER in roles
 
+    # Формируем текст кнопки "Все заявки" без счетчиков
+    all_orders_text = "📋 Все заявки"
+
     if has_admin:
         # Администратор видит все
-        builder.row(KeyboardButton(text="📋 Все заявки"), KeyboardButton(text="➕ Создать заявку"))
+        builder.row(KeyboardButton(text=all_orders_text), KeyboardButton(text="➕ Создать заявку"))
         builder.row(KeyboardButton(text="👥 Мастера"), KeyboardButton(text="📊 Отчеты"))
         builder.row(KeyboardButton(text="👤 Пользователи"), KeyboardButton(text="⚙️ Настройки"))
 
@@ -41,7 +45,7 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
         # Кнопки диспетчера
         if has_dispatcher:
             builder.row(
-                KeyboardButton(text="📋 Все заявки"), KeyboardButton(text="➕ Создать заявку")
+                KeyboardButton(text=all_orders_text), KeyboardButton(text="➕ Создать заявку")
             )
             buttons_added.add("dispatcher_orders")
 

@@ -11,7 +11,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import Config, OrderStatus
 from app.database import Database
-from app.utils import safe_send_message
+from app.utils import get_now, safe_send_message
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,33 @@ class TaskScheduler:
             replace_existing=True,
         )
 
+        # Ежедневный отчет (в 8:00 каждый день)
+        self.scheduler.add_job(
+            self.send_daily_report,
+            trigger=CronTrigger(hour=8, minute=0),
+            id="daily_report",
+            name="Ежедневный отчет",
+            replace_existing=True,
+        )
+
+        # Еженедельный отчет (в понедельник в 9:00)
+        self.scheduler.add_job(
+            self.send_weekly_report,
+            trigger=CronTrigger(day_of_week=0, hour=9, minute=0),
+            id="weekly_report",
+            name="Еженедельный отчет",
+            replace_existing=True,
+        )
+
+        # Ежемесячный отчет (1 числа каждого месяца в 10:00)
+        self.scheduler.add_job(
+            self.send_monthly_report,
+            trigger=CronTrigger(day=1, hour=10, minute=0),
+            id="monthly_report",
+            name="Ежемесячный отчет",
+            replace_existing=True,
+        )
+
         # Ежедневная сводка (в 9:00 каждый день)
         self.scheduler.add_job(
             self.send_daily_summary,
@@ -60,6 +87,15 @@ class TaskScheduler:
             trigger=IntervalTrigger(minutes=5),
             id="remind_assigned_orders",
             name="Напоминание о непринятых заявках",
+            replace_existing=True,
+        )
+
+        # Напоминание о неназначенных заявках (каждые 5 минут)
+        self.scheduler.add_job(
+            self.remind_unassigned_orders,
+            trigger=IntervalTrigger(minutes=5),
+            id="remind_unassigned_orders",
+            name="Напоминание о неназначенных заявках",
             replace_existing=True,
         )
 
@@ -82,7 +118,7 @@ class TaskScheduler:
             # Получаем все активные заявки
             orders = await self.db.get_all_orders()
 
-            now = datetime.utcnow()
+            now = get_now()
             alerts = []
 
             for order in orders:
@@ -146,7 +182,7 @@ class TaskScheduler:
 
             # Получаем заявки за последние 24 часа
             all_orders = await self.db.get_all_orders()
-            yesterday = datetime.utcnow() - timedelta(days=1)
+            yesterday = get_now() - timedelta(days=1)
 
             new_orders = [o for o in all_orders if o.created_at and o.created_at > yesterday]
 
@@ -157,7 +193,7 @@ class TaskScheduler:
 
             text = (
                 "📊 <b>Ежедневная сводка</b>\n"
-                f"📅 {datetime.now().strftime('%d.%m.%Y')}\n\n"
+                f"📅 {get_now().strftime('%d.%m.%Y')}\n\n"
                 f"<b>За последние 24 часа:</b>\n"
                 f"• Новых заявок: {len(new_orders)}\n\n"
                 f"<b>Текущее состояние:</b>\n"
@@ -207,7 +243,7 @@ class TaskScheduler:
             # Получаем заявки со статусом ASSIGNED старше 15 минут
             orders = await self.db.get_all_orders(status=OrderStatus.ASSIGNED)
 
-            now = datetime.utcnow()
+            now = get_now()
             remind_threshold = timedelta(minutes=15)
 
             for order in orders:
@@ -291,3 +327,115 @@ class TaskScheduler:
 
         except Exception as e:
             logger.error(f"Error in remind_assigned_orders: {e}")
+
+    async def remind_unassigned_orders(self):
+        """
+        Напоминание о неназначенных заявках (статус NEW старше 15 минут)
+        Отправляет уведомления всем админам и диспетчерам
+        """
+        try:
+            # Получаем заявки со статусом NEW
+            orders = await self.db.get_all_orders(status=OrderStatus.NEW)
+
+            # Используем get_now() для правильного часового пояса
+            now = get_now()
+            remind_threshold = timedelta(minutes=15)
+            unassigned_alerts = []
+
+            for order in orders:
+                if not order.created_at:
+                    continue
+
+                time_unassigned = now - order.created_at
+
+                if time_unassigned > remind_threshold:
+                    unassigned_alerts.append({"order": order, "time": time_unassigned})
+
+            # Отправляем уведомления если есть неназначенные заявки
+            if unassigned_alerts:
+                # Получаем всех админов и диспетчеров
+                admins_and_dispatchers = await self.db.get_admins_and_dispatchers()
+                
+                # Формируем текст уведомления
+                text = "⚠️ <b>Неназначенные заявки!</b>\n\n"
+                text += f"Найдено заявок без мастера: {len(unassigned_alerts)}\n\n"
+
+                for alert in unassigned_alerts[:5]:  # Показываем первые 5
+                    order = alert["order"]
+                    minutes = int(alert["time"].total_seconds() / 60)
+
+                    text += (
+                        f"📋 <b>Заявка #{order.id}</b>\n"
+                        f"   🔧 {order.equipment_type}\n"
+                        f"   👤 {order.client_name}\n"
+                        f"   ⏱ Создана {minutes} мин. назад\n\n"
+                    )
+
+                if len(unassigned_alerts) > 5:
+                    text += f"<i>И еще {len(unassigned_alerts) - 5} заявок...</i>\n\n"
+                
+                text += "⚠️ <b>Требуется назначить мастеров!</b>"
+
+                # Отправляем всем админам и диспетчерам
+                for user in admins_and_dispatchers:
+                    try:
+                        await safe_send_message(
+                            self.bot,
+                            user.telegram_id,
+                            text,
+                            parse_mode="HTML",
+                            max_attempts=3
+                        )
+                        logger.info(f"Unassigned order reminder sent to {user.telegram_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to send reminder to {user.telegram_id}: {e}")
+
+                logger.info(
+                    f"Unassigned orders check completed. Found {len(unassigned_alerts)} unassigned orders older than 15 minutes"
+                )
+            else:
+                logger.debug("No unassigned orders older than 15 minutes")
+
+        except Exception as e:
+            logger.error(f"Error in remind_unassigned_orders: {e}")
+
+    # ==================== ОТЧЕТЫ ====================
+
+    async def send_daily_report(self):
+        """Отправляет ежедневный отчет"""
+        try:
+            from app.services.reports_notifier import ReportsNotifier
+            
+            notifier = ReportsNotifier(self.bot)
+            await notifier.send_daily_report()
+            
+            logger.info("Ежедневный отчет отправлен")
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки ежедневного отчета: {e}")
+
+    async def send_weekly_report(self):
+        """Отправляет еженедельный отчет"""
+        try:
+            from app.services.reports_notifier import ReportsNotifier
+            
+            notifier = ReportsNotifier(self.bot)
+            await notifier.send_weekly_report()
+            
+            logger.info("Еженедельный отчет отправлен")
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки еженедельного отчета: {e}")
+
+    async def send_monthly_report(self):
+        """Отправляет ежемесячный отчет"""
+        try:
+            from app.services.reports_notifier import ReportsNotifier
+            
+            notifier = ReportsNotifier(self.bot)
+            await notifier.send_monthly_report()
+            
+            logger.info("Ежемесячный отчет отправлен")
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки ежемесячного отчета: {e}")

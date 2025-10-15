@@ -15,8 +15,9 @@ from app.keyboards.inline import (
     get_master_management_keyboard,
     get_masters_list_keyboard,
 )
-from app.keyboards.reply import get_cancel_keyboard, get_main_menu_keyboard
+from app.keyboards.reply import get_cancel_keyboard
 from app.states import AddMasterStates, SetWorkChatStates
+from app.decorators import handle_errors
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -25,6 +26,155 @@ logger = logging.getLogger(__name__)
 router = Router(name="admin")
 # Фильтры на уровне роутера НЕ работают, т.к. выполняются ДО middleware
 # Проверка роли теперь в каждом обработчике через декоратор
+
+
+@router.message(F.text == "📊 Отчеты")
+@handle_errors
+async def btn_reports(message: Message, state: FSMContext, user_role: str):
+    """
+    Показать меню отчетов
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="📅 Ежедневный отчет",
+            callback_data="generate_daily_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📆 Еженедельный отчет", 
+            callback_data="generate_weekly_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🗓️ Ежемесячный отчет",
+            callback_data="generate_monthly_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📋 Кастомный отчет",
+            callback_data="generate_custom_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_admin_menu"
+        )
+    )
+
+    await message.answer(
+        "📊 <b>Генерация отчетов</b>\n\n"
+        "Выберите тип отчета для генерации:",
+        parse_mode="HTML",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "generate_daily_report")
+@handle_errors
+async def callback_generate_daily_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежедневного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую ежедневный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_daily_report()
+        
+        await callback.message.edit_text("✅ Ежедневный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации ежедневного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_weekly_report")
+@handle_errors
+async def callback_generate_weekly_report(callback: CallbackQuery, user_role: str):
+    """Генерация еженедельного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую еженедельный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_weekly_report()
+        
+        await callback.message.edit_text("✅ Еженедельный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации еженедельного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_monthly_report")
+@handle_errors
+async def callback_generate_monthly_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежемесячного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую ежемесячный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_monthly_report()
+        
+        await callback.message.edit_text("✅ Ежемесячный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации ежемесячного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_custom_report")
+@handle_errors
+async def callback_generate_custom_report(callback: CallbackQuery, user_role: str):
+    """Генерация кастомного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text(
+        "📋 <b>Кастомный отчет</b>\n\n"
+        "Для создания кастомного отчета введите период в формате:\n"
+        "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
+        "Например: <code>2025-10-01 2025-10-15</code>\n\n"
+        "Или введите <code>отмена</code> для возврата к меню.",
+        parse_mode="HTML"
+    )
+    
+    # Здесь можно добавить состояние для ввода дат
+    await callback.answer()
 
 
 @router.message(F.text == "👥 Мастера")
@@ -488,8 +638,10 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
     await callback.answer("Мастер добавлен!")
 
     # Возвращаем главное меню
+    from app.handlers.common import get_menu_with_counter
+    menu_keyboard = await get_menu_with_counter([UserRole.ADMIN])
     await callback.message.answer(
-        "Главное меню:", reply_markup=get_main_menu_keyboard(UserRole.ADMIN)
+        "Главное меню:", reply_markup=menu_keyboard
     )
 
 
@@ -834,7 +986,9 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
     chat_shared = message.chat_shared
 
     if not chat_shared or chat_shared.request_id != 1:
-        await message.answer("❌ Неверный запрос.", reply_markup=get_main_menu_keyboard(user_role))
+        from app.handlers.common import get_menu_with_counter
+        menu_keyboard = await get_menu_with_counter([user_role])
+        await message.answer("❌ Неверный запрос.", reply_markup=menu_keyboard)
         await state.clear()
         return
 
@@ -850,9 +1004,11 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
 
         # Проверяем, что это действительно группа
         if chat_type not in ["group", "supergroup"]:
+            from app.handlers.common import get_menu_with_counter
+            menu_keyboard = await get_menu_with_counter([user_role])
             await message.answer(
                 "❌ Выбранный чат не является группой.",
-                reply_markup=get_main_menu_keyboard(user_role),
+                reply_markup=menu_keyboard,
             )
             await state.clear()
             return
@@ -866,15 +1022,23 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
             master = await db.get_master_by_telegram_id(master_telegram_id)
 
             if not master:
+                from app.handlers.common import get_menu_with_counter
+                menu_keyboard = await get_menu_with_counter([user_role])
                 await message.answer(
-                    "❌ Мастер не найден", reply_markup=get_main_menu_keyboard(user_role)
+                    "❌ Мастер не найден", reply_markup=menu_keyboard
                 )
                 await state.clear()
                 return
 
             # Обновляем work_chat_id
             await db.update_master_work_chat(master_telegram_id, chat_id)
+            
+            # Проверяем, что обновление прошло успешно
+            updated_master = await db.get_master_by_telegram_id(master_telegram_id)
+            logger.info(f"Work chat update verification: master {master_telegram_id} -> work_chat_id: {updated_master.work_chat_id if updated_master else 'NOT FOUND'}")
 
+            from app.handlers.common import get_menu_with_counter
+            menu_keyboard = await get_menu_with_counter([user_role])
             await message.answer(
                 f"✅ <b>Рабочая группа установлена!</b>\n\n"
                 f"👤 Мастер: {master.get_display_name()}\n"
@@ -882,7 +1046,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
                 f"🆔 Chat ID: <code>{chat_id}</code>\n\n"
                 f"Теперь все уведомления о новых заявках будут отправляться в эту группу.",
                 parse_mode="HTML",
-                reply_markup=get_main_menu_keyboard(user_role),
+                reply_markup=menu_keyboard,
             )
 
             logger.info(f"Work chat {chat_id} set for master {master_telegram_id}")
@@ -892,12 +1056,14 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
 
     except Exception as e:
         logger.error(f"Error getting chat info: {e}")
+        from app.handlers.common import get_menu_with_counter
+        menu_keyboard = await get_menu_with_counter([user_role])
         await message.answer(
             f"✅ <b>Рабочая группа установлена!</b>\n\n"
             f"🆔 Chat ID: <code>{chat_id}</code>\n\n"
             f"Теперь все уведомления о новых заявках будут отправляться в эту группу.",
             parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(user_role),
+            reply_markup=menu_keyboard,
         )
 
     await state.clear()
@@ -916,11 +1082,13 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
     if user_role != UserRole.ADMIN:
         return
 
+    from app.handlers.common import get_menu_with_counter
+    menu_keyboard = await get_menu_with_counter([user_role])
     await message.answer(
         "❌ <b>Установка рабочей группы отменена</b>\n\n"
         "Вы можете попробовать снова в любое время.",
         parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(user_role),
+        reply_markup=menu_keyboard,
     )
 
     await state.clear()

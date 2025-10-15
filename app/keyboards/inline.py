@@ -177,7 +177,23 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("dr_order", order.id),
                 ),
             )
+        elif order.status == OrderStatus.DR:
+            # Для заявок в длительном ремонте - можно завершить
+            builder.row(
+                InlineKeyboardButton(
+                    text="💰 Завершить ремонт",
+                    callback_data=create_callback_data("complete_order", order.id),
+                )
+            )
 
+    # Кнопка экспорта в Excel (для всех ролей)
+    builder.row(
+        InlineKeyboardButton(
+            text="📊 Экспорт в Excel",
+            callback_data=create_callback_data("export_order", order.id),
+        )
+    )
+    
     # Кнопка "Назад" для всех
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_orders"))
 
@@ -203,6 +219,9 @@ def get_masters_list_keyboard(
     for master in masters:
         display_name = master.get_display_name()
         specialization = f" ({master.specialization})"
+        
+        # Добавляем предупреждение если нет рабочей группы
+        warning = " ⚠️ НЕТ ГРУППЫ" if not master.work_chat_id else ""
 
         if order_id:
             callback_data = create_callback_data(action, order_id, master.id)
@@ -211,7 +230,7 @@ def get_masters_list_keyboard(
 
         builder.row(
             InlineKeyboardButton(
-                text=f"{display_name}{specialization}", callback_data=callback_data
+                text=f"{display_name}{specialization}{warning}", callback_data=callback_data
             )
         )
 
@@ -244,48 +263,58 @@ def get_master_approval_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_orders_filter_keyboard() -> InlineKeyboardMarkup:
+def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMarkup:
     """
-    Клавиатура фильтрации заявок
+    Клавиатура фильтрации заявок с счетчиками
+
+    Args:
+        counts: Словарь с количеством заявок по статусам {status: count}
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
+    
+    # Если счетчики не переданы, используем пустой словарь
+    if counts is None:
+        counts = {}
+
+    # Формируем текст кнопок с счетчиками
+    new_text = f"🆕 Новые ({counts.get(OrderStatus.NEW, 0)})" if counts.get(OrderStatus.NEW, 0) > 0 else "🆕 Новые"
+    assigned_text = f"👨‍🔧 Назначенные ({counts.get(OrderStatus.ASSIGNED, 0)})" if counts.get(OrderStatus.ASSIGNED, 0) > 0 else "👨‍🔧 Назначенные"
+    accepted_text = f"✅ Принятые ({counts.get(OrderStatus.ACCEPTED, 0)})" if counts.get(OrderStatus.ACCEPTED, 0) > 0 else "✅ Принятые"
+    onsite_text = f"🏠 На объекте ({counts.get(OrderStatus.ONSITE, 0)})" if counts.get(OrderStatus.ONSITE, 0) > 0 else "🏠 На объекте"
+    closed_text = f"💰 Завершенные ({counts.get(OrderStatus.CLOSED, 0)})" if counts.get(OrderStatus.CLOSED, 0) > 0 else "💰 Завершенные"
+    dr_text = f"⏳ Длительный ремонт ({counts.get(OrderStatus.DR, 0)})" if counts.get(OrderStatus.DR, 0) > 0 else "⏳ Длительный ремонт"
 
     builder.row(
         InlineKeyboardButton(
-            text="🆕 Новые", callback_data=create_callback_data("filter_orders", OrderStatus.NEW)
+            text=new_text, callback_data=create_callback_data("filter_orders", OrderStatus.NEW)
         ),
         InlineKeyboardButton(
-            text="👨‍🔧 Назначенные",
+            text=assigned_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.ASSIGNED),
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="✅ Принятые",
+            text=accepted_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.ACCEPTED),
         ),
         InlineKeyboardButton(
-            text="🏠 На объекте",
+            text=onsite_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.ONSITE),
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="💰 Завершенные",
+            text=closed_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
         ),
         InlineKeyboardButton(
-            text="⏳ Длительный ремонт",
+            text=dr_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.DR),
         ),
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="🔄 Все заявки", callback_data=create_callback_data("filter_orders", "all")
-        )
     )
 
     return builder.as_markup()
@@ -448,4 +477,37 @@ def get_pagination_keyboard(
 
     builder.row(*buttons)
 
+    return builder.as_markup()
+
+
+def get_dev_menu_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура для меню разработчика
+    
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🧪 Создать тестовую заявку",
+            callback_data="dev_create_test_order"
+        )
+    )
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🗄️ Архивировать старые заявки",
+            callback_data="dev_archive_orders"
+        )
+    )
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="❌ Закрыть",
+            callback_data="dev_close"
+        )
+    )
+    
     return builder.as_markup()

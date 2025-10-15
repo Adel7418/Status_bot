@@ -45,23 +45,34 @@ env/
 *.sqlite
 *.sqlite3
 bot_database.db
+bot_database_dev.db
+bot_database_dev_dev.db
+data/databases/*.db
 
 # Logs
 *.log
 bot.log
 logs/
+data/*.log
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Reports
+# Reports (Excel exports)
 *.xlsx
 reports/
+!reports/.gitkeep
 
 # Backup (исключаем data/backups - она отслеживается)
 backup/
 *.bak
+
+# Data (временные файлы)
+data/*.json
+data/*.xml
+data/*.csv
+!data/migrations/*.json
 
 # Testing & Coverage
 .pytest_cache/

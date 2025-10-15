@@ -12,7 +12,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from app.config import OrderStatus
 from app.database import Database
-from app.utils import format_date, format_datetime
+from app.utils import format_date, format_datetime, get_now
 
 
 logger = logging.getLogger(__name__)
@@ -414,7 +414,7 @@ class ReportsService:
         Returns:
             Кортеж (start_date, end_date)
         """
-        now = datetime.now()
+        now = get_now()
 
         if period == "today":
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)

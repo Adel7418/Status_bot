@@ -7,7 +7,7 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup
 
 from app.config import Messages, UserRole
 from app.database.models import User
@@ -18,6 +18,32 @@ from app.keyboards.reply import get_main_menu_keyboard
 logger = logging.getLogger(__name__)
 
 router = Router(name="common")
+
+
+async def get_menu_with_counter(user_roles: list[str]) -> ReplyKeyboardMarkup:
+    """
+    Получение главного меню с счетчиком новых заявок
+    
+    Args:
+        user_roles: Список ролей пользователя
+        
+    Returns:
+        ReplyKeyboardMarkup с счетчиком
+    """
+    new_orders_count = 0
+    has_admin = UserRole.ADMIN in user_roles
+    has_dispatcher = UserRole.DISPATCHER in user_roles
+    
+    if has_admin or has_dispatcher:
+        from app.database import Database
+        db = Database()
+        await db.connect()
+        try:
+            new_orders_count = await db.count_new_orders()
+        finally:
+            await db.disconnect()
+    
+    return get_main_menu_keyboard(user_roles, new_orders_count)
 
 
 @router.message(CommandStart())
@@ -34,6 +60,21 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
     """
     logger.info(f"START command received from user {message.from_user.id}")
     logger.info(f"User roles: {user_roles}, User object: {user}")
+
+    # Проверяем, если это личное сообщение и пользователь ТОЛЬКО мастер
+    is_private = message.chat.type == "private"
+    is_only_master = UserRole.MASTER in user_roles and UserRole.ADMIN not in user_roles and UserRole.DISPATCHER not in user_roles
+    
+    if is_private and is_only_master:
+        await message.answer(
+            "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
+            "Для мастеров взаимодействие с ботом доступно только в рабочей группе.\n\n"
+            "📌 Все заявки и уведомления вы будете получать в вашей рабочей группе.\n\n"
+            "Если у вас нет доступа к рабочей группе - обратитесь к администратору.",
+            parse_mode="HTML"
+        )
+        logger.info(f"Master {message.from_user.id} tried to use bot in private chat")
+        return
 
     # Выбираем приветственное сообщение в зависимости от ролей
     welcome_messages = {
@@ -62,8 +103,11 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
 
     logger.info("Sending welcome message...")
 
-    # Отправляем приветствие с клавиатурой (передаем список ролей)
-    await message.answer(welcome_text, reply_markup=get_main_menu_keyboard(user_roles))
+    # Получаем меню с счетчиком новых заявок
+    menu_keyboard = await get_menu_with_counter(user_roles)
+    
+    # Отправляем приветствие с клавиатурой
+    await message.answer(welcome_text, reply_markup=menu_keyboard)
 
     logger.info(f"User {message.from_user.id} ({', '.join(user_roles)}) started the bot")
 
@@ -174,7 +218,8 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_r
     # Очищаем состояние
     await state.clear()
 
-    await message.answer("❌ Действие отменено.", reply_markup=get_main_menu_keyboard(user_roles))
+    menu_keyboard = await get_menu_with_counter(user_roles, message.from_user.id)
+    await message.answer("❌ Действие отменено.", reply_markup=menu_keyboard)
 
     logger.info(f"User {message.from_user.id} cancelled action")
 
@@ -309,13 +354,14 @@ async def callback_current_page(callback: CallbackQuery):
 
 
 @router.message(F.text)
-async def handle_unknown_text(message: Message, user_role: str):
+async def handle_unknown_text(message: Message, user_role: str, user_roles: list):
     """
     Обработчик неизвестного текста
 
     Args:
         message: Сообщение
         user_role: Роль пользователя
+        user_roles: Список ролей пользователя
     """
     # Игнорируем сообщения в группах - бот должен отвечать только на команды
     if message.chat.type in ["group", "supergroup"]:
@@ -347,10 +393,10 @@ async def handle_unknown_text(message: Message, user_role: str):
         await message.answer(
             "❌ У вас нет доступа к системе.\n"
             "Обратитесь к администратору для получения доступа.",
-            reply_markup=get_main_menu_keyboard(user_role),
+            reply_markup=get_main_menu_keyboard(user_roles),
         )
     else:
         await message.answer(
             "❓ Не понимаю эту команду. Используйте меню ниже или /help для справки.",
-            reply_markup=get_main_menu_keyboard(user_role),
+            reply_markup=get_main_menu_keyboard(user_roles),
         )

@@ -82,9 +82,11 @@ class LoggingMiddleware(BaseMiddleware):
             else:
                 text_preview = "[other media]"
 
+            # Убираем эмодзи из логов для совместимости с cp1251
+            clean_text = text_preview.encode('ascii', errors='ignore').decode('ascii')
             logger.log(
                 self.log_level,
-                f"[MSG] Message from {user_info} in {chat_type}: {text_preview}",
+                f"[MSG] Message from {user_info} in {chat_type}: {clean_text}",
             )
 
         elif isinstance(event, CallbackQuery):
