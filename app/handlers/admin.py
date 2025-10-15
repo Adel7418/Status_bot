@@ -32,14 +32,16 @@ router = Router(name="admin")
 @handle_errors
 async def btn_reports(message: Message, state: FSMContext, user_role: str):
     """
-    Показать меню отчетов
+    Показать меню отчетов (только для ADMIN)
+    Для DISPATCHER используется обработчик в financial_reports.py
     
     Args:
         message: Сообщение
         state: FSM контекст
         user_role: Роль пользователя
     """
-    if user_role not in [UserRole.ADMIN]:
+    # Только для админов, для остальных ролей пропускаем в следующий обработчик
+    if user_role != UserRole.ADMIN:
         return
 
     from aiogram.utils.keyboard import InlineKeyboardBuilder

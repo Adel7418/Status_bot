@@ -29,8 +29,8 @@ def get_main_menu_keyboard(role: str | list[str], new_orders_count: int = 0) -> 
     has_dispatcher = UserRole.DISPATCHER in roles
     has_master = UserRole.MASTER in roles
 
-    # Формируем текст кнопки "Все заявки" без счетчиков
-    all_orders_text = "📋 Все заявки"
+    # Формируем текст кнопки "Все заявки" со счетчиком новых заявок
+    all_orders_text = f"📋 Все заявки{f' ({new_orders_count})' if new_orders_count > 0 else ''}"
 
     if has_admin:
         # Администратор видит все
