@@ -117,6 +117,15 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("unassign_master", order.id),
                 ),
             )
+            
+            # Кнопка "Клиент ждет" для активных заявок с назначенным мастером
+            if order.status in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="📞 Клиент ждет",
+                        callback_data=create_callback_data("client_waiting", order.id),
+                    )
+                )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
             # TODO: Реализовать функционал редактирования заявок

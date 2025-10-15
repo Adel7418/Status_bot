@@ -23,10 +23,11 @@ from app.keyboards.inline import (
 )
 from app.keyboards.reply import get_cancel_keyboard, get_confirm_keyboard, get_skip_cancel_keyboard
 from app.schemas import OrderCreateSchema
-from app.states import CreateOrderStates
+from app.states import AdminCloseOrderStates, CreateOrderStates
 from app.utils import (
     escape_html,
     format_datetime,
+    get_now,
     log_action,
     safe_send_message,
 )
@@ -630,6 +631,43 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
 
         log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
 
+        # Отправляем уведомления всем админам и диспетчерам (кроме создателя)
+        admins_and_dispatchers = await db.get_admins_and_dispatchers(exclude_user_id=message.from_user.id)
+        
+        notification_text = (
+            f"🆕 <b>Новая заявка #{order.id}</b>\n\n"
+            f"👤 Создал: {escape_html(message.from_user.full_name)}\n"
+            f"🔧 Тип: {escape_html(order.equipment_type)}\n"
+            f"📝 {escape_html(order.description)}\n\n"
+            f"👤 Клиент: {escape_html(order.client_name)}\n"
+            f"📍 {escape_html(order.client_address)}\n"
+            f"📞 {order.client_phone}\n"
+        )
+        
+        if order.scheduled_time:
+            notification_text += f"\n⏰ Прибытие: {escape_html(order.scheduled_time)}"
+        
+        if order.notes:
+            notification_text += f"\n\n📝 Заметки: {escape_html(order.notes)}"
+        
+        notification_text += f"\n\n⚠️ <b>Требует назначения мастера!</b>"
+        
+        # Отправляем уведомления
+        from aiogram import Bot
+        bot = Bot.get_current()
+        
+        for user in admins_and_dispatchers:
+            try:
+                await safe_send_message(
+                    bot,
+                    user.telegram_id,
+                    notification_text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Notification sent to {user.telegram_id} about order #{order.id}")
+            except Exception as e:
+                logger.error(f"Failed to notify user {user.telegram_id}: {e}")
+
     finally:
         # Гарантированная очистка ресурсов
         if db:
@@ -669,7 +707,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
 # ==================== ПРОСМОТР ЗАЯВОК ====================
 
 
-@router.message(F.text == "📋 Все заявки")
+@router.message(F.text.startswith("📋 Все заявки"))
 @handle_errors
 async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
     """
@@ -801,6 +839,13 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
         if order.scheduled_time:
             text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
 
+        # Показываем информацию о длительном ремонте
+        if order.status == OrderStatus.DR:
+            if order.estimated_completion_date:
+                text += f"⏰ <b>Примерный срок окончания:</b> {escape_html(order.estimated_completion_date)}\n"
+            if order.prepayment_amount:
+                text += f"💰 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
+
         if order.created_at:
             text += f"\n📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
 
@@ -901,18 +946,26 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
         # Уведомляем мастера с retry
         order = await db.get_order_by_id(order_id)
 
-        # Определяем, куда отправлять уведомление
-        # Если есть work_chat_id - отправляем в рабочую группу
-        # Иначе - в личные сообщения мастеру
-        target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
-
-        logger.info(
-            f"Attempting to send notification to {'group' if master.work_chat_id else 'DM'} {target_chat_id}"
-        )
-
-        # Если отправляем в группу, создаем полное сообщение с клавиатурой
-        if master.work_chat_id:
+        # Отправляем уведомление ТОЛЬКО в рабочую группу
+        # Личные сообщения отключены - мастера работают только через группу
+        if not master.work_chat_id:
+            logger.warning(
+                f"Master {master.id} ({master.get_display_name()}) has no work_chat_id set. "
+                f"Notification will NOT be sent. Please set work chat for this master."
+            )
+            # Уведомляем диспетчера о проблеме
+            await callback.answer(
+                f"⚠️ У мастера {master.get_display_name()} не настроена рабочая группа. "
+                f"Уведомление НЕ отправлено!",
+                show_alert=True
+            )
+        else:
+            # Отправляем уведомление только в рабочую группу
             from app.keyboards.inline import get_group_order_keyboard
+
+            target_chat_id = master.work_chat_id
+
+            logger.info(f"Attempting to send notification to group {target_chat_id}")
 
             notification_text = (
                 f"🔔 <b>Новая заявка назначена!</b>\n\n"
@@ -938,7 +991,7 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
                 notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
 
             notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-            notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
+            notification_text += f"🔄 <b>Назначена:</b> {format_datetime(get_now())}"
 
             keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
@@ -957,45 +1010,6 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
                 logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
             else:
                 logger.error(f"CRITICAL: Failed to notify master in group {target_chat_id}")
-        else:
-            # Отправляем в личные сообщения
-            from app.keyboards.inline import get_group_order_keyboard
-
-            notification_text = (
-                f"🔔 <b>Новая заявка назначена!</b>\n\n"
-                f"📋 <b>Заявка #{order.id}</b>\n"
-                f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
-                f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-                f"📝 <b>Описание:</b> {order.description}\n\n"
-                f"👤 <b>Клиент:</b> {order.client_name}\n"
-                f"📍 <b>Адрес:</b> {order.client_address}\n"
-                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-            )
-
-            if order.notes:
-                notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-
-            if order.scheduled_time:
-                notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
-
-            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-            notification_text += f"🔄 <b>Назначена:</b> {format_datetime(datetime.now())}"
-
-            keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
-
-            result = await safe_send_message(
-                callback.bot,
-                target_chat_id,
-                notification_text,
-                parse_mode="HTML",
-                reply_markup=keyboard,
-                max_attempts=5,
-            )
-
-            if result:
-                logger.info(f"SUCCESS: Notification sent to DM {target_chat_id}")
-            else:
-                logger.error(f"CRITICAL: Failed to notify master in DM {target_chat_id}")
 
         await callback.message.edit_text(
             f"✅ <b>Мастер назначен!</b>\n\n"
@@ -1133,15 +1147,17 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
                 max_attempts=3,
             )
 
-        # Уведомляем нового мастера с retry
-        # Определяем, куда отправлять уведомление
-        target_chat_id = (
-            new_master.work_chat_id if new_master.work_chat_id else new_master.telegram_id
-        )
-
-        # Если отправляем в группу, создаем полное сообщение с клавиатурой
-        if new_master.work_chat_id:
+        # Уведомляем нового мастера ТОЛЬКО в рабочую группу
+        # Личные сообщения отключены - мастера работают только через группу
+        if not new_master.work_chat_id:
+            logger.warning(
+                f"Master {new_master.id} ({new_master.get_display_name()}) has no work_chat_id set. "
+                f"Notification will NOT be sent."
+            )
+        else:
             from app.keyboards.inline import get_group_order_keyboard
+
+            target_chat_id = new_master.work_chat_id
 
             notification_text = (
                 f"🔔 <b>Новая заявка назначена!</b>\n\n"
@@ -1164,7 +1180,7 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
                 notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
 
             notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-            notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(datetime.now())}"
+            notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(get_now())}"
 
             keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
@@ -1178,21 +1194,8 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
             )
             if result:
                 logger.info(f"Notification sent to new master group {target_chat_id}")
-        else:
-            # Отправляем в личные сообщения
-            notification_text = (
-                f"🔔 <b>Новая заявка!</b>\n\n"
-                f"📋 Заявка #{order.id}\n"
-                f"🔧 {order.equipment_type}\n"
-                f"📝 {order.description}\n\n"
-                f"Используйте /start и 'Мои заявки' для просмотра деталей."
-            )
-
-            result = await safe_send_message(
-                callback.bot, target_chat_id, notification_text, parse_mode="HTML", max_attempts=5
-            )
-            if result:
-                logger.info(f"Notification sent to new master DM {target_chat_id}")
+            else:
+                logger.warning(f"Failed to send notification to new master group {target_chat_id}")
 
         old_master_name = old_master.get_display_name() if old_master else "Неизвестен"
 
@@ -1299,39 +1302,34 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
 
 @router.callback_query(F.data.startswith("close_order:"))
-async def callback_close_order(callback: CallbackQuery, user_role: str):
+async def callback_close_order(callback: CallbackQuery, user_role: str, state: FSMContext):
     """
-    Закрытие заявки
+    Закрытие заявки с вводом финансовых данных
 
     Args:
         callback: Callback query
         user_role: Роль пользователя
+        state: FSM контекст
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
-    await db.connect()
-
-    try:
-        await db.update_order_status(
-            order_id, OrderStatus.CLOSED, changed_by=callback.from_user.id
-        )
-
-        await db.add_audit_log(
-            user_id=callback.from_user.id, action="CLOSE_ORDER", details=f"Closed order #{order_id}"
-        )
-
-        await callback.message.edit_text(f"✅ Заявка #{order_id} закрыта.")
-
-        log_action(callback.from_user.id, "CLOSE_ORDER", f"Order #{order_id}")
-
-    finally:
-        await db.disconnect()
-
-    await callback.answer("Заявка закрыта")
+    # Сохраняем order_id в state для последующих шагов
+    await state.update_data(order_id=order_id)
+    
+    # Переходим к вводу общей суммы
+    await state.set_state(AdminCloseOrderStates.enter_total_amount)
+    
+    await callback.message.edit_text(
+        f"💰 <b>Закрытие заявки #{order_id}</b>\n\n"
+        "Введите общую сумму заказа в рублях:\n"
+        "(например: 5000 или 5000.50)",
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("refuse_order:"))
@@ -1385,6 +1383,105 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
     await callback.answer("Заявка отклонена")
 
 
+@router.callback_query(F.data.startswith("client_waiting:"))
+@handle_errors
+async def callback_client_waiting(callback: CallbackQuery, user_role: str):
+    """
+    Уведомление мастера о том, что клиент ждет
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+    
+    order_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        order = await db.get_order_by_id(order_id)
+        
+        if not order or not order.assigned_master_id:
+            await callback.answer("❌ Заявка не найдена или мастер не назначен", show_alert=True)
+            return
+        
+        master = await db.get_master_by_id(order.assigned_master_id)
+        
+        if not master:
+            await callback.answer("❌ Мастер не найден", show_alert=True)
+            return
+        
+        # Отправляем ВАЖНОЕ уведомление мастеру
+        # Это уведомление отправляется в ЛИЧКУ как важное/срочное
+        urgent_notification = (
+            f"📞 <b>СРОЧНО: Клиент ждет!</b>\n\n"
+            f"📋 <b>Заявка #{order.id}</b>\n"
+            f"🔧 {order.equipment_type}\n"
+            f"👤 Клиент: {order.client_name}\n"
+            f"📍 Адрес: {order.client_address}\n\n"
+            f"⚠️ <b>Клиент звонил и спрашивал где мастер!</b>\n"
+            f"Пожалуйста, свяжитесь с клиентом как можно скорее.\n\n"
+            f"📞 Телефон: {order.client_phone}"
+        )
+        
+        # Отправляем в ЛИЧКУ как важное уведомление
+        result = await safe_send_message(
+            callback.bot,
+            master.telegram_id,
+            urgent_notification,
+            parse_mode="HTML",
+            max_attempts=5
+        )
+        
+        # Также дублируем в рабочую группу если она есть
+        if master.work_chat_id:
+            group_notification = (
+                f"📞 <b>ВАЖНО: Клиент ждет!</b>\n\n"
+                f"📋 Заявка #{order.id}\n"
+                f"👨‍🔧 Мастер: @{master.username if master.username else master.get_display_name()}\n\n"
+                f"⚠️ Клиент звонил и спрашивает где мастер.\n"
+                f"Пожалуйста, свяжитесь с клиентом."
+            )
+            
+            await safe_send_message(
+                callback.bot,
+                master.work_chat_id,
+                group_notification,
+                parse_mode="HTML",
+                max_attempts=3
+            )
+        
+        # Логируем действие
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="CLIENT_WAITING_NOTIFICATION",
+            details=f"Sent 'client waiting' notification for order #{order_id} to master {master.id}"
+        )
+        
+        log_action(
+            callback.from_user.id, 
+            "CLIENT_WAITING", 
+            f"Order #{order_id}, Master {master.id}"
+        )
+        
+        if result:
+            await callback.answer(
+                f"✅ Уведомление отправлено мастеру {master.get_display_name()}", 
+                show_alert=True
+            )
+        else:
+            await callback.answer(
+                f"⚠️ Не удалось отправить уведомление мастеру", 
+                show_alert=True
+            )
+    
+    finally:
+        await db.disconnect()
+
+
 @router.callback_query(F.data == "back_to_orders")
 async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
     """
@@ -1410,25 +1507,22 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
 
 
 @router.message(F.text == "📊 Отчеты")
-async def btn_reports(message: Message, user_role: str):
+async def btn_reports(message: Message, user_role: str, user_roles: list):
     """
-    Меню отчетов
+    Меню финансовых отчетов (новая система)
 
     Args:
         message: Сообщение
         user_role: Роль пользователя
+        user_roles: Список ролей пользователя
     """
-    # Проверка роли
-    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+    # Проверка роли (проверяем весь список ролей)
+    if not any(role in user_roles for role in [UserRole.ADMIN, UserRole.DISPATCHER]):
         return
 
-    from app.keyboards.inline import get_reports_keyboard
-
-    await message.answer(
-        "📊 <b>Отчеты</b>\n\n" "Выберите тип отчета:",
-        parse_mode="HTML",
-        reply_markup=get_reports_keyboard(),
-    )
+    # Вызываем команду /reports из новой системы
+    from app.handlers.financial_reports import cmd_reports
+    await cmd_reports(message, user_role)
 
 
 @router.callback_query(F.data == "report_masters")
@@ -1842,3 +1936,245 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
 
     finally:
         await db.disconnect()
+
+
+# ==================== FSM: ЗАКРЫТИЕ ЗАЯВКИ С ФИНАНСАМИ ====================
+
+
+@router.message(AdminCloseOrderStates.enter_total_amount)
+async def admin_process_total_amount(message: Message, state: FSMContext):
+    """
+    Обработка ввода общей суммы заказа админом/диспетчером
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем, что введена корректная сумма
+    try:
+        total_amount = float(message.text.replace(",", ".").strip())
+        if total_amount <= 0:
+            await message.reply(
+                "❌ Сумма должна быть положительным числом.\n"
+                "Попробуйте еще раз:"
+            )
+            return
+    except ValueError:
+        await message.reply(
+            "❌ Неверный формат суммы.\n"
+            "Пожалуйста, введите число (например: 5000 или 5000.50):"
+        )
+        return
+
+    # Сохраняем общую сумму
+    await state.update_data(total_amount=total_amount)
+
+    # Переходим к запросу суммы расходного материала
+    await state.set_state(AdminCloseOrderStates.enter_materials_cost)
+
+    await message.reply(
+        f"✅ Общая сумма заказа: <b>{total_amount:.2f} ₽</b>\n\n"
+        f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
+        f"Например: 1500 или 1500.50\n\n"
+        f"Если расходного материала не было, введите: 0",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminCloseOrderStates.enter_materials_cost)
+async def admin_process_materials_cost(message: Message, state: FSMContext):
+    """
+    Обработка ввода суммы расходного материала админом/диспетчером
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем, что введена корректная сумма
+    try:
+        materials_cost = float(message.text.replace(",", ".").strip())
+        if materials_cost < 0:
+            await message.reply(
+                "❌ Сумма не может быть отрицательной.\n"
+                "Попробуйте еще раз (или введите 0, если расходов не было):"
+            )
+            return
+    except ValueError:
+        await message.reply(
+            "❌ Неверный формат суммы.\n"
+            "Пожалуйста, введите число (например: 1500 или 0):"
+        )
+        return
+
+    # Сохраняем сумму расходного материала
+    await state.update_data(materials_cost=materials_cost)
+
+    # Переходим к запросу об отзыве
+    await state.set_state(AdminCloseOrderStates.confirm_review)
+
+    await message.reply(
+        f"✅ Сумма расходного материала: <b>{materials_cost:.2f} ₽</b>\n\n"
+        f"❓ <b>Взял ли мастер отзыв у клиента?</b>\n"
+        f"(За отзыв мастер получит дополнительно +10% к прибыли)\n\n"
+        f"Ответьте:\n"
+        f"• <b>Да</b> - если взяли отзыв\n"
+        f"• <b>Нет</b> - если не взяли",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminCloseOrderStates.confirm_review)
+async def admin_process_review_confirmation(message: Message, state: FSMContext):
+    """
+    Обработка подтверждения наличия отзыва админом/диспетчером
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем ответ
+    answer = message.text.strip().lower()
+
+    if answer in ["да", "yes", "lf", "+"]:
+        has_review = True
+    elif answer in ["нет", "no", "ytn", "-"]:
+        has_review = False
+    else:
+        await message.reply("❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>", parse_mode="HTML")
+        return
+
+    # Сохраняем ответ об отзыве
+    await state.update_data(has_review=has_review)
+
+    # Переходим к запросу выезда за город
+    await state.set_state(AdminCloseOrderStates.confirm_out_of_city)
+
+    review_text = "✅ Отзыв взят!" if has_review else "❌ Отзыв не взят"
+    await message.reply(
+        f"{review_text}\n\n"
+        f"🚗 <b>Был ли выезд за город?</b>\n"
+        f"(За выезд за город мастер получит дополнительно +10% к прибыли)\n\n"
+        f"Ответьте:\n"
+        f"• <b>Да</b> - если был выезд за город\n"
+        f"• <b>Нет</b> - если выезда не было",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminCloseOrderStates.confirm_out_of_city)
+async def admin_process_out_of_city_confirmation(message: Message, state: FSMContext):
+    """
+    Обработка подтверждения выезда за город и завершение заказа админом/диспетчером
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    # Проверяем ответ
+    answer = message.text.strip().lower()
+
+    if answer in ["да", "yes", "lf", "+"]:
+        out_of_city = True
+    elif answer in ["нет", "no", "ytn", "-"]:
+        out_of_city = False
+    else:
+        await message.reply("❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>", parse_mode="HTML")
+        return
+
+    # Получаем данные из состояния
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    total_amount = data.get("total_amount")
+    materials_cost = data.get("materials_cost")
+    has_review = data.get("has_review")
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await message.reply("❌ Заявка не найдена.")
+            await state.clear()
+            return
+
+        # Расчет прибыли
+        from app.utils.helpers import calculate_profit_split
+        master_profit, company_profit = calculate_profit_split(
+            total_amount, materials_cost, has_review, out_of_city
+        )
+
+        # Обновляем заявку
+        await db.update_order_amounts(
+            order_id=order_id,
+            total_amount=total_amount,
+            materials_cost=materials_cost,
+            master_profit=master_profit,
+            company_profit=company_profit,
+            has_review=has_review,
+            out_of_city=out_of_city,
+        )
+
+        # Меняем статус на CLOSED
+        await db.update_order_status(order_id, OrderStatus.CLOSED, changed_by=message.from_user.id)
+
+        # Логирование
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="CLOSE_ORDER",
+            details=f"Closed order #{order_id} with financials",
+        )
+
+        # Расчет чистой прибыли
+        net_profit = total_amount - materials_cost
+
+        # Формируем сообщение для админа/диспетчера
+        out_of_city_text = "🚗 Да" if out_of_city else "❌ Нет"
+        review_text = "⭐ Да" if has_review else "❌ Нет"
+
+        summary_message = (
+            f"✅ <b>Заявка #{order_id} успешно закрыта!</b>\n\n"
+            f"💰 <b>Финансы:</b>\n"
+            f"├ Общая сумма: {total_amount:.2f} ₽\n"
+            f"├ Расходники: {materials_cost:.2f} ₽\n"
+            f"├ Чистая прибыль: {net_profit:.2f} ₽\n"
+            f"├ К выплате мастеру: <b>{master_profit:.2f} ₽</b>\n"
+            f"└ Прибыль компании: <b>{company_profit:.2f} ₽</b>\n\n"
+            f"📊 <b>Дополнительно:</b>\n"
+            f"├ Отзыв: {review_text}\n"
+            f"└ Выезд за город: {out_of_city_text}"
+        )
+
+        await message.reply(summary_message, parse_mode="HTML")
+
+        # Уведомление мастера (если есть)
+        if order.assigned_master_id:
+            master = await db.get_master_by_id(order.assigned_master_id)
+            if master and master.work_chat_id:
+                master_message = (
+                    f"✅ <b>Заявка #{order_id} закрыта!</b>\n\n"
+                    f"💰 <b>Финансы:</b>\n"
+                    f"├ Общая сумма: {total_amount:.2f} ₽\n"
+                    f"├ Расходники: {materials_cost:.2f} ₽\n"
+                    f"├ Чистая прибыль: {net_profit:.2f} ₽\n"
+                    f"└ К выплате вам: <b>{master_profit:.2f} ₽</b>\n\n"
+                    f"📊 <b>Дополнительно:</b>\n"
+                    f"├ Отзыв: {review_text}\n"
+                    f"└ Выезд за город: {out_of_city_text}"
+                )
+
+                from aiogram import Bot
+                bot = Bot.get_current()
+                await safe_send_message(
+                    bot, master.work_chat_id, master_message, parse_mode="HTML"
+                )
+
+        log_action(message.from_user.id, "CLOSE_ORDER", f"Order #{order_id}")
+
+    except Exception as e:
+        logger.error(f"Error closing order: {e}")
+        await message.reply(f"❌ Ошибка при закрытии заявки: {str(e)}")
+    finally:
+        await db.disconnect()
+        await state.clear()
