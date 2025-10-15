@@ -31,11 +31,9 @@ class Config:
     # Developer Mode (режим разработчика)
     DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")  # По умолчанию true для локальной разработки
 
-    # Путь к базе данных (автоматически выбирается в зависимости от DEV_MODE)
-    _base_db_path: str = os.getenv("DATABASE_PATH", "bot_database.db")
-    DATABASE_PATH: str = (
-        _base_db_path.replace(".db", "_dev.db") if DEV_MODE else _base_db_path
-    )
+    # Путь к базе данных
+    # Используем DATABASE_PATH напрямую из .env без автоматического добавления _dev
+    DATABASE_PATH: str = os.getenv("DATABASE_PATH", "bot_database.db")
 
     # Уровень логирования
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
