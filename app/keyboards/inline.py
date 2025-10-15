@@ -284,8 +284,8 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
     assigned_text = f"👨‍🔧 Назначенные ({counts.get(OrderStatus.ASSIGNED, 0)})" if counts.get(OrderStatus.ASSIGNED, 0) > 0 else "👨‍🔧 Назначенные"
     accepted_text = f"✅ Принятые ({counts.get(OrderStatus.ACCEPTED, 0)})" if counts.get(OrderStatus.ACCEPTED, 0) > 0 else "✅ Принятые"
     onsite_text = f"🏠 На объекте ({counts.get(OrderStatus.ONSITE, 0)})" if counts.get(OrderStatus.ONSITE, 0) > 0 else "🏠 На объекте"
-    closed_text = f"💰 Завершенные ({counts.get(OrderStatus.CLOSED, 0)})" if counts.get(OrderStatus.CLOSED, 0) > 0 else "💰 Завершенные"
-    dr_text = f"⏳ Длительный ремонт ({counts.get(OrderStatus.DR, 0)})" if counts.get(OrderStatus.DR, 0) > 0 else "⏳ Длительный ремонт"
+    # Длительные ремонты - всегда показываем счётчик для видимости
+    dr_text = f"⏳ Длительные ремонты ({counts.get(OrderStatus.DR, 0)})"
 
     builder.row(
         InlineKeyboardButton(
@@ -306,11 +306,8 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
             callback_data=create_callback_data("filter_orders", OrderStatus.ONSITE),
         ),
     )
+    # Длительные ремонты - отдельная широкая строка для лучшей видимости
     builder.row(
-        InlineKeyboardButton(
-            text=closed_text,
-            callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
-        ),
         InlineKeyboardButton(
             text=dr_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.DR),

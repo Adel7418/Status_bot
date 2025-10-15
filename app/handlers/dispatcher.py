@@ -729,13 +729,13 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
 
     await state.clear()
 
-    # Получаем счетчики заявок по статусам
+    # Получаем счетчики заявок по статусам (без завершённых)
     db = Database()
     await db.connect()
     try:
         counts = {}
         for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, 
-                      OrderStatus.ONSITE, OrderStatus.CLOSED, OrderStatus.DR]:
+                      OrderStatus.ONSITE, OrderStatus.DR]:
             orders = await db.get_all_orders(status=status)
             counts[status] = len(orders)
     finally:
@@ -1579,13 +1579,13 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
     """
     # Для диспетчеров и админов - возврат к фильтру заявок
     if user_role in [UserRole.ADMIN, UserRole.DISPATCHER]:
-        # Получаем счетчики заявок
+        # Получаем счетчики заявок (без завершённых)
         db = Database()
         await db.connect()
         try:
             counts = {}
             for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, 
-                          OrderStatus.ONSITE, OrderStatus.CLOSED, OrderStatus.DR]:
+                          OrderStatus.ONSITE, OrderStatus.DR]:
                 orders = await db.get_all_orders(status=status)
                 counts[status] = len(orders)
         finally:
