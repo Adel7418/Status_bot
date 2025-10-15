@@ -96,6 +96,7 @@ make prod-status           # Статус контейнеров
 ### Полезные ссылки
 
 - **[Makefile](../Makefile)** - Все доступные команды
+- **[Git Commands](../GIT_COMMANDS.md)** ⭐ - Шпаргалка по Git
 - **[Scripts README](../scripts/README.md)** - Описание скриптов
 - **[Tests README](../tests/README.md)** - Информация о тестах
 
