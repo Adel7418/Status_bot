@@ -166,11 +166,33 @@ prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВН
 	@echo "🚀 Запуск полного деплоя..."
 	@echo "📥 1. Получение последнего кода..."
 	git pull origin main
-	@echo "🔨 2. Пересборка Docker образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
-	@echo "🔄 3. Перезапуск контейнера..."
+	@echo "🔨 2. Очистка build cache..."
+	docker builder prune -f
+	@echo "🔨 3. Пересборка Docker образа..."
+	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache --pull bot
+	@echo "🔄 4. Перезапуск контейнера..."
 	cd docker && docker-compose -f docker-compose.prod.yml up -d bot
 	@echo "✅ Деплой завершен! Проверьте логи: make prod-logs"
+
+prod-deploy-version:  ## Деплой конкретной версии (использование: make prod-deploy-version VERSION=v1.2.3)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Ошибка: укажите версию"; \
+		echo "Использование: make prod-deploy-version VERSION=v1.2.3"; \
+		echo "Доступные версии: make git-tags"; \
+		exit 1; \
+	fi
+	@echo "🚀 Деплой версии $(VERSION)..."
+	@echo "📥 1. Получение версии $(VERSION)..."
+	git fetch --tags
+	git checkout tags/$(VERSION)
+	@echo "🔨 2. Очистка build cache..."
+	docker builder prune -f
+	@echo "🔨 3. Пересборка Docker образа..."
+	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache --pull bot
+	@echo "🔄 4. Перезапуск контейнера..."
+	cd docker && docker-compose -f docker-compose.prod.yml up -d bot
+	@echo "✅ Версия $(VERSION) задеплоена! Проверьте логи: make prod-logs"
+	@echo "⚠️  Для возврата на main: git checkout main"
 
 prod-deploy-script:  ## Деплой через скрипт (для non-Docker режима)
 	@echo "🚀 Запуск автоматического деплоя..."
@@ -246,4 +268,33 @@ git-diff:  ## Показать изменения
 
 git-branch:  ## Показать текущую ветку
 	@git branch
+
+git-tag:  ## Создать тэг версии (использование: make git-tag VERSION=v1.2.3)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Ошибка: укажите версию"; \
+		echo "Использование: make git-tag VERSION=v1.2.3"; \
+		exit 1; \
+	fi
+	@echo "🏷️  Создание тэга $(VERSION)..."
+	@git tag -a $(VERSION) -m "Release $(VERSION)"
+	@git push origin $(VERSION)
+	@echo "✅ Тэг $(VERSION) создан и отправлен в GitHub"
+
+git-tags:  ## Показать все тэги
+	@echo "🏷️  Список версий:"
+	@git tag -l
+
+git-release:  ## Полный релиз: add + commit + push + tag (использование: make git-release VERSION=v1.2.3 MSG="описание")
+	@if [ -z "$(VERSION)" ] || [ -z "$(MSG)" ]; then \
+		echo "❌ Ошибка: укажите версию и сообщение"; \
+		echo "Использование: make git-release VERSION=v1.2.3 MSG=\"описание релиза\""; \
+		exit 1; \
+	fi
+	@echo "📦 Подготовка релиза $(VERSION)..."
+	@git add -A
+	@git commit -m "$(MSG)"
+	@git push origin main
+	@git tag -a $(VERSION) -m "Release $(VERSION): $(MSG)"
+	@git push origin $(VERSION)
+	@echo "✅ Релиз $(VERSION) готов и отправлен!"
 
