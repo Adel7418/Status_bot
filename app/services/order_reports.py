@@ -51,8 +51,17 @@ class OrderReportsService:
             completion_time_hours = None
             if order.created_at and order.updated_at:
                 try:
-                    created_dt = datetime.fromisoformat(order.created_at.replace('Z', '+00:00'))
-                    updated_dt = datetime.fromisoformat(order.updated_at.replace('Z', '+00:00'))
+                    # Преобразуем в datetime если это строка
+                    if isinstance(order.created_at, str):
+                        created_dt = datetime.fromisoformat(order.created_at.replace('Z', '+00:00'))
+                    else:
+                        created_dt = order.created_at
+                    
+                    if isinstance(order.updated_at, str):
+                        updated_dt = datetime.fromisoformat(order.updated_at.replace('Z', '+00:00'))
+                    else:
+                        updated_dt = order.updated_at
+                    
                     time_diff = updated_dt - created_dt
                     completion_time_hours = time_diff.total_seconds() / 3600  # в часах
                 except Exception as e:
