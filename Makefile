@@ -157,7 +157,22 @@ prod-logs:  ## Показать логи production (Docker)
 prod-status:  ## Статус production контейнеров (Docker)
 	cd docker && docker-compose -f docker-compose.prod.yml ps
 
-prod-deploy:  ## Полный деплой с миграциями (ГЛАВНАЯ КОМАНДА - используйте эту!)
+prod-rebuild:  ## Пересобрать Docker образ с новым кодом
+	@echo "🔨 Пересборка Docker образа..."
+	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
+	@echo "✅ Образ пересобран"
+
+prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВНАЯ КОМАНДА ДЛЯ DOCKER!)
+	@echo "🚀 Запуск полного деплоя..."
+	@echo "📥 1. Получение последнего кода..."
+	git pull origin main
+	@echo "🔨 2. Пересборка Docker образа..."
+	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
+	@echo "🔄 3. Перезапуск контейнера..."
+	cd docker && docker-compose -f docker-compose.prod.yml up -d bot
+	@echo "✅ Деплой завершен! Проверьте логи: make prod-logs"
+
+prod-deploy-script:  ## Деплой через скрипт (для non-Docker режима)
 	@echo "🚀 Запуск автоматического деплоя..."
 	chmod +x scripts/deploy_with_migrations.sh
 	./scripts/deploy_with_migrations.sh
