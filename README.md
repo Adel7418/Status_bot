@@ -250,6 +250,13 @@ make prod-backup       # Создать backup БД
 make migrate           # Применить миграции
 make migrate-create    # Создать миграцию
 make backup            # Создать бэкап БД
+
+# Git команды
+make git-status        # Статус Git
+make git-add           # Добавить все изменения
+make git-push          # Отправить в GitHub
+make git-pull          # Получить из GitHub
+make git-save MSG="..."  # ⭐ Быстро: add + commit + push
 ```
 
 ## 📦 Основные возможности
