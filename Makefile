@@ -116,61 +116,15 @@ security-check:  ## Проверка безопасности зависимос
 	bandit -r app/
 
 # ========================================
-# PRODUCTION SERVER COMMANDS
-# Команды для использования НА production сервере
+# SERVER MANAGEMENT (опционально, для автоматизации)
 # ========================================
+# Если вы делаете SSH на сервер вручную - эта секция НЕ НУЖНА!
+# Команды ниже автоматизируют деплой с локальной машины
+# Используйте их только если хотите избежать ручного SSH
 
-prod-update:  ## Обновить код из git (на сервере)
-	@echo "🔄 Обновление кода из GitHub..."
-	git fetch origin
-	git pull origin main
-	@echo "✅ Код обновлен"
-
-prod-migrate:  ## Применить миграции БД в production (Docker)
-	@echo "🔄 Применение миграций БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
-	@echo "✅ Миграции применены"
-
-prod-migrate-stamp:  ## Пометить БД как готовую (для существующей БД без миграций)
-	@echo "📌 Установка версии миграции для существующей БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic stamp head
-	@echo "✅ БД помечена как готовая"
-	@echo "ℹ️  Теперь можете использовать: make prod-migrate"
-
-prod-migrate-check:  ## Проверить текущую версию миграции БД
-	@echo "🔍 Текущая версия миграции:"
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic current
-
-prod-backup:  ## Создать backup БД в production (Docker)
-	@echo "💾 Создание backup БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py
-	@echo "✅ Backup создан"
-
-prod-restart:  ## Перезапуск production бота (Docker)
-	@echo "🔄 Перезапуск бота..."
-	cd docker && docker-compose -f docker-compose.prod.yml restart bot
-	@echo "✅ Бот перезапущен"
-
-prod-logs:  ## Показать логи production (Docker)
-	cd docker && docker-compose -f docker-compose.prod.yml logs -f bot
-
-prod-status:  ## Статус production контейнеров (Docker)
-	cd docker && docker-compose -f docker-compose.prod.yml ps
-
-prod-full-update:  ## Полное обновление: backup + git pull + rebuild + migrate + restart
-	@echo "🚀 ПОЛНОЕ ОБНОВЛЕНИЕ PRODUCTION"
-	@echo "1️⃣ Создание backup..."
-	cd docker && docker-compose -f docker-compose.prod.yml exec -T bot python scripts/backup_db.py
-	@echo "2️⃣ Обновление кода..."
-	git pull origin main
-	@echo "3️⃣ Пересборка образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
-	@echo "4️⃣ Применение миграций..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
-	@echo "5️⃣ Перезапуск..."
-	cd docker && docker-compose -f docker-compose.prod.yml up -d
-	@echo "✅ Обновление завершено!"
-	@echo "📊 Проверьте логи: make prod-logs"
+# prod-deploy-simple:  ## Деплой в production (автоматический)
+# 	@echo "⚠️  PRODUCTION DEPLOYMENT"
+# 	@bash scripts/deploy_prod_simple.sh
 
 all: clean install-dev lint test  ## Выполнить всё: очистка, установка, линт, тесты
 
