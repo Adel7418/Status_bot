@@ -17,6 +17,7 @@ from app.keyboards.inline import (
 )
 from app.keyboards.reply import get_cancel_keyboard
 from app.states import AddMasterStates, SetWorkChatStates
+from app.decorators import handle_errors
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -25,6 +26,155 @@ logger = logging.getLogger(__name__)
 router = Router(name="admin")
 # Фильтры на уровне роутера НЕ работают, т.к. выполняются ДО middleware
 # Проверка роли теперь в каждом обработчике через декоратор
+
+
+@router.message(F.text == "📊 Отчеты")
+@handle_errors
+async def btn_reports(message: Message, state: FSMContext, user_role: str):
+    """
+    Показать меню отчетов
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="📅 Ежедневный отчет",
+            callback_data="generate_daily_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📆 Еженедельный отчет", 
+            callback_data="generate_weekly_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🗓️ Ежемесячный отчет",
+            callback_data="generate_monthly_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📋 Кастомный отчет",
+            callback_data="generate_custom_report"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_admin_menu"
+        )
+    )
+
+    await message.answer(
+        "📊 <b>Генерация отчетов</b>\n\n"
+        "Выберите тип отчета для генерации:",
+        parse_mode="HTML",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "generate_daily_report")
+@handle_errors
+async def callback_generate_daily_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежедневного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую ежедневный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_daily_report()
+        
+        await callback.message.edit_text("✅ Ежедневный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации ежедневного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_weekly_report")
+@handle_errors
+async def callback_generate_weekly_report(callback: CallbackQuery, user_role: str):
+    """Генерация еженедельного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую еженедельный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_weekly_report()
+        
+        await callback.message.edit_text("✅ Еженедельный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации еженедельного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_monthly_report")
+@handle_errors
+async def callback_generate_monthly_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежемесячного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text("⏳ Генерирую ежемесячный отчет...")
+    
+    try:
+        from app.services.reports_notifier import ReportsNotifier
+        
+        notifier = ReportsNotifier(callback.bot)
+        await notifier.send_monthly_report()
+        
+        await callback.message.edit_text("✅ Ежемесячный отчет успешно отправлен!")
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации ежемесячного отчета: {e}")
+        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "generate_custom_report")
+@handle_errors
+async def callback_generate_custom_report(callback: CallbackQuery, user_role: str):
+    """Генерация кастомного отчета"""
+    if user_role not in [UserRole.ADMIN]:
+        return
+
+    await callback.message.edit_text(
+        "📋 <b>Кастомный отчет</b>\n\n"
+        "Для создания кастомного отчета введите период в формате:\n"
+        "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
+        "Например: <code>2025-10-01 2025-10-15</code>\n\n"
+        "Или введите <code>отмена</code> для возврата к меню.",
+        parse_mode="HTML"
+    )
+    
+    # Здесь можно добавить состояние для ввода дат
+    await callback.answer()
 
 
 @router.message(F.text == "👥 Мастера")
