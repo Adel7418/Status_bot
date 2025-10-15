@@ -131,6 +131,16 @@ prod-migrate:  ## Применить миграции БД в production (Docker
 	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
 	@echo "✅ Миграции применены"
 
+prod-migrate-stamp:  ## Пометить БД как готовую (для существующей БД без миграций)
+	@echo "📌 Установка версии миграции для существующей БД..."
+	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic stamp head
+	@echo "✅ БД помечена как готовая"
+	@echo "ℹ️  Теперь можете использовать: make prod-migrate"
+
+prod-migrate-check:  ## Проверить текущую версию миграции БД
+	@echo "🔍 Текущая версия миграции:"
+	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic current
+
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД..."
 	cd docker && docker-compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py
