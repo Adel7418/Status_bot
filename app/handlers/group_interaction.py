@@ -335,7 +335,7 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
-            f"Например: 5000 или 5000.50",
+            f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
         )
 
