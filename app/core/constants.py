@@ -3,6 +3,10 @@
 """
 
 
+# Telegram Bot IDs
+GROUP_ANONYMOUS_BOT_ID = 1087968824  # ID бота для анонимных админов в группах
+
+
 class UserRole:
     """Роли пользователей"""
 
