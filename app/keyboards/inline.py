@@ -170,11 +170,11 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             #         callback_data=create_callback_data("edit_order", order.id),
             #     )
             # )
+            
+            # Кнопку "Закрыть заявку" убрали - теперь админ завершает через "Завершить (за мастера)"
+            # которая запускает правильный процесс с запросом суммы и материалов
+            
             builder.row(
-                InlineKeyboardButton(
-                    text="💰 Закрыть заявку",
-                    callback_data=create_callback_data("close_order", order.id),
-                ),
                 InlineKeyboardButton(
                     text="❌ Отклонить",
                     callback_data=create_callback_data("refuse_order", order.id),
