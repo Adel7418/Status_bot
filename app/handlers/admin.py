@@ -237,6 +237,14 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
         await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
 
 
+@router.callback_query(F.data == "back_to_admin_menu")
+@handle_errors
+async def callback_back_to_admin_menu(callback: CallbackQuery):
+    """Возврат в главное меню администратора"""
+    await callback.message.delete()
+    await callback.answer()
+
+
 @router.message(F.text == "👥 Мастера")
 async def btn_masters(message: Message, state: FSMContext, user_role: str):
     """
