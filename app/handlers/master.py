@@ -612,13 +612,23 @@ async def process_dr_info(message: Message, state: FSMContext):
     
     try:
         order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            logger.error(f"[DR] Error - Order not found: {order_id}")
+            await message.reply("❌ Ошибка: заявка не найдена")
+            await state.clear()
+            return
+        
+        # Для мастера проверяем, что он назначен на эту заявку
+        # Для администратора проверка не нужна
         master = await db.get_master_by_telegram_id(message.from_user.id)
         
         logger.debug(f"[DR] Order found: {order is not None}, Master found: {master is not None}")
         
-        if not order or not master:
-            logger.error(f"[DR] Error - Order: {order}, Master: {master}")
-            await message.reply("❌ Ошибка: заявка или мастер не найдены")
+        # Если это не администратор, проверяем что мастер назначен
+        if master and order.assigned_master_id != master.id:
+            logger.error(f"[DR] Master {master.id} not assigned to order {order_id}")
+            await message.reply("❌ Ошибка: эта заявка назначена другому мастеру")
             await state.clear()
             return
         
