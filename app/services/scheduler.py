@@ -36,10 +36,10 @@ class TaskScheduler:
         """Запуск планировщика"""
         # БД уже подключена в main(), не создаем новое соединение
 
-        # Проверка SLA заявок (каждые 30 минут)
+        # Проверка SLA заявок
         self.scheduler.add_job(
             self.check_order_sla,
-            trigger=IntervalTrigger(minutes=30),
+            trigger=IntervalTrigger(minutes=Config.SLA_CHECK_INTERVAL),
             id="check_order_sla",
             name="Проверка SLA заявок",
             replace_existing=True,
@@ -81,19 +81,19 @@ class TaskScheduler:
             replace_existing=True,
         )
 
-        # Напоминание о непринятых заявках (каждые 5 минут)
+        # Напоминание о непринятых заявках
         self.scheduler.add_job(
             self.remind_assigned_orders,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=Config.REMINDER_INTERVAL),
             id="remind_assigned_orders",
             name="Напоминание о непринятых заявках",
             replace_existing=True,
         )
 
-        # Напоминание о неназначенных заявках (каждые 5 минут)
+        # Напоминание о неназначенных заявках
         self.scheduler.add_job(
             self.remind_unassigned_orders,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=Config.REMINDER_INTERVAL),
             id="remind_unassigned_orders",
             name="Напоминание о неназначенных заявках",
             replace_existing=True,
@@ -107,6 +107,133 @@ class TaskScheduler:
         self.scheduler.shutdown(wait=True)  # Ждем завершения всех джоб
         # БД будет отключена в main(), не закрываем здесь
         logger.info("Планировщик задач остановлен")
+
+    async def _send_scheduled_time_reminder(self, order, scheduled_datetime: datetime):
+        """
+        Отправка напоминания за 2 часа до визита
+        
+        Args:
+            order: Заявка
+            scheduled_datetime: Запланированное время визита
+        """
+        try:
+            # Получаем мастера
+            master = await self.db.get_master_by_id(order.assigned_master_id)
+            if not master:
+                return
+            
+            reminder_text = (
+                f"⏰ <b>Напоминание о визите через 2 часа!</b>\n\n"
+                f"📋 Заявка #{order.id}\n"
+                f"🔧 {order.equipment_type}\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📍 Адрес: {order.client_address}\n"
+                f"📞 Телефон: {order.client_phone}\n\n"
+                f"⏰ Запланированное время: {scheduled_datetime.strftime('%H:%M')}\n\n"
+                f"Не забудьте подготовиться к выезду!"
+            )
+            
+            # Определяем, куда отправлять
+            target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+            
+            await safe_send_message(
+                self.bot,
+                target_chat_id,
+                reminder_text,
+                parse_mode="HTML",
+                max_attempts=3
+            )
+            
+            logger.info(f"2-hour reminder sent for order #{order.id} to {'group' if master.work_chat_id else 'DM'} {target_chat_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send scheduled time reminder for order #{order.id}: {e}")
+    
+    def _check_scheduled_time_alert(self, order, now: datetime) -> bool:
+        """
+        Проверка запланированного времени для перенесенных заявок.
+        Отправляет напоминание за 2 часа до визита.
+        
+        Args:
+            order: Заявка
+            now: Текущее время
+            
+        Returns:
+            True если напоминание было отправлено или время еще не подошло
+        """
+        import re
+        from datetime import datetime, timedelta
+        
+        scheduled_time = order.scheduled_time.lower().strip()
+        
+        # Пытаемся найти время в формате HH:MM
+        time_pattern = r'(\d{1,2}):(\d{2})'
+        time_match = re.search(time_pattern, scheduled_time)
+        
+        if not time_match:
+            return False  # Не удалось распарсить время
+        
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+        
+        # Определяем дату
+        target_date = now.date()
+        
+        # Ключевые слова для определения даты
+        if 'завтра' in scheduled_time:
+            target_date = (now + timedelta(days=1)).date()
+        elif 'послезавтра' in scheduled_time:
+            target_date = (now + timedelta(days=2)).date()
+        elif 'через' in scheduled_time and 'дн' in scheduled_time:
+            # Пытаемся найти количество дней
+            days_match = re.search(r'через\s+(\d+)\s+дн', scheduled_time)
+            if days_match:
+                days = int(days_match.group(1))
+                target_date = (now + timedelta(days=days)).date()
+        
+        # Пытаемся найти дату в формате DD.MM.YYYY
+        date_pattern = r'(\d{1,2})\.(\d{1,2})\.(\d{4})'
+        date_match = re.search(date_pattern, scheduled_time)
+        if date_match:
+            day = int(date_match.group(1))
+            month = int(date_match.group(2))
+            year = int(date_match.group(3))
+            try:
+                target_date = datetime(year, month, day).date()
+            except ValueError:
+                pass  # Неверная дата
+        
+        # Создаем целевое время визита
+        try:
+            scheduled_datetime = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+            # Добавляем timezone как у now
+            scheduled_datetime = scheduled_datetime.replace(tzinfo=now.tzinfo)
+        except ValueError:
+            return False  # Неверное время
+        
+        # Если время визита уже прошло, не отправляем напоминание
+        if scheduled_datetime <= now:
+            return False
+        
+        # Проверяем, осталось ли менее 2 часов до визита
+        time_until_visit = scheduled_datetime - now
+        
+        # Если осталось от 1:30 до 2:30 часов - отправляем напоминание
+        if timedelta(hours=1, minutes=30) <= time_until_visit <= timedelta(hours=2, minutes=30):
+            logger.info(f"Sending 2-hour reminder for rescheduled order #{order.id}, scheduled at {scheduled_datetime}")
+            # Отправляем напоминание асинхронно
+            import asyncio
+            try:
+                asyncio.create_task(self._send_scheduled_time_reminder(order, scheduled_datetime))
+            except Exception as e:
+                logger.error(f"Failed to create reminder task: {e}")
+            return True
+        
+        # Если до визита больше 2:30 часов - ждем
+        if time_until_visit > timedelta(hours=2, minutes=30):
+            return True  # Не проверяем по стандартному SLA
+        
+        return False
 
     async def check_order_sla(self):
         """
@@ -139,6 +266,12 @@ class TaskScheduler:
                 }
 
                 sla_limit = sla_rules.get(order.status)
+
+                # Для перенесенных заявок с указанным временем - проверяем запланированное время
+                if order.rescheduled_count > 0 and order.scheduled_time and order.status == OrderStatus.ACCEPTED:
+                    scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
+                    if scheduled_alert_sent:
+                        continue  # Пропускаем стандартную проверку SLA для этой заявки
 
                 if sla_limit and time_in_status > sla_limit:
                     alerts.append({"order": order, "time": time_in_status})
@@ -244,16 +377,29 @@ class TaskScheduler:
             orders = await self.db.get_all_orders(status=OrderStatus.ASSIGNED)
 
             now = get_now()
-            remind_threshold = timedelta(minutes=15)
+            # Для перенесенных заявок увеличиваем порог напоминания до 30 минут
+            base_remind_threshold = timedelta(minutes=15)
 
             for order in orders:
                 if not order.updated_at:
                     continue
 
                 time_assigned = now - order.updated_at
+                
+                # Для перенесенных заявок с указанным временем - проверяем запланированное время
+                if order.rescheduled_count > 0 and order.scheduled_time:
+                    scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
+                    if scheduled_alert_sent:
+                        continue  # Пропускаем напоминание для этой заявки
+                
+                # Для перенесенных заявок без точного времени увеличиваем порог напоминания
+                remind_threshold = base_remind_threshold
+                if order.rescheduled_count > 0:
+                    remind_threshold = timedelta(minutes=30)
 
                 logger.debug(
-                    f"Order #{order.id}: updated_at={order.updated_at}, now={now}, time_assigned={time_assigned}"
+                    f"Order #{order.id}: updated_at={order.updated_at}, now={now}, time_assigned={time_assigned}, "
+                    f"rescheduled={order.rescheduled_count}, threshold={remind_threshold}"
                 )
 
                 if time_assigned > remind_threshold and order.assigned_master_id:

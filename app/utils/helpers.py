@@ -248,6 +248,8 @@ def log_action(user_id: int, action: str, details: str | None = None):
     logger.info(log_msg)
 
 
+
+
 def calculate_profit_split(
     total_amount: float, materials_cost: float, has_review: bool = False, out_of_city: bool = False
 ) -> tuple[float, float]:

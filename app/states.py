@@ -82,3 +82,10 @@ class LongRepairStates(StatesGroup):
     """Состояния для перевода заявки в длительный ремонт"""
 
     enter_completion_date_and_prepayment = State()  # Ввод срока окончания + предоплаты (опционально)
+
+
+class RescheduleOrderStates(StatesGroup):
+    """Состояния для переноса заявки"""
+
+    enter_new_time = State()  # Ввод нового времени прибытия
+    enter_reason = State()  # Ввод причины переноса (опционально)

@@ -37,6 +37,12 @@ class Config:
 
     # Уровень логирования
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    
+    # Интервал проверки SLA заявок (в минутах)
+    SLA_CHECK_INTERVAL: int = int(os.getenv("SLA_CHECK_INTERVAL", "30"))
+    
+    # Интервал напоминаний о непринятых заявках (в минутах)
+    REMINDER_INTERVAL: int = int(os.getenv("REMINDER_INTERVAL", "5"))
 
     @classmethod
     def validate(cls) -> bool:

@@ -34,7 +34,19 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
                 callback_data=create_callback_data("group_refuse_order", order.id),
             ),
         )
+        builder.row(
+            InlineKeyboardButton(
+                text="📅 Перенести визит",
+                callback_data=create_callback_data("group_reschedule_order", order.id),
+            )
+        )
     elif status == OrderStatus.ACCEPTED:
+        builder.row(
+            InlineKeyboardButton(
+                text="📅 Перенести визит",
+                callback_data=create_callback_data("group_reschedule_order", order.id),
+            )
+        )
         builder.row(
             InlineKeyboardButton(
                 text="🏠 Я на объекте",
@@ -136,7 +148,19 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_accept_order", order.id),
                     )
                 )
+                builder.row(
+                    InlineKeyboardButton(
+                        text="📅 Перенести визит",
+                        callback_data=create_callback_data("reschedule_order", order.id),
+                    )
+                )
             elif order.status == OrderStatus.ACCEPTED:
+                builder.row(
+                    InlineKeyboardButton(
+                        text="📅 Перенести визит",
+                        callback_data=create_callback_data("reschedule_order", order.id),
+                    )
+                )
                 builder.row(
                     InlineKeyboardButton(
                         text="🏠 На объекте (за мастера)",
@@ -194,7 +218,19 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("refuse_order_master", order.id),
                 ),
             )
+            builder.row(
+                InlineKeyboardButton(
+                    text="📅 Перенести визит",
+                    callback_data=create_callback_data("reschedule_order", order.id),
+                )
+            )
         elif order.status == OrderStatus.ACCEPTED:
+            builder.row(
+                InlineKeyboardButton(
+                    text="📅 Перенести визит",
+                    callback_data=create_callback_data("reschedule_order", order.id),
+                )
+            )
             builder.row(
                 InlineKeyboardButton(
                     text="🏠 Я на объекте",

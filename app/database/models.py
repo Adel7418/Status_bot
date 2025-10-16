@@ -167,6 +167,9 @@ class Order:
     out_of_city: bool | None = None  # Был ли выезд за город
     estimated_completion_date: str | None = None  # Примерный срок окончания ремонта (для DR)
     prepayment_amount: float | None = None  # Сумма предоплаты (для DR)
+    rescheduled_count: int = 0  # Количество переносов заявки
+    last_rescheduled_at: datetime | None = None  # Дата последнего переноса
+    reschedule_reason: str | None = None  # Причина последнего переноса
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

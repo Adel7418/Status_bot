@@ -22,28 +22,15 @@ router = Router(name="common")
 
 async def get_menu_with_counter(user_roles: list[str]) -> ReplyKeyboardMarkup:
     """
-    Получение главного меню с счетчиком новых заявок
+    Получение главного меню
     
     Args:
         user_roles: Список ролей пользователя
         
     Returns:
-        ReplyKeyboardMarkup с счетчиком
+        ReplyKeyboardMarkup
     """
-    new_orders_count = 0
-    has_admin = UserRole.ADMIN in user_roles
-    has_dispatcher = UserRole.DISPATCHER in user_roles
-    
-    if has_admin or has_dispatcher:
-        from app.database import Database
-        db = Database()
-        await db.connect()
-        try:
-            new_orders_count = await db.count_new_orders()
-        finally:
-            await db.disconnect()
-    
-    return get_main_menu_keyboard(user_roles, new_orders_count)
+    return get_main_menu_keyboard(user_roles)
 
 
 @router.message(CommandStart())
@@ -218,7 +205,7 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_r
     # Очищаем состояние
     await state.clear()
 
-    menu_keyboard = await get_menu_with_counter(user_roles, message.from_user.id)
+    menu_keyboard = await get_menu_with_counter(user_roles)
     await message.answer("❌ Действие отменено.", reply_markup=menu_keyboard)
 
     logger.info(f"User {message.from_user.id} cancelled action")
@@ -400,3 +387,6 @@ async def handle_unknown_text(message: Message, user_role: str, user_roles: list
             "❓ Не понимаю эту команду. Используйте меню ниже или /help для справки.",
             reply_markup=get_main_menu_keyboard(user_roles),
         )
+
+
+

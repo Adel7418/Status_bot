@@ -653,16 +653,14 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         
         notification_text += f"\n\n⚠️ <b>Требует назначения мастера!</b>"
         
-        # Отправляем уведомления
-        # Получаем экземпляр бота из контекста
-        from app.config import Config
-        from aiogram import Bot
-        bot = Bot(token=Config.BOT_TOKEN)
-        
+        # Отправляем уведомления (используем бот из контекста сообщения)
         for user in admins_and_dispatchers:
+            # Пропускаем создателя заявки
+            if user.telegram_id == message.from_user.id:
+                continue
             try:
                 await safe_send_message(
-                    bot,
+                    message.bot,
                     user.telegram_id,
                     notification_text,
                     parse_mode="HTML"
@@ -671,6 +669,15 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             except Exception as e:
                 logger.error(f"Failed to notify user {user.telegram_id}: {e}")
 
+    except Exception as e:
+        logger.error(f"Error in confirm_create_order: {e}")
+        # Отправляем сообщение об ошибке
+        await message.answer(
+            "❌ <b>Ошибка при создании заявки</b>\n\n"
+            "Пожалуйста, попробуйте еще раз или обратитесь к администратору.",
+            parse_mode="HTML"
+        )
+        return
     finally:
         # Гарантированная очистка ресурсов
         if db:
@@ -703,7 +710,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         reply_markup=builder.as_markup(),
     )
 
-    # Обновляем reply клавиатуру главного меню коротким сообщением
+    # Обновляем reply клавиатуру главного меню
     from app.handlers.common import get_menu_with_counter
     menu_keyboard = await get_menu_with_counter([user_role])
     await message.answer("Главное меню:", reply_markup=menu_keyboard)
@@ -1318,6 +1325,8 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
             action="UNASSIGN_MASTER",
             details=f"Unassigned master {order.assigned_master_id} from order #{order_id}",
         )
+        
+        # Меню обновится автоматически в update_order_status
 
         # Уведомляем мастера с retry
         if master:

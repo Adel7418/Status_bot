@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard
-from app.states import CompleteOrderStates, LongRepairStates
+from app.states import CompleteOrderStates, LongRepairStates, RescheduleOrderStates
 from app.utils import calculate_profit_split, format_datetime, get_now, log_action
 
 
@@ -348,6 +348,8 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             action="REFUSE_ORDER_MASTER",
             details=f"Master refused order #{order_id}",
         )
+        
+        # Меню обновится автоматически в update_order_status
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
@@ -1161,3 +1163,194 @@ async def callback_export_order_master(callback: CallbackQuery):
         logger.info(f"Order #{order_id} exported to Excel by master {callback.from_user.id}")
     else:
         await callback.answer("❌ Заявка не найдена", show_alert=True)
+
+
+# ==================== ПЕРЕНОС ЗАЯВКИ ====================
+
+
+@router.callback_query(F.data.startswith("reschedule_order:"))
+async def callback_reschedule_order(callback: CallbackQuery, state: FSMContext):
+    """
+    Начало процесса переноса заявки
+    
+    Args:
+        callback: Callback query
+        state: FSM контекст
+    """
+    order_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+        
+        # Проверяем, что заявка в статусе ASSIGNED или ACCEPTED
+        if order.status not in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]:
+            await callback.answer(
+                "Перенести можно только заявки в статусе 'Назначена' или 'Принята'", 
+                show_alert=True
+            )
+            return
+        
+        # Сохраняем данные в state
+        await state.update_data(order_id=order_id, reschedule_initiated_by=callback.from_user.id)
+        
+        # Переходим к вводу нового времени
+        await state.set_state(RescheduleOrderStates.enter_new_time)
+        
+        current_time = order.scheduled_time or "не указано"
+        
+        await callback.message.edit_text(
+            f"📅 <b>Перенос заявки #{order_id}</b>\n\n"
+            f"⏰ Сейчас: {current_time}\n\n"
+            f"Напишите новое время:\n"
+            f"<i>Например: завтра 14:00, сегодня 18:00, через 2 часа</i>",
+            parse_mode="HTML"
+        )
+        
+        await callback.answer()
+        
+    finally:
+        await db.disconnect()
+
+
+@router.message(RescheduleOrderStates.enter_new_time)
+async def process_reschedule_new_time(message: Message, state: FSMContext):
+    """
+    Обработка ввода нового времени для переноса заявки
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    new_time = message.text.strip()
+    
+    # Сохраняем новое время
+    await state.update_data(new_scheduled_time=new_time)
+    
+    # Переходим к запросу причины
+    await state.set_state(RescheduleOrderStates.enter_reason)
+    
+    await message.reply(
+        f"✅ Новое время: <b>{new_time}</b>\n\n"
+        f"Укажите причину переноса:\n"
+        f"<i>(или отправьте '-' чтобы пропустить)</i>",
+        parse_mode="HTML"
+    )
+
+
+@router.message(RescheduleOrderStates.enter_reason)
+async def process_reschedule_reason(message: Message, state: FSMContext):
+    """
+    Обработка ввода причины переноса и завершение процесса
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    reason = message.text.strip()
+    
+    # Если пользователь указал "-", причины нет
+    if reason == "-":
+        reason = None
+    
+    # Получаем данные из state
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    new_time = data.get("new_scheduled_time")
+    initiated_by = data.get("reschedule_initiated_by")
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await message.reply("❌ Ошибка: заявка не найдена")
+            return
+        
+        # Обновляем заявку
+        old_time = order.scheduled_time or "не указано"
+        
+        await db.connection.execute(
+            """
+            UPDATE orders 
+            SET scheduled_time = ?,
+                rescheduled_count = rescheduled_count + 1,
+                last_rescheduled_at = ?,
+                reschedule_reason = ?
+            WHERE id = ?
+            """,
+            (new_time, get_now(), reason, order_id)
+        )
+        await db.connection.commit()
+        
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="RESCHEDULE_ORDER",
+            details=f"Order #{order_id} rescheduled from '{old_time}' to '{new_time}'. Reason: {reason or 'не указана'}",
+        )
+        
+        # Формируем сообщение с результатом
+        result_text = (
+            f"✅ <b>Заявка #{order_id} перенесена</b>\n\n"
+            f"Было: {old_time}\n"
+            f"Стало: <b>{new_time}</b>\n"
+        )
+        
+        if reason:
+            result_text += f"\n📝 {reason}"
+        
+        result_text += f"\n\n<i>Диспетчер уведомлен</i>"
+        
+        await message.reply(result_text, parse_mode="HTML")
+        
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            master = await db.get_master_by_telegram_id(initiated_by)
+            master_name = master.get_display_name() if master else f"ID: {initiated_by}"
+            
+            notification = (
+                f"📅 <b>Заявка #{order_id} перенесена</b>\n\n"
+                f"👨‍🔧 {master_name}\n"
+                f"👤 {order.client_name} - {order.client_phone}\n"
+                f"🔧 {order.equipment_type}\n\n"
+                f"Было: {old_time}\n"
+                f"<b>Стало: {new_time}</b>\n"
+            )
+            
+            if reason:
+                notification += f"\n📝 {reason}"
+            
+            notification += f"\n\n💡 Свяжитесь с клиентом для подтверждения"
+            
+            try:
+                await message.bot.send_message(
+                    order.dispatcher_id,
+                    notification,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Reschedule notification sent to dispatcher {order.dispatcher_id}")
+            except Exception as e:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+        
+        log_action(message.from_user.id, "RESCHEDULE_ORDER", f"Order #{order_id}")
+        
+        logger.info(f"✅ Order #{order_id} successfully rescheduled to '{new_time}'")
+        
+    except Exception as e:
+        logger.exception(f"❌ Error rescheduling order #{order_id}: {e}")
+        await message.reply(
+            "❌ Произошла ошибка при переносе заявки.\n"
+            "Попробуйте еще раз или обратитесь к диспетчеру."
+        )
+    finally:
+        await db.disconnect()
+        await state.clear()

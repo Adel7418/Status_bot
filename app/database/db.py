@@ -28,7 +28,7 @@ class Database:
         """
         self.db_path = db_path or Config.DATABASE_PATH
         self.connection: aiosqlite.Connection | None = None
-
+    
     async def connect(self):
         """Подключение к базе данных"""
         self.connection = await aiosqlite.connect(self.db_path)
@@ -434,20 +434,6 @@ class Database:
                 result.append(user)
         
         return result
-
-    async def count_new_orders(self) -> int:
-        """
-        Подсчет новых заявок (статус NEW)
-        
-        Returns:
-            Количество новых заявок
-        """
-        cursor = await self.connection.execute(
-            "SELECT COUNT(*) as count FROM orders WHERE status = ?",
-            (OrderStatus.NEW,)
-        )
-        row = await cursor.fetchone()
-        return row["count"] if row else 0
 
     # ==================== MASTERS ====================
 
@@ -863,6 +849,8 @@ class Database:
         )
 
         logger.info(f"Создана заявка #{order.id}")
+        
+        
         return order
 
     async def get_order_by_id(self, order_id: int) -> Order | None:
@@ -1088,6 +1076,8 @@ class Database:
             f"Статус заявки #{order_id} изменен с {old_status} на {status}"
             + (f" пользователем {changed_by}" if changed_by else "")
         )
+        
+        
         return True
 
     async def get_order_status_history(self, order_id: int) -> list[dict]:
