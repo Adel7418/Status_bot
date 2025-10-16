@@ -1690,51 +1690,6 @@ async def btn_reports(message: Message, user_role: str, user_roles: list):
     await cmd_reports(message, user_role)
 
 
-@router.callback_query(F.data == "report_active_orders")
-async def callback_report_active_orders(callback: CallbackQuery, user_role: str):
-    """
-    Отчет по активным заявкам с экспортом в Excel
-    
-    Args:
-        callback: Callback query
-        user_role: Роль пользователя
-    """
-    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
-        return
-    
-    await callback.answer("📊 Генерирую отчет...", show_alert=False)
-    
-    try:
-        from app.services.active_orders_export import ActiveOrdersExportService
-        
-        export_service = ActiveOrdersExportService()
-        filepath = await export_service.export_active_orders_to_excel()
-        
-        if filepath:
-            # Отправляем файл
-            from aiogram.types import FSInputFile
-            
-            file = FSInputFile(filepath)
-            await callback.message.answer_document(
-                file,
-                caption="📋 <b>Отчет по активным заявкам</b>\n\n"
-                        "В файле указаны все незакрытые заявки с информацией:\n"
-                        "• Статус и время создания\n"
-                        "• Назначенный мастер\n"
-                        "• Контакты клиента\n"
-                        "• Запланированное время",
-                parse_mode="HTML"
-            )
-            
-            await callback.answer("✅ Отчет сформирован!", show_alert=True)
-        else:
-            await callback.answer("❌ Нет активных заявок", show_alert=True)
-    
-    except Exception as e:
-        logger.error(f"Error generating active orders report: {e}")
-        await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
-
-
 @router.callback_query(F.data == "report_masters")
 async def callback_report_masters(callback: CallbackQuery, user_role: str):
     """

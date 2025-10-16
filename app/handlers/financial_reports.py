@@ -26,7 +26,7 @@ def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура главного меню отчетов"""
     keyboard = [
         [
-            InlineKeyboardButton(text="📋 Активные заявки (Excel)", callback_data="report_active_orders_excel"),
+            InlineKeyboardButton(text="📋 Активные заявки", callback_data="report_active_orders_excel"),
         ],
         [
             InlineKeyboardButton(text="📅 Ежедневный", callback_data="report_daily"),
