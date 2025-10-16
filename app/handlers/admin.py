@@ -50,6 +50,12 @@ async def btn_reports(message: Message, state: FSMContext, user_role: str):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
+            text="📋 Активные заявки (Excel)",
+            callback_data="export_active_orders_admin"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
             text="📅 Ежедневный отчет",
             callback_data="generate_daily_report"
         )
@@ -177,6 +183,58 @@ async def callback_generate_custom_report(callback: CallbackQuery, user_role: st
     
     # Здесь можно добавить состояние для ввода дат
     await callback.answer()
+
+
+@router.callback_query(F.data == "export_active_orders_admin")
+@handle_errors
+async def callback_export_active_orders_admin(callback: CallbackQuery, user_role: str):
+    """
+    Экспорт активных заявок в Excel
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    
+    await callback.answer("📊 Генерирую отчет...", show_alert=False)
+    
+    try:
+        from app.services.active_orders_export import ActiveOrdersExportService
+        
+        export_service = ActiveOrdersExportService()
+        filepath = await export_service.export_active_orders_to_excel()
+        
+        if filepath:
+            # Отправляем файл
+            from aiogram.types import FSInputFile
+            
+            file = FSInputFile(filepath)
+            await callback.message.answer_document(
+                file,
+                caption="📋 <b>Отчет по активным заявкам</b>\n\n"
+                        "В файле указаны все незакрытые заявки:\n"
+                        "• Статус и время создания\n"
+                        "• Назначенный мастер\n"
+                        "• Контакты клиента\n"
+                        "• Запланированное время\n\n"
+                        "Сводка по статусам в конце файла.",
+                parse_mode="HTML"
+            )
+            
+            logger.info(f"Active orders report sent to {callback.from_user.id}")
+            await callback.message.edit_text(
+                "✅ Отчет по активным заявкам сформирован!",
+                reply_markup=None
+            )
+        else:
+            await callback.answer("❌ Нет активных заявок", show_alert=True)
+    
+    except Exception as e:
+        logger.error(f"Error generating active orders report: {e}")
+        await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
 
 
 @router.message(F.text == "👥 Мастера")
