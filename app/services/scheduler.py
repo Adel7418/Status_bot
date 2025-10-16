@@ -260,8 +260,8 @@ class TaskScheduler:
                 # SLA правила
                 sla_rules = {
                     OrderStatus.NEW: timedelta(hours=2),  # Новая заявка > 2 часов
-                    OrderStatus.ASSIGNED: timedelta(hours=4),  # Назначена > 4 часов
-                    OrderStatus.ACCEPTED: timedelta(hours=8),  # Принята > 8 часов
+                    OrderStatus.ASSIGNED: timedelta(hours=1, minutes=30),  # Назначена > 1.5 часов
+                    OrderStatus.ACCEPTED: timedelta(hours=1, minutes=30),  # Принята > 1.5 часов
                     OrderStatus.ONSITE: timedelta(hours=12),  # На объекте > 12 часов
                 }
 
