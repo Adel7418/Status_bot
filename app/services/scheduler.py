@@ -267,8 +267,9 @@ class TaskScheduler:
 
                 sla_limit = sla_rules.get(order.status)
 
-                # Для перенесенных заявок с указанным временем - проверяем запланированное время
-                if order.rescheduled_count > 0 and order.scheduled_time and order.status == OrderStatus.ACCEPTED:
+                # Для заявок с указанным временем прибытия - используем умные напоминания
+                # Работает для статусов ASSIGNED и ACCEPTED
+                if order.scheduled_time and order.status in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]:
                     scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
                     if scheduled_alert_sent:
                         continue  # Пропускаем стандартную проверку SLA для этой заявки
@@ -386,16 +387,14 @@ class TaskScheduler:
 
                 time_assigned = now - order.updated_at
                 
-                # Для перенесенных заявок с указанным временем - проверяем запланированное время
-                if order.rescheduled_count > 0 and order.scheduled_time:
+                # Для заявок с указанным временем прибытия - используем умные напоминания
+                if order.scheduled_time:
                     scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
                     if scheduled_alert_sent:
                         continue  # Пропускаем напоминание для этой заявки
                 
-                # Для перенесенных заявок без точного времени увеличиваем порог напоминания
+                # Используем стандартный порог напоминания
                 remind_threshold = base_remind_threshold
-                if order.rescheduled_count > 0:
-                    remind_threshold = timedelta(minutes=30)
 
                 logger.debug(
                     f"Order #{order.id}: updated_at={order.updated_at}, now={now}, time_assigned={time_assigned}, "
