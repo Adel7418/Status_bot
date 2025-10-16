@@ -676,9 +676,16 @@ async def process_dr_info(message: Message, state: FSMContext):
         
         # Уведомляем диспетчера
         if order.dispatcher_id:
+            # Определяем кто перевел заявку в DR
+            if master:
+                initiator_name = master.get_display_name()
+            else:
+                # Администратор
+                initiator_name = message.from_user.full_name
+            
             notification = (
                 f"⏳ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
-                f"👨‍🔧 Мастер: {master.get_display_name()}\n"
+                f"👨‍🔧 Инициатор: {initiator_name}\n"
                 f"⏰ Примерный срок: {completion_date}\n"
             )
             
