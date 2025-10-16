@@ -429,6 +429,7 @@ def get_reports_keyboard() -> InlineKeyboardMarkup:
     """
     builder = InlineKeyboardBuilder()
 
+    builder.row(InlineKeyboardButton(text="📋 Активные заявки (Excel)", callback_data="report_active_orders"))
     builder.row(InlineKeyboardButton(text="👥 По мастерам", callback_data="report_masters"))
     builder.row(InlineKeyboardButton(text="📊 По статусам", callback_data="report_statuses"))
     builder.row(InlineKeyboardButton(text="🔧 По типам техники", callback_data="report_equipment"))

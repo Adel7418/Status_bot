@@ -26,6 +26,9 @@ def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура главного меню отчетов"""
     keyboard = [
         [
+            InlineKeyboardButton(text="📋 Активные заявки (Excel)", callback_data="report_active_orders_excel"),
+        ],
+        [
             InlineKeyboardButton(text="📅 Ежедневный", callback_data="report_daily"),
             InlineKeyboardButton(text="📊 Еженедельный", callback_data="report_weekly"),
         ],
@@ -456,6 +459,54 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
             f"❌ Ошибка при экспорте: {str(e)}",
             reply_markup=get_reports_menu_keyboard(),
         )
+
+
+@router.callback_query(F.data == "report_active_orders_excel")
+@handle_errors
+async def callback_report_active_orders_excel(callback: CallbackQuery, user_role: str):
+    """
+    Экспорт активных заявок в Excel
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    
+    await callback.answer("📊 Генерирую отчет...", show_alert=False)
+    
+    try:
+        from app.services.active_orders_export import ActiveOrdersExportService
+        
+        export_service = ActiveOrdersExportService()
+        filepath = await export_service.export_active_orders_to_excel()
+        
+        if filepath:
+            # Отправляем файл
+            from aiogram.types import FSInputFile
+            
+            file = FSInputFile(filepath)
+            await callback.message.answer_document(
+                file,
+                caption="📋 <b>Отчет по активным заявкам</b>\n\n"
+                        "В файле указаны все незакрытые заявки:\n"
+                        "• Статус и время создания\n"
+                        "• Назначенный мастер\n"
+                        "• Контакты клиента\n"
+                        "• Запланированное время\n\n"
+                        "Сводка по статусам в конце файла.",
+                parse_mode="HTML"
+            )
+            
+            logger.info(f"Active orders report sent to {callback.from_user.id}")
+        else:
+            await callback.answer("❌ Нет активных заявок", show_alert=True)
+    
+    except Exception as e:
+        logger.error(f"Error generating active orders report: {e}")
+        await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
 
 
 @router.callback_query(F.data == "close_menu")
