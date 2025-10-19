@@ -36,13 +36,13 @@ docker compose -f docker-compose.prod.yml logs --tail=50 bot
 
 ## ❓ FAQ
 
-**В: Git pull удаляет файлы?**  
+**В: Git pull удаляет файлы?**
 О: ДА! Если вы удалили файл локально, закоммитили и запушили, то при `git pull` на сервере файл тоже удалится. Это нормально!
 
-**В: Нужен ли staging?**  
+**В: Нужен ли staging?**
 О: НЕТ! Тестируете локально - этого достаточно.
 
-**В: Как откатить изменения?**  
+**В: Как откатить изменения?**
 О: На сервере: `git log --oneline -10`, потом `git reset --hard <commit>` и `docker compose restart`
 
 ---
@@ -54,4 +54,3 @@ docker compose -f docker-compose.prod.yml logs --tail=50 bot
 2. На сервере: `git pull` + `docker restart`
 
 **Готово!** ✅
-

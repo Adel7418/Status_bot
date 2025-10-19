@@ -13,6 +13,7 @@ from app.config import OrderStatus
 from app.database import Database
 from app.utils import format_datetime
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +61,10 @@ class OrderExportService:
 
             # Основная информация
             data = [
-                ("Статус", f"{OrderStatus.get_status_emoji(order.status)} {OrderStatus.get_status_name(order.status)}"),
+                (
+                    "Статус",
+                    f"{OrderStatus.get_status_emoji(order.status)} {OrderStatus.get_status_name(order.status)}",
+                ),
                 ("Тип техники", order.equipment_type),
                 ("Описание", order.description),
                 ("", ""),

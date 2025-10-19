@@ -1,7 +1,7 @@
 # 🚀 Пошаговый Деплой на VPS Linux
 
-**Дата:** 13 октября 2025  
-**Версия:** 1.2.1  
+**Дата:** 13 октября 2025
+**Версия:** 1.2.1
 **Статус:** ✅ Production Ready
 
 ---
@@ -220,35 +220,35 @@ from datetime import datetime
 
 def export_database():
     """Экспорт данных из SQLite в JSON"""
-    
+
     conn = sqlite3.connect('bot_database.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
+
     export_data = {
         'export_date': datetime.now().isoformat(),
         'tables': {}
     }
-    
+
     # Получение списка таблиц
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = [row[0] for row in cursor.fetchall()]
-    
+
     # Экспорт данных каждой таблицы
     for table in tables:
         cursor.execute(f"SELECT * FROM {table}")
         rows = cursor.fetchall()
         export_data['tables'][table] = [dict(row) for row in rows]
-    
+
     # Сохранение в JSON
     filename = f"db_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(export_data, f, ensure_ascii=False, indent=2, default=str)
-    
+
     conn.close()
     print(f"✅ База данных экспортирована в {filename}")
     print(f"📊 Экспортировано таблиц: {len(tables)}")
-    
+
     return filename
 
 if __name__ == "__main__":
@@ -306,22 +306,22 @@ import sys
 
 def import_database(json_file):
     """Импорт данных из JSON в SQLite"""
-    
+
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    
+
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
-    
+
     for table_name, rows in data['tables'].items():
         if not rows:
             continue
-            
+
         # Получение колонок
         columns = list(rows[0].keys())
         placeholders = ','.join(['?' for _ in columns])
         columns_str = ','.join(columns)
-        
+
         # Вставка данных
         for row in rows:
             values = [row[col] for col in columns]
@@ -332,7 +332,7 @@ def import_database(json_file):
                 )
             except Exception as e:
                 print(f"⚠️  Ошибка при вставке в {table_name}: {e}")
-    
+
     conn.commit()
     conn.close()
     print(f"✅ База данных импортирована из {json_file}")
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Использование: python import_db.py <json_file>")
         sys.exit(1)
-    
+
     import_database(sys.argv[1])
 ```
 
@@ -469,7 +469,7 @@ docker stats telegram_repair_bot_prod --no-stream
 
 **Ожидаемый вывод:**
 ```
-CONTAINER ID   NAME                        CPU %     MEM USAGE / LIMIT   
+CONTAINER ID   NAME                        CPU %     MEM USAGE / LIMIT
 abc123def456   telegram_repair_bot_prod    0.5%      150MiB / 512MiB
 ```
 
@@ -720,7 +720,7 @@ docker compose -f /home/botuser/telegram_repair_bot/docker/docker-compose.prod.y
 if [ -f "$DB_FILE" ]; then
     cp "$DB_FILE" "$BACKUP_FILE"
     echo "✅ Backup создан: $BACKUP_FILE"
-    
+
     # Удаление старых backup (старше 30 дней)
     find "$BACKUP_DIR" -name "bot_database_*.db" -mtime +30 -delete
     echo "🗑️  Старые backup удалены"
@@ -971,9 +971,8 @@ docker stats
 
 ---
 
-**Версия:** 1.2.1  
-**Дата обновления:** 13 октября 2025  
+**Версия:** 1.2.1
+**Дата обновления:** 13 октября 2025
 **Статус:** ✅ Production Ready
 
 🚀 **Успешного деплоя!**
-

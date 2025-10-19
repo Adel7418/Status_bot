@@ -197,4 +197,3 @@ DATABASE_PATH=bot_database_test.db alembic downgrade -1
 # 5. Удалить тестовую копию
 rm bot_database_test.db
 ```
-

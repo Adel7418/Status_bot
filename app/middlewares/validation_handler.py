@@ -47,7 +47,7 @@ class ValidationHandlerMiddleware(BaseMiddleware):
             # Формируем user-friendly сообщение
             error_message = (
                 f"❌ <b>Недопустимое действие</b>\n\n"
-                f"{str(e)}\n\n"
+                f"{e!s}\n\n"
                 f"<i>Проверьте текущий статус заявки и попробуйте снова.</i>"
             )
 
@@ -72,4 +72,3 @@ class ValidationHandlerMiddleware(BaseMiddleware):
 
             # Не пробрасываем исключение дальше - обработали
             return None
-

@@ -158,7 +158,9 @@ class Order:
     assigned_master_id: int | None = None
     dispatcher_id: int | None = None
     notes: str | None = None
-    scheduled_time: str | None = None  # Время прибытия к клиенту (например: "14:00", "завтра 10:00")
+    scheduled_time: str | None = (
+        None  # Время прибытия к клиенту (например: "14:00", "завтра 10:00")
+    )
     total_amount: float | None = None  # Общая сумма заказа
     materials_cost: float | None = None  # Сумма расходного материала
     master_profit: float | None = None  # Прибыль мастера

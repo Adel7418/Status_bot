@@ -14,13 +14,6 @@ from app.utils.helpers import (
     truncate_text,
     validate_phone,
 )
-from app.utils.retry import (
-    retry_on_telegram_error,
-    safe_answer_callback,
-    safe_delete_message,
-    safe_edit_message,
-    safe_send_message,
-)
 from app.utils.pii_masking import (
     mask_address,
     mask_name,
@@ -31,6 +24,14 @@ from app.utils.pii_masking import (
     safe_str_user,
     sanitize_log_message,
 )
+from app.utils.retry import (
+    retry_on_telegram_error,
+    safe_answer_callback,
+    safe_delete_message,
+    safe_edit_message,
+    safe_send_message,
+)
+
 
 __all__ = [
     # Format utilities

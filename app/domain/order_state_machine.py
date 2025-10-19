@@ -3,7 +3,6 @@ State Machine для валидации переходов статусов за
 """
 
 from dataclasses import dataclass
-from typing import Set
 
 from app.core.constants import OrderStatus, UserRole
 
@@ -34,9 +33,9 @@ class OrderStateTransitionResult:
 class OrderStateMachine:
     """
     State Machine для управления жизненным циклом заявки
-    
+
     Граф переходов:
-    
+
     NEW → ASSIGNED → ACCEPTED → ONSITE → CLOSED
       ↓                 ↓                    ↓
     REFUSED         REFUSED                 DR
@@ -45,7 +44,7 @@ class OrderStateMachine:
     """
 
     # Допустимые переходы: из какого статуса в какие можно перейти
-    TRANSITIONS: dict[str, Set[str]] = {
+    TRANSITIONS: dict[str, set[str]] = {
         OrderStatus.NEW: {
             OrderStatus.ASSIGNED,  # Назначение мастера
             OrderStatus.REFUSED,  # Отмена диспетчером
@@ -75,7 +74,7 @@ class OrderStateMachine:
     }
 
     # Роли, которые могут выполнять определённые переходы
-    ROLE_PERMISSIONS: dict[tuple[str, str], Set[str]] = {
+    ROLE_PERMISSIONS: dict[tuple[str, str], set[str]] = {
         # (from_status, to_status): {allowed_roles}
         (OrderStatus.NEW, OrderStatus.ASSIGNED): {
             UserRole.ADMIN,
@@ -135,11 +134,11 @@ class OrderStateMachine:
     def can_transition(cls, from_state: str, to_state: str) -> bool:
         """
         Проверка возможности перехода между статусами
-        
+
         Args:
             from_state: Текущий статус
             to_state: Целевой статус
-        
+
         Returns:
             True если переход допустим
         """
@@ -160,17 +159,17 @@ class OrderStateMachine:
     ) -> OrderStateTransitionResult:
         """
         Валидация перехода статуса с проверкой прав
-        
+
         Args:
             from_state: Текущий статус заявки
             to_state: Целевой статус
             user_role: Основная роль пользователя (deprecated, используйте user_roles)
             user_roles: Список ролей пользователя
             raise_exception: Выбрасывать ли исключение при ошибке
-        
+
         Returns:
             OrderStateTransitionResult с результатом валидации
-        
+
         Raises:
             InvalidStateTransitionError: Если переход недопустим и raise_exception=True
         """
@@ -187,18 +186,20 @@ class OrderStateMachine:
                 f"Переход из '{OrderStatus.get_status_name(from_state)}' "
                 f"в '{OrderStatus.get_status_name(to_state)}' недопустим"
             )
-            
+
             # Подсказываем допустимые переходы
             allowed = cls.TRANSITIONS.get(from_state, set())
             if allowed:
                 allowed_names = [OrderStatus.get_status_name(s) for s in allowed]
                 error_msg += f". Допустимые переходы: {', '.join(allowed_names)}"
             else:
-                error_msg += f". Статус '{OrderStatus.get_status_name(from_state)}' является терминальным"
+                error_msg += (
+                    f". Статус '{OrderStatus.get_status_name(from_state)}' является терминальным"
+                )
 
             if raise_exception:
                 raise InvalidStateTransitionError(from_state, to_state, error_msg)
-            
+
             return OrderStateTransitionResult(
                 is_valid=False,
                 error_message=error_msg,
@@ -211,7 +212,7 @@ class OrderStateMachine:
         if required_roles:
             # Формируем список ролей для проверки
             roles_to_check = user_roles if user_roles else ([user_role] if user_role else [])
-            
+
             # Проверяем наличие хотя бы одной подходящей роли
             has_permission = any(role in required_roles for role in roles_to_check)
 
@@ -236,14 +237,16 @@ class OrderStateMachine:
         return OrderStateTransitionResult(is_valid=True)
 
     @classmethod
-    def get_available_transitions(cls, from_state: str, user_roles: list[str] | None = None) -> list[str]:
+    def get_available_transitions(
+        cls, from_state: str, user_roles: list[str] | None = None
+    ) -> list[str]:
         """
         Получение списка доступных переходов из текущего статуса
-        
+
         Args:
             from_state: Текущий статус
             user_roles: Роли пользователя для фильтрации по правам
-        
+
         Returns:
             Список доступных статусов для перехода
         """
@@ -273,11 +276,11 @@ class OrderStateMachine:
     def get_transition_description(cls, from_state: str, to_state: str) -> str:
         """
         Получение описания перехода на русском
-        
+
         Args:
             from_state: Начальный статус
             to_state: Конечный статус
-        
+
         Returns:
             Описание перехода
         """
@@ -308,10 +311,10 @@ class OrderStateMachine:
     def is_terminal_state(cls, state: str) -> bool:
         """
         Проверка, является ли статус терминальным
-        
+
         Args:
             state: Статус для проверки
-        
+
         Returns:
             True если из этого статуса нельзя никуда перейти
         """
@@ -321,16 +324,22 @@ class OrderStateMachine:
     def get_state_validation_rules(cls, state: str) -> dict:
         """
         Получение правил валидации для конкретного статуса
-        
+
         Args:
             state: Статус заявки
-        
+
         Returns:
             Словарь с правилами валидации
         """
         rules = {
             OrderStatus.NEW: {
-                "required_fields": ["equipment_type", "description", "client_name", "client_address", "client_phone"],
+                "required_fields": [
+                    "equipment_type",
+                    "description",
+                    "client_name",
+                    "client_address",
+                    "client_phone",
+                ],
                 "optional_fields": ["notes", "scheduled_time"],
                 "must_have": None,
                 "must_not_have": ["assigned_master_id"],
@@ -355,7 +364,13 @@ class OrderStateMachine:
             },
             OrderStatus.CLOSED: {
                 "required_fields": ["total_amount"],
-                "optional_fields": ["materials_cost", "master_profit", "company_profit", "has_review", "out_of_city"],
+                "optional_fields": [
+                    "materials_cost",
+                    "master_profit",
+                    "company_profit",
+                    "has_review",
+                    "out_of_city",
+                ],
                 "must_have": "total_amount",
                 "must_not_have": None,
             },
@@ -374,4 +389,3 @@ class OrderStateMachine:
         }
 
         return rules.get(state, {})
-

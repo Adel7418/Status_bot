@@ -94,7 +94,7 @@
    ```bash
    # Windows
    del bot_database.db
-   
+
    # Linux/Mac
    rm bot_database.db
    ```
@@ -152,7 +152,7 @@
    ```bash
    # Windows (от имени администратора)
    pip install -r requirements.txt
-   
+
    # Linux/Mac
    sudo pip3 install -r requirements.txt
    ```
@@ -187,11 +187,11 @@
    # Сохраните старую
    copy bot_database.db bot_database_old.db  # Windows
    cp bot_database.db bot_database_old.db    # Linux/Mac
-   
+
    # Удалите текущую
    del bot_database.db   # Windows
    rm bot_database.db    # Linux/Mac
-   
+
    # Запустите бота - создастся новая БД
    python bot.py
    ```
@@ -304,14 +304,14 @@
 3. **Создайте чистое виртуальное окружение:**
    ```bash
    python -m venv venv
-   
+
    # Активируйте
    venv\Scripts\activate      # Windows
    source venv/bin/activate   # Linux/Mac
-   
+
    # Установите зависимости
    pip install -r requirements.txt
-   
+
    # Запустите
    python bot.py
    ```
@@ -372,4 +372,3 @@ ps aux | grep python
 - [INSTALLATION.md](INSTALLATION.md) - Инструкция по установке
 - [QUICKSTART.md](QUICKSTART.md) - Быстрый старт
 - [README.md](README.md) - Общая информация
-

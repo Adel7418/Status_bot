@@ -10,13 +10,13 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus, UserRole
 from app.database import Database
+from app.decorators import handle_errors
 from app.keyboards.inline import (
     get_master_management_keyboard,
     get_masters_list_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
 from app.states import AddMasterStates, SetWorkChatStates
-from app.decorators import handle_errors
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -33,7 +33,7 @@ async def btn_reports(message: Message, state: FSMContext, user_role: str):
     """
     Показать меню отчетов (только для ADMIN)
     Для DISPATCHER используется обработчик в financial_reports.py
-    
+
     Args:
         message: Сообщение
         state: FSM контекст
@@ -43,50 +43,31 @@ async def btn_reports(message: Message, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
     from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="📋 Активные заявки (Excel)",
-            callback_data="export_active_orders_admin"
+            text="📋 Активные заявки (Excel)", callback_data="export_active_orders_admin"
         )
     )
     builder.row(
-        InlineKeyboardButton(
-            text="📅 Ежедневный отчет",
-            callback_data="generate_daily_report"
-        )
+        InlineKeyboardButton(text="📅 Ежедневный отчет", callback_data="generate_daily_report")
     )
     builder.row(
-        InlineKeyboardButton(
-            text="📆 Еженедельный отчет", 
-            callback_data="generate_weekly_report"
-        )
+        InlineKeyboardButton(text="📆 Еженедельный отчет", callback_data="generate_weekly_report")
     )
     builder.row(
-        InlineKeyboardButton(
-            text="🗓️ Ежемесячный отчет",
-            callback_data="generate_monthly_report"
-        )
+        InlineKeyboardButton(text="🗓️ Ежемесячный отчет", callback_data="generate_monthly_report")
     )
     builder.row(
-        InlineKeyboardButton(
-            text="📋 Кастомный отчет",
-            callback_data="generate_custom_report"
-        )
+        InlineKeyboardButton(text="📋 Кастомный отчет", callback_data="generate_custom_report")
     )
-    builder.row(
-        InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data="back_to_admin_menu"
-        )
-    )
+    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_admin_menu"))
 
     await message.answer(
-        "📊 <b>Генерация отчетов</b>\n\n"
-        "Выберите тип отчета для генерации:",
+        "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
         parse_mode="HTML",
         reply_markup=builder.as_markup(),
     )
@@ -100,19 +81,19 @@ async def callback_generate_daily_report(callback: CallbackQuery, user_role: str
         return
 
     await callback.message.edit_text("⏳ Генерирую ежедневный отчет...")
-    
+
     try:
         from app.services.reports_notifier import ReportsNotifier
-        
+
         notifier = ReportsNotifier(callback.bot)
         await notifier.send_daily_report()
-        
+
         await callback.message.edit_text("✅ Ежедневный отчет успешно отправлен!")
-        
+
     except Exception as e:
         logger.error(f"Ошибка генерации ежедневного отчета: {e}")
         await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
-    
+
     await callback.answer()
 
 
@@ -124,19 +105,19 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
         return
 
     await callback.message.edit_text("⏳ Генерирую еженедельный отчет...")
-    
+
     try:
         from app.services.reports_notifier import ReportsNotifier
-        
+
         notifier = ReportsNotifier(callback.bot)
         await notifier.send_weekly_report()
-        
+
         await callback.message.edit_text("✅ Еженедельный отчет успешно отправлен!")
-        
+
     except Exception as e:
         logger.error(f"Ошибка генерации еженедельного отчета: {e}")
         await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
-    
+
     await callback.answer()
 
 
@@ -148,19 +129,19 @@ async def callback_generate_monthly_report(callback: CallbackQuery, user_role: s
         return
 
     await callback.message.edit_text("⏳ Генерирую ежемесячный отчет...")
-    
+
     try:
         from app.services.reports_notifier import ReportsNotifier
-        
+
         notifier = ReportsNotifier(callback.bot)
         await notifier.send_monthly_report()
-        
+
         await callback.message.edit_text("✅ Ежемесячный отчет успешно отправлен!")
-        
+
     except Exception as e:
         logger.error(f"Ошибка генерации ежемесячного отчета: {e}")
         await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
-    
+
     await callback.answer()
 
 
@@ -177,9 +158,9 @@ async def callback_generate_custom_report(callback: CallbackQuery, user_role: st
         "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
         "Например: <code>2025-10-01 2025-10-15</code>\n\n"
         "Или введите <code>отмена</code> для возврата к меню.",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
-    
+
     # Здесь можно добавить состояние для ввода дат
     await callback.answer()
 
@@ -189,7 +170,7 @@ async def callback_generate_custom_report(callback: CallbackQuery, user_role: st
 async def callback_export_active_orders_admin(callback: CallbackQuery, user_role: str):
     """
     Экспорт активных заявок в Excel
-    
+
     Args:
         callback: Callback query
         user_role: Роль пользователя
@@ -197,40 +178,39 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
     if user_role != UserRole.ADMIN:
         await callback.answer("❌ Нет доступа", show_alert=True)
         return
-    
+
     await callback.answer("📊 Генерирую отчет...", show_alert=False)
-    
+
     try:
         from app.services.active_orders_export import ActiveOrdersExportService
-        
+
         export_service = ActiveOrdersExportService()
         filepath = await export_service.export_active_orders_to_excel()
-        
+
         if filepath:
             # Отправляем файл
             from aiogram.types import FSInputFile
-            
+
             file = FSInputFile(filepath)
             await callback.message.answer_document(
                 file,
                 caption="📋 <b>Отчет по активным заявкам</b>\n\n"
-                        "В файле указаны все незакрытые заявки:\n"
-                        "• Статус и время создания\n"
-                        "• Назначенный мастер\n"
-                        "• Контакты клиента\n"
-                        "• Запланированное время\n\n"
-                        "Сводка по статусам в конце файла.",
-                parse_mode="HTML"
+                "В файле указаны все незакрытые заявки:\n"
+                "• Статус и время создания\n"
+                "• Назначенный мастер\n"
+                "• Контакты клиента\n"
+                "• Запланированное время\n\n"
+                "Сводка по статусам в конце файла.",
+                parse_mode="HTML",
             )
-            
+
             logger.info(f"Active orders report sent to {callback.from_user.id}")
             await callback.message.edit_text(
-                "✅ Отчет по активным заявкам сформирован!",
-                reply_markup=None
+                "✅ Отчет по активным заявкам сформирован!", reply_markup=None
             )
         else:
             await callback.answer("❌ Нет активных заявок", show_alert=True)
-    
+
     except Exception as e:
         logger.error(f"Error generating active orders report: {e}")
         await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
@@ -518,6 +498,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
 
         # Уведомляем мастера с retry механизмом
         from app.utils import safe_send_message
+
         result = await safe_send_message(
             callback.bot,
             data["telegram_id"],
@@ -528,7 +509,9 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             parse_mode="HTML",
         )
         if not result:
-            logger.error(f"Failed to send notification to master {data['telegram_id']} after retries")
+            logger.error(
+                f"Failed to send notification to master {data['telegram_id']} after retries"
+            )
 
         await callback.message.edit_text(
             f"✅ <b>Мастер успешно добавлен!</b>\n\n"
@@ -549,10 +532,9 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
 
     # Возвращаем главное меню
     from app.handlers.common import get_menu_with_counter
+
     menu_keyboard = await get_menu_with_counter([UserRole.ADMIN])
-    await callback.message.answer(
-        "Главное меню:", reply_markup=menu_keyboard
-    )
+    await callback.message.answer("Главное меню:", reply_markup=menu_keyboard)
 
 
 @router.callback_query(F.data.startswith("manage_master:"))
@@ -855,7 +837,8 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
         KeyboardButton(
             text="💬 Выбрать группу",
             request_chat=KeyboardButtonRequestChat(
-                request_id=1, chat_is_channel=False  # Включает только обычные группы (не каналы)
+                request_id=1,
+                chat_is_channel=False,  # Включает только обычные группы (не каналы)
             ),
         )
     )
@@ -894,6 +877,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
 
     if not chat_shared or chat_shared.request_id != 1:
         from app.handlers.common import get_menu_with_counter
+
         menu_keyboard = await get_menu_with_counter([user_role])
         await message.answer("❌ Неверный запрос.", reply_markup=menu_keyboard)
         await state.clear()
@@ -912,6 +896,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
         # Проверяем, что это действительно группа
         if chat_type not in ["group", "supergroup"]:
             from app.handlers.common import get_menu_with_counter
+
             menu_keyboard = await get_menu_with_counter([user_role])
             await message.answer(
                 "❌ Выбранный чат не является группой.",
@@ -930,21 +915,23 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
 
             if not master:
                 from app.handlers.common import get_menu_with_counter
+
                 menu_keyboard = await get_menu_with_counter([user_role])
-                await message.answer(
-                    "❌ Мастер не найден", reply_markup=menu_keyboard
-                )
+                await message.answer("❌ Мастер не найден", reply_markup=menu_keyboard)
                 await state.clear()
                 return
 
             # Обновляем work_chat_id
             await db.update_master_work_chat(master_telegram_id, chat_id)
-            
+
             # Проверяем, что обновление прошло успешно
             updated_master = await db.get_master_by_telegram_id(master_telegram_id)
-            logger.info(f"Work chat update verification: master {master_telegram_id} -> work_chat_id: {updated_master.work_chat_id if updated_master else 'NOT FOUND'}")
+            logger.info(
+                f"Work chat update verification: master {master_telegram_id} -> work_chat_id: {updated_master.work_chat_id if updated_master else 'NOT FOUND'}"
+            )
 
             from app.handlers.common import get_menu_with_counter
+
             menu_keyboard = await get_menu_with_counter([user_role])
             await message.answer(
                 f"✅ <b>Рабочая группа установлена!</b>\n\n"
@@ -964,6 +951,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
     except Exception as e:
         logger.error(f"Error getting chat info: {e}")
         from app.handlers.common import get_menu_with_counter
+
         menu_keyboard = await get_menu_with_counter([user_role])
         await message.answer(
             f"✅ <b>Рабочая группа установлена!</b>\n\n"
@@ -990,6 +978,7 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
         return
 
     from app.handlers.common import get_menu_with_counter
+
     menu_keyboard = await get_menu_with_counter([user_role])
     await message.answer(
         "❌ <b>Установка рабочей группы отменена</b>\n\n"
@@ -1046,7 +1035,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
             order_id=order_id,
             status=OrderStatus.ACCEPTED,
             changed_by=callback.from_user.id,
-            skip_validation=True  # Админ может менять статусы принудительно
+            skip_validation=True,  # Админ может менять статусы принудительно
         )
 
         # Добавляем в лог
@@ -1059,6 +1048,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -1079,8 +1069,12 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n"
             + (f"\n📝 <b>Заметки:</b> {order.notes}\n" if order.notes else "")
-            + (f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n" if order.scheduled_time else "")
-            + f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
+            + (
+                f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
+                if order.scheduled_time
+                else ""
+            )
+            + "\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
             parse_mode="HTML",
         )
         if not result:
@@ -1090,7 +1084,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
 
         # Обновляем сообщение
         from app.keyboards.inline import get_order_actions_keyboard
-        
+
         status_emoji = OrderStatus.get_status_emoji(OrderStatus.ACCEPTED)
         status_name = OrderStatus.get_status_name(OrderStatus.ACCEPTED)
 
@@ -1111,13 +1105,17 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
         if order.scheduled_time:
             text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
-        text += f"<i>✅ Заявка принята администратором от имени мастера</i>"
+        text += "<i>✅ Заявка принята администратором от имени мастера</i>"
 
         keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
 
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
-        log_action(callback.from_user.id, "ADMIN_ACCEPT_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+        log_action(
+            callback.from_user.id,
+            "ADMIN_ACCEPT_ORDER_FOR_MASTER",
+            f"Order #{order_id} for master {master.telegram_id}",
+        )
 
     finally:
         await db.disconnect()
@@ -1165,7 +1163,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
             order_id=order_id,
             status=OrderStatus.ONSITE,
             changed_by=callback.from_user.id,
-            skip_validation=True  # Админ может менять статусы принудительно
+            skip_validation=True,  # Админ может менять статусы принудительно
         )
 
         # Добавляем в лог
@@ -1178,6 +1176,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -1203,7 +1202,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
 
         # Обновляем сообщение
         from app.keyboards.inline import get_order_actions_keyboard
-        
+
         status_emoji = OrderStatus.get_status_emoji(OrderStatus.ONSITE)
         status_name = OrderStatus.get_status_name(OrderStatus.ONSITE)
 
@@ -1224,13 +1223,17 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         if order.scheduled_time:
             text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
-        text += f"<i>🏠 Статус обновлен администратором от имени мастера</i>"
+        text += "<i>🏠 Статус обновлен администратором от имени мастера</i>"
 
         keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
 
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
-        log_action(callback.from_user.id, "ADMIN_ONSITE_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+        log_action(
+            callback.from_user.id,
+            "ADMIN_ONSITE_ORDER_FOR_MASTER",
+            f"Order #{order_id} for master {master.telegram_id}",
+        )
 
     finally:
         await db.disconnect()
@@ -1287,7 +1290,11 @@ async def callback_admin_complete_order(callback: CallbackQuery, state: FSMConte
             parse_mode="HTML",
         )
 
-        log_action(callback.from_user.id, "ADMIN_START_COMPLETE_ORDER_FOR_MASTER", f"Order #{order_id} for master {master.telegram_id}")
+        log_action(
+            callback.from_user.id,
+            "ADMIN_START_COMPLETE_ORDER_FOR_MASTER",
+            f"Order #{order_id} for master {master.telegram_id}",
+        )
 
     finally:
         await db.disconnect()
@@ -1310,7 +1317,7 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
         return
 
     order_id = int(callback.data.split(":")[1])
-    
+
     logger.debug(f"[DR] Admin starting DR process for order #{order_id}")
 
     db = Database()
@@ -1337,13 +1344,14 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         # Сохраняем order_id и мастера в state
         await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)
-        
-        logger.debug(f"[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
-        
+
+        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
+
         # Переходим к вводу срока окончания и предоплаты
         from app.states import LongRepairStates
+
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
-        
+
         await callback.message.answer(
             f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n"
             f"<b>От имени мастера:</b> {master.get_display_name()}\n\n"
@@ -1355,9 +1363,9 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
             f"• <code>завтра, предоплата 1500</code>\n"
             f"• <code>неделя</code>\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback.answer()
 
     finally:

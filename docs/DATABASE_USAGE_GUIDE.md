@@ -155,14 +155,14 @@ SELECT * FROM orders;
 
 ### Проверка пользователей с множественными ролями
 ```sql
-SELECT telegram_id, username, first_name, role 
-FROM users 
+SELECT telegram_id, username, first_name, role
+FROM users
 WHERE role LIKE '%,%';
 ```
 
 ### Мастера с их статистикой
 ```sql
-SELECT 
+SELECT
     m.id,
     u.first_name || ' ' || u.last_name as name,
     m.phone,
@@ -177,7 +177,7 @@ GROUP BY m.id;
 
 ### Активные заявки
 ```sql
-SELECT 
+SELECT
     o.id,
     o.equipment_type,
     o.client_name,
@@ -192,13 +192,13 @@ ORDER BY o.created_at DESC;
 
 ### Финансовая статистика
 ```sql
-SELECT 
+SELECT
     COUNT(*) as total_closed,
     SUM(total_amount) as total_revenue,
     SUM(materials_cost) as total_materials,
     SUM(master_profit) as total_master_profit,
     SUM(company_profit) as total_company_profit
-FROM orders 
+FROM orders
 WHERE status = 'CLOSED' AND total_amount IS NOT NULL;
 ```
 
@@ -224,8 +224,8 @@ Copy-Item "C:\Bot_test\telegram_repair_bot\bot_database.db" -Destination $Backup
 Write-Host "Резервная копия создана: $BackupFile"
 
 # Удаление копий старше 30 дней
-Get-ChildItem $BackupDir -Filter "bot_database_*.db" | 
-    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | 
+Get-ChildItem $BackupDir -Filter "bot_database_*.db" |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } |
     Remove-Item
 ```
 
@@ -275,8 +275,8 @@ SELECT * FROM users WHERE role LIKE '%DISPATCHER%' AND role LIKE '%MASTER%';
 ### Добавление роли вручную (через SQL):
 ```sql
 -- Добавить роль MASTER диспетчеру (telegram_id = 123456789)
-UPDATE users 
-SET role = 'DISPATCHER,MASTER' 
+UPDATE users
+SET role = 'DISPATCHER,MASTER'
 WHERE telegram_id = 123456789 AND role = 'DISPATCHER';
 
 -- НО ЛУЧШЕ использовать интерфейс бота!
@@ -292,6 +292,5 @@ WHERE telegram_id = 123456789 AND role = 'DISPATCHER';
 
 ---
 
-**Дата создания:** 12 октября 2025  
+**Дата создания:** 12 октября 2025
 **Версия:** 1.0
-

@@ -104,15 +104,15 @@ Start-Process "C:\Program Files\DB Browser for SQLite\DB Browser for SQLite.exe"
 
 **Если роль UNKNOWN:**
 ```sql
-UPDATE users 
-SET role = 'DISPATCHER' 
+UPDATE users
+SET role = 'DISPATCHER'
 WHERE telegram_id = 123456789;
 ```
 
 **Если уже есть другая роль (например, MASTER):**
 ```sql
-UPDATE users 
-SET role = 'DISPATCHER,MASTER' 
+UPDATE users
+SET role = 'DISPATCHER,MASTER'
 WHERE telegram_id = 123456789;
 ```
 
@@ -225,8 +225,8 @@ SELECT * FROM users WHERE role LIKE '%DISPATCHER%' AND role LIKE '%,%';
 **Решение:**
 ```sql
 -- Восстановить обе роли
-UPDATE users 
-SET role = 'DISPATCHER,MASTER' 
+UPDATE users
+SET role = 'DISPATCHER,MASTER'
 WHERE telegram_id = 123456789;
 ```
 
@@ -259,6 +259,5 @@ WHERE telegram_id = 123456789;
 
 ---
 
-**Дата создания:** 12 октября 2025  
+**Дата создания:** 12 октября 2025
 **Версия:** 1.0
-

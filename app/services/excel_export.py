@@ -2,18 +2,16 @@
 Сервис для экспорта финансовых отчетов в Excel
 """
 
-from datetime import datetime
 import logging
 from pathlib import Path
 from typing import Optional
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.database.db import Database
-from app.database.models import FinancialReport, MasterFinancialReport
 from app.utils.helpers import get_now
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,19 +52,21 @@ class ExcelExportService:
             header_font = Font(bold=True, size=14, color="FFFFFF")
             header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
             subheader_font = Font(bold=True, size=12)
-            subheader_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+            subheader_fill = PatternFill(
+                start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
+            )
             total_font = Font(bold=True, size=11)
             total_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-            
+
             center_alignment = Alignment(horizontal="center", vertical="center")
             left_alignment = Alignment(horizontal="left", vertical="center")
             right_alignment = Alignment(horizontal="right", vertical="center")
-            
+
             thin_border = Border(
-                left=Side(style='thin'),
-                right=Side(style='thin'),
-                top=Side(style='thin'),
-                bottom=Side(style='thin')
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin"),
             )
 
             # Определяем тип отчета
@@ -80,8 +80,8 @@ class ExcelExportService:
 
             # Заголовок
             row = 1
-            ws.merge_cells(f'A{row}:H{row}')
-            cell = ws[f'A{row}']
+            ws.merge_cells(f"A{row}:H{row}")
+            cell = ws[f"A{row}"]
             cell.value = f"ФИНАНСОВЫЙ ОТЧЕТ - {report.report_type}"
             cell.font = header_font
             cell.fill = header_fill
@@ -89,8 +89,8 @@ class ExcelExportService:
             ws.row_dimensions[row].height = 25
 
             row += 1
-            ws.merge_cells(f'A{row}:H{row}')
-            cell = ws[f'A{row}']
+            ws.merge_cells(f"A{row}:H{row}")
+            cell = ws[f"A{row}"]
             cell.value = f"Период: {period_text}"
             cell.font = Font(bold=True, size=12)
             cell.alignment = center_alignment
@@ -99,8 +99,8 @@ class ExcelExportService:
             row += 2
 
             # Общие показатели
-            ws.merge_cells(f'A{row}:H{row}')
-            cell = ws[f'A{row}']
+            ws.merge_cells(f"A{row}:H{row}")
+            cell = ws[f"A{row}"]
             cell.value = "ОБЩИЕ ПОКАЗАТЕЛИ"
             cell.font = subheader_font
             cell.fill = subheader_fill
@@ -126,7 +126,9 @@ class ExcelExportService:
                     cell.border = thin_border
                     if row_data == summary_data[0]:  # Заголовок
                         cell.font = Font(bold=True)
-                        cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+                        cell.fill = PatternFill(
+                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                        )
                     if col_idx == 2:
                         cell.alignment = right_alignment
                     else:
@@ -137,8 +139,8 @@ class ExcelExportService:
 
             # Отчеты по мастерам
             if master_reports:
-                ws.merge_cells(f'A{row}:H{row}')
-                cell = ws[f'A{row}']
+                ws.merge_cells(f"A{row}:H{row}")
+                cell = ws[f"A{row}"]
                 cell.value = "ОТЧЁТ ПО МАСТЕРАМ"
                 cell.font = subheader_font
                 cell.fill = subheader_fill
@@ -146,18 +148,31 @@ class ExcelExportService:
                 cell.border = thin_border
 
                 row += 1
-                headers = ["Мастер", "Заказов", "Сумма", "К сдаче", "Средний чек", "Отзывы", "Выезды", "Прибыль компании"]
+                headers = [
+                    "Мастер",
+                    "Заказов",
+                    "Сумма",
+                    "К сдаче",
+                    "Средний чек",
+                    "Отзывы",
+                    "Выезды",
+                    "Прибыль компании",
+                ]
                 for col_idx, header in enumerate(headers, start=1):
                     cell = ws.cell(row=row, column=col_idx, value=header)
                     cell.font = Font(bold=True)
-                    cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+                    cell.fill = PatternFill(
+                        start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                    )
                     cell.alignment = center_alignment
                     cell.border = thin_border
 
                 row += 1
 
                 # Данные по мастерам
-                for master_report in sorted(master_reports, key=lambda x: x.total_master_profit, reverse=True):
+                for master_report in sorted(
+                    master_reports, key=lambda x: x.total_master_profit, reverse=True
+                ):
                     data = [
                         master_report.master_name,
                         master_report.orders_count,
@@ -174,19 +189,23 @@ class ExcelExportService:
                         if col_idx == 1:
                             cell.alignment = left_alignment
                         else:
-                            cell.alignment = right_alignment if isinstance(value, str) and '₽' in value else center_alignment
+                            cell.alignment = (
+                                right_alignment
+                                if isinstance(value, str) and "₽" in value
+                                else center_alignment
+                            )
                     row += 1
 
             # Устанавливаем ширину столбцов
             column_widths = {
-                'A': 25,  # Мастер/Показатель
-                'B': 12,  # Заказов/Значение
-                'C': 15,  # Сумма
-                'D': 15,  # К сдаче
-                'E': 15,  # Средний чек
-                'F': 12,  # Отзывы
-                'G': 12,  # Выезды
-                'H': 18,  # Прибыль компании
+                "A": 25,  # Мастер/Показатель
+                "B": 12,  # Заказов/Значение
+                "C": 15,  # Сумма
+                "D": 15,  # К сдаче
+                "E": 15,  # Средний чек
+                "F": 12,  # Отзывы
+                "G": 12,  # Выезды
+                "H": 18,  # Прибыль компании
             }
             for col, width in column_widths.items():
                 ws.column_dimensions[col].width = width
@@ -212,4 +231,3 @@ class ExcelExportService:
 
         finally:
             await self.db.disconnect()
-

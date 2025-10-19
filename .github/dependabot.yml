@@ -1,5 +1,5 @@
-# Dependabot configuration
-# Автоматическое обновление зависимостей
+# Конфигурация Dependabot для автоматического обновления зависимостей
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
@@ -10,33 +10,34 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "Europe/Moscow"
     open-pull-requests-limit: 10
     reviewers:
-      - "Adel7418"  # Замените на ваш username
+      - "your-github-username"  # Замените на свой username
     assignees:
-      - "Adel7418"
+      - "your-github-username"
     labels:
       - "dependencies"
       - "python"
     commit-message:
       prefix: "deps"
+      prefix-development: "deps-dev"
       include: "scope"
-
-  # Docker dependencies
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "Adel7418"
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "docker"
+    pull-request-branch-name:
+      separator: "/"
+    # Группировка обновлений
+    groups:
+      aiogram:
+        patterns:
+          - "aiogram*"
+      pytest:
+        patterns:
+          - "pytest*"
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -44,13 +45,33 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "10:00"
+      timezone: "Europe/Moscow"
     open-pull-requests-limit: 5
-    reviewers:
-      - "Adel7418"
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
+      include: "scope"
 
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+
+# Ignore specific dependencies (если нужно)
+# ignore:
+#   - dependency-name: "aiogram"
+#     versions: ["3.x"]

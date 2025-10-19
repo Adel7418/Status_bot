@@ -308,4 +308,3 @@ packages = ["app"]
 
 [tool.setuptools.package-data]
 app = ["py.typed"]
-

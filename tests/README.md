@@ -145,7 +145,7 @@ def test_with_mock(mocker):
     """Тест с использованием mock"""
     mock_function = mocker.patch('app.module.function')
     mock_function.return_value = "mocked"
-    
+
     result = call_function_that_uses_mock()
     assert result == "expected"
     mock_function.assert_called_once()
@@ -192,4 +192,3 @@ pip install pytest-asyncio
 # Укажите правильный путь к исходникам
 pytest --cov=app --cov-report=term
 ```
-

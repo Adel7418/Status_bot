@@ -28,10 +28,10 @@ def check_database():
     )
     users = cursor.fetchall()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("👥 ПОЛЬЗОВАТЕЛИ")
-    print("="*80)
-    
+    print("=" * 80)
+
     if users:
         print(f"\nВсего пользователей: {len(users)}\n")
         for user in users:
@@ -57,10 +57,10 @@ def check_database():
     )
     masters = cursor.fetchall()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("👨‍🔧 МАСТЕРА")
-    print("="*80)
-    
+    print("=" * 80)
+
     if masters:
         print(f"\nВсего мастеров: {len(masters)}\n")
         for master in masters:
@@ -68,7 +68,7 @@ def check_database():
             status = "✅ Подтвержден" if master["is_approved"] else "⏳ Ожидает"
             active = "🟢 Активен" if master["is_active"] else "🔴 Неактивен"
             work_chat = master["work_chat_id"] if master["work_chat_id"] else "-"
-            
+
             print(f"ID: {master['id']} | TG: {master['telegram_id']}")
             print(f"   Имя: {name}")
             print(f"   Телефон: {master['phone']}")
@@ -97,10 +97,10 @@ def check_database():
     )
     orders = cursor.fetchall()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("📋 ЗАЯВКИ (последние 20)")
-    print("="*80)
-    
+    print("=" * 80)
+
     if orders:
         print(f"\nВсего заявок в выборке: {len(orders)}\n")
         for order in orders:
@@ -113,29 +113,33 @@ def check_database():
                 "REFUSED": "❌",
                 "DR": "⏳",
             }.get(order["status"], "❓")
-            
+
             # Форматируем имена с fallback на ID
             dispatcher_display = (
-                order['dispatcher_name'].strip() if order['dispatcher_name'] and order['dispatcher_name'].strip()
-                else f"ID: {order['dispatcher_id']}" if order['dispatcher_id']
-                else '-'
+                order["dispatcher_name"].strip()
+                if order["dispatcher_name"] and order["dispatcher_name"].strip()
+                else f"ID: {order['dispatcher_id']}"
+                if order["dispatcher_id"]
+                else "-"
             )
             master_display = (
-                order['master_name'].strip() if order['master_name'] and order['master_name'].strip()
-                else f"Master ID: {order['assigned_master_id']}" if order['assigned_master_id']
-                else '-'
+                order["master_name"].strip()
+                if order["master_name"] and order["master_name"].strip()
+                else f"Master ID: {order['assigned_master_id']}"
+                if order["assigned_master_id"]
+                else "-"
             )
-            
+
             print(f"Заявка #{order['id']} | {status_emoji} {order['status']}")
             print(f"   Оборудование: {order['equipment_type']}")
             print(f"   Клиент: {order['client_name']}")
             print(f"   Диспетчер: {dispatcher_display}")
             print(f"   Мастер: {master_display}")
-            if order['notes']:
+            if order["notes"]:
                 print(f"   📝 Заметки: {order['notes']}")
-            if order['scheduled_time']:
+            if order["scheduled_time"]:
                 print(f"   ⏰ Время прибытия: {order['scheduled_time']}")
-            if order['total_amount']:
+            if order["total_amount"]:
                 print(f"   💰 Сумма: {order['total_amount']:.0f} ₽")
             print(f"   Создана: {order['created_at']}")
             print()
@@ -153,10 +157,10 @@ def check_database():
     )
     stats = cursor.fetchall()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("📊 СТАТИСТИКА ПО ЗАЯВКАМ")
-    print("="*80)
-    
+    print("=" * 80)
+
     if stats:
         print()
         for stat in stats:
@@ -187,11 +191,11 @@ def check_database():
     multi_role_users = cursor.fetchall()
 
     if multi_role_users:
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("👥 ПОЛЬЗОВАТЕЛИ С МНОЖЕСТВЕННЫМИ РОЛЯМИ")
-        print("="*80)
+        print("=" * 80)
         print()
-        
+
         for user in multi_role_users:
             name = f"{user['first_name'] or ''} {user['last_name'] or ''}".strip() or "-"
             roles = user["role"].split(",")
@@ -202,7 +206,7 @@ def check_database():
                 "UNKNOWN": "❓ Неизвестно",
             }
             roles_str = ", ".join([role_names.get(r.strip(), r) for r in roles])
-            
+
             print(f"TG: {user['telegram_id']} | @{user['username'] or '-'}")
             print(f"   Имя: {name}")
             print(f"   Роли: {roles_str}")
@@ -211,7 +215,7 @@ def check_database():
     # Проверка истории изменений статусов (последние 20)
     cursor.execute(
         """
-        SELECT 
+        SELECT
             h.id,
             h.order_id,
             h.old_status,
@@ -229,13 +233,15 @@ def check_database():
     history = cursor.fetchall()
 
     if history:
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("📜 ИСТОРИЯ ИЗМЕНЕНИЙ СТАТУСОВ (последние 20)")
-        print("="*80)
+        print("=" * 80)
         print()
-        
+
         for h in history:
-            changed_by_name = h['changed_by_name'].strip() if h['changed_by_name'] else f"ID: {h['changed_by']}"
+            changed_by_name = (
+                h["changed_by_name"].strip() if h["changed_by_name"] else f"ID: {h['changed_by']}"
+            )
             status_names = {
                 "NEW": "🆕 Новая",
                 "ASSIGNED": "👨‍🔧 Назначена",
@@ -245,13 +251,13 @@ def check_database():
                 "REFUSED": "❌ Отклонена",
                 "DR": "⏳ Длительный ремонт",
             }
-            old = status_names.get(h['old_status'], h['old_status']) if h['old_status'] else "-"
-            new = status_names.get(h['new_status'], h['new_status'])
-            
+            old = status_names.get(h["old_status"], h["old_status"]) if h["old_status"] else "-"
+            new = status_names.get(h["new_status"], h["new_status"])
+
             print(f"Заявка #{h['order_id']} | {old} → {new}")
             print(f"   Изменил: {changed_by_name}")
             print(f"   Время: {h['changed_at']}")
-            if h['notes']:
+            if h["notes"]:
                 print(f"   Примечание: {h['notes']}")
             print()
 

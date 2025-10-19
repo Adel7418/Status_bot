@@ -130,7 +130,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("unassign_master", order.id),
                 ),
             )
-            
+
             # Кнопка "Клиент ждет" для активных заявок с назначенным мастером
             if order.status in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]:
                 builder.row(
@@ -139,7 +139,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("client_waiting", order.id),
                     )
                 )
-        
+
         # Добавляем кнопки действий мастера для админа (только если мастер назначен)
         if user_role == UserRole.ADMIN and order.assigned_master_id:
             if order.status == OrderStatus.ASSIGNED:
@@ -195,10 +195,10 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             #         callback_data=create_callback_data("edit_order", order.id),
             #     )
             # )
-            
+
             # Кнопку "Закрыть заявку" убрали - теперь админ завершает через "Завершить (за мастера)"
             # которая запускает правильный процесс с запросом суммы и материалов
-            
+
             builder.row(
                 InlineKeyboardButton(
                     text="❌ Отклонить",
@@ -265,7 +265,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             callback_data=create_callback_data("export_order", order.id),
         )
     )
-    
+
     # Кнопка "Назад" для всех
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_orders"))
 
@@ -291,7 +291,7 @@ def get_masters_list_keyboard(
     for master in masters:
         display_name = master.get_display_name()
         specialization = f" ({master.specialization})"
-        
+
         # Добавляем предупреждение если нет рабочей группы
         warning = " ⚠️ НЕТ ГРУППЫ" if not master.work_chat_id else ""
 
@@ -322,16 +322,32 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
-    
+
     # Если счетчики не переданы, используем пустой словарь
     if counts is None:
         counts = {}
 
     # Формируем текст кнопок с счетчиками
-    new_text = f"🆕 Новые ({counts.get(OrderStatus.NEW, 0)})" if counts.get(OrderStatus.NEW, 0) > 0 else "🆕 Новые"
-    assigned_text = f"👨‍🔧 Назначенные ({counts.get(OrderStatus.ASSIGNED, 0)})" if counts.get(OrderStatus.ASSIGNED, 0) > 0 else "👨‍🔧 Назначенные"
-    accepted_text = f"✅ Принятые ({counts.get(OrderStatus.ACCEPTED, 0)})" if counts.get(OrderStatus.ACCEPTED, 0) > 0 else "✅ Принятые"
-    onsite_text = f"🏠 На объекте ({counts.get(OrderStatus.ONSITE, 0)})" if counts.get(OrderStatus.ONSITE, 0) > 0 else "🏠 На объекте"
+    new_text = (
+        f"🆕 Новые ({counts.get(OrderStatus.NEW, 0)})"
+        if counts.get(OrderStatus.NEW, 0) > 0
+        else "🆕 Новые"
+    )
+    assigned_text = (
+        f"👨‍🔧 Назначенные ({counts.get(OrderStatus.ASSIGNED, 0)})"
+        if counts.get(OrderStatus.ASSIGNED, 0) > 0
+        else "👨‍🔧 Назначенные"
+    )
+    accepted_text = (
+        f"✅ Принятые ({counts.get(OrderStatus.ACCEPTED, 0)})"
+        if counts.get(OrderStatus.ACCEPTED, 0) > 0
+        else "✅ Принятые"
+    )
+    onsite_text = (
+        f"🏠 На объекте ({counts.get(OrderStatus.ONSITE, 0)})"
+        if counts.get(OrderStatus.ONSITE, 0) > 0
+        else "🏠 На объекте"
+    )
     # Длительные ремонты - всегда показываем счётчик для видимости
     dr_text = f"⏳ Длительные ремонты ({counts.get(OrderStatus.DR, 0)})"
 
@@ -528,58 +544,49 @@ def get_pagination_keyboard(
 def get_yes_no_keyboard(callback_prefix: str, order_id: int) -> InlineKeyboardMarkup:
     """
     Клавиатура с кнопками Да/Нет для подтверждения действий
-    
+
     Args:
         callback_prefix: Префикс для callback_data (например "confirm_review", "confirm_out_of_city")
         order_id: ID заказа
-    
+
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
-    
+
     builder.row(
         InlineKeyboardButton(
-            text="✅ Да",
-            callback_data=create_callback_data(callback_prefix, order_id, "yes")
+            text="✅ Да", callback_data=create_callback_data(callback_prefix, order_id, "yes")
         ),
         InlineKeyboardButton(
-            text="❌ Нет",
-            callback_data=create_callback_data(callback_prefix, order_id, "no")
-        )
+            text="❌ Нет", callback_data=create_callback_data(callback_prefix, order_id, "no")
+        ),
     )
-    
+
     return builder.as_markup()
 
 
 def get_dev_menu_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура для меню разработчика
-    
+
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
-    
+
     builder.row(
         InlineKeyboardButton(
-            text="🧪 Создать тестовую заявку",
-            callback_data="dev_create_test_order"
+            text="🧪 Создать тестовую заявку", callback_data="dev_create_test_order"
         )
     )
-    
+
     builder.row(
         InlineKeyboardButton(
-            text="🗄️ Архивировать старые заявки",
-            callback_data="dev_archive_orders"
+            text="🗄️ Архивировать старые заявки", callback_data="dev_archive_orders"
         )
     )
-    
-    builder.row(
-        InlineKeyboardButton(
-            text="❌ Закрыть",
-            callback_data="dev_close"
-        )
-    )
-    
+
+    builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="dev_close"))
+
     return builder.as_markup()

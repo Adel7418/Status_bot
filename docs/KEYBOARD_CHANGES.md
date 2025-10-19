@@ -75,11 +75,11 @@ builder.row(
 
 ```python
 # БЫЛО:
-for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, 
+for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED,
               OrderStatus.ONSITE, OrderStatus.CLOSED, OrderStatus.DR]:
 
 # СТАЛО:
-for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, 
+for status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED,
               OrderStatus.ONSITE, OrderStatus.DR]:
 ```
 
@@ -137,5 +137,5 @@ python scripts/view_order_reports.py
 
 ---
 
-**Дата изменения:** 2025-10-16  
+**Дата изменения:** 2025-10-16
 **Версия:** 2.0

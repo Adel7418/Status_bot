@@ -3,7 +3,6 @@
 """
 
 import logging
-from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -12,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus
 from app.database import Database
-from app.filters import IsGroupChat, IsGroupOrderCallback, IsMasterInGroup
+from app.filters import IsGroupChat, IsMasterInGroup
 from app.keyboards.inline import get_group_order_keyboard
 from app.states import RescheduleOrderStates
 from app.utils import format_datetime, get_now, log_action
@@ -26,31 +25,29 @@ router = Router(name="group_interaction")
 async def check_master_work_group(master, callback: CallbackQuery) -> bool:
     """
     Проверка, что у мастера настроена рабочая группа и он работает в ней
-    
+
     Args:
         master: Объект мастера
         callback: Callback query
-        
+
     Returns:
         True если проверка пройдена, False если нет
     """
     # Проверяем наличие рабочей группы
     if not master.work_chat_id:
         await callback.answer(
-            "❌ У вас не настроена рабочая группа!\n"
-            "Обратитесь к администратору для настройки.",
-            show_alert=True
+            "❌ У вас не настроена рабочая группа!\n" "Обратитесь к администратору для настройки.",
+            show_alert=True,
         )
         return False
-    
+
     # Проверяем, что действие выполняется в правильной группе
     if callback.message.chat.id != master.work_chat_id:
         await callback.answer(
-            "❌ Вы можете работать только в своей рабочей группе!",
-            show_alert=True
+            "❌ Вы можете работать только в своей рабочей группе!", show_alert=True
         )
         return False
-    
+
     return True
 
 
@@ -70,28 +67,29 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
 
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             # Находим мастера по ID группы
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
+
             is_admin_acting = True
-            logger.info(f"Admin {callback.from_user.id} acting as master {master.telegram_id} in group {callback.message.chat.id}")
+            logger.info(
+                f"Admin {callback.from_user.id} acting as master {master.telegram_id} in group {callback.message.chat.id}"
+            )
         else:
             # Обычная проверка для мастера
             master = await db.get_master_by_telegram_id(callback.from_user.id)
             is_admin_acting = False
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
@@ -106,7 +104,7 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
             order_id=order_id,
             status=OrderStatus.ACCEPTED,
             changed_by=callback.from_user.id,
-            user_roles=user_roles  # Передаём роли для валидации
+            user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Добавляем в лог
@@ -129,17 +127,17 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
             f"📍 Адрес: {order.client_address}\n"
             f"📞 Телефон: <i>Будет доступен после прибытия на объект</i>\n"
         )
-        
+
         # Добавляем заметки если есть
         if order.notes:
             acceptance_text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
-        
+
         # Добавляем время прибытия если указано
         if order.scheduled_time:
             acceptance_text += f"\n⏰ <b>Время прибытия к клиенту:</b> {order.scheduled_time}\n"
-        
-        acceptance_text += f"\n<b>Когда будете на объекте, нажмите кнопку ниже.</b>"
-        
+
+        acceptance_text += "\n<b>Когда будете на объекте, нажмите кнопку ниже.</b>"
+
         # Обновляем сообщение в группе
         await callback.message.edit_text(
             acceptance_text,
@@ -150,6 +148,7 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -183,26 +182,27 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
 
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
+
             is_admin_acting = True
-            logger.info(f"Admin {callback.from_user.id} refusing order as master {master.telegram_id}")
+            logger.info(
+                f"Admin {callback.from_user.id} refusing order as master {master.telegram_id}"
+            )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
             is_admin_acting = False
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
@@ -225,7 +225,7 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
             action="REFUSE_ORDER_GROUP",
             details=f"Master refused order #{order_id} in group",
         )
-        
+
         # Меню обновится автоматически в update_order_status
 
         # Обновляем сообщение в группе (номер телефона скрыт, т.к. заявка отклонена до прибытия на объект)
@@ -246,6 +246,7 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -280,26 +281,27 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
 
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
+
             is_admin_acting = True
-            logger.info(f"Admin {callback.from_user.id} marking onsite as master {master.telegram_id}")
+            logger.info(
+                f"Admin {callback.from_user.id} marking onsite as master {master.telegram_id}"
+            )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
             is_admin_acting = False
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
@@ -314,7 +316,7 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
             order_id=order_id,
             status=OrderStatus.ONSITE,
             changed_by=callback.from_user.id,
-            user_roles=user_roles  # Передаём роли для валидации
+            user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Добавляем в лог
@@ -345,6 +347,7 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -363,7 +366,9 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
 
 
 @router.callback_query(F.data.startswith("group_complete_order:"))
-async def callback_group_complete_order(callback: CallbackQuery, state: FSMContext, user_roles: list):
+async def callback_group_complete_order(
+    callback: CallbackQuery, state: FSMContext, user_roles: list
+):
     """
     Начало процесса завершения заявки мастером или админом в группе
 
@@ -379,26 +384,27 @@ async def callback_group_complete_order(callback: CallbackQuery, state: FSMConte
 
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
+
             is_admin_acting = True
-            logger.info(f"Admin {callback.from_user.id} completing order as master {master.telegram_id}")
+            logger.info(
+                f"Admin {callback.from_user.id} completing order as master {master.telegram_id}"
+            )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
             is_admin_acting = False
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
@@ -455,26 +461,25 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
+
             is_admin_acting = True
             logger.info(f"Admin {callback.from_user.id} starting DR as master {master.telegram_id}")
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
             is_admin_acting = False
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
@@ -489,11 +494,12 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
             order_id=order_id,
             acting_as_master_id=master.telegram_id if is_admin_acting else None,
         )
-        
+
         # Переходим к вводу срока окончания и предоплаты
         from app.states import LongRepairStates
+
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
-        
+
         await callback.message.reply(
             f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
@@ -504,13 +510,15 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
             f"• <code>завтра, предоплата 1500</code>\n"
             f"• <code>неделя</code>\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback.answer()
-        
-        logger.debug(f"[DR] Group DR process started for order #{order_id}, master: {master.telegram_id}")
-        
+
+        logger.debug(
+            f"[DR] Group DR process started for order #{order_id}, master: {master.telegram_id}"
+        )
+
         return
 
     finally:
@@ -518,83 +526,85 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
 
 @router.callback_query(F.data.startswith("group_reschedule_order:"))
-async def callback_group_reschedule_order(callback: CallbackQuery, state: FSMContext, user_roles: list):
+async def callback_group_reschedule_order(
+    callback: CallbackQuery, state: FSMContext, user_roles: list
+):
     """
     Перенос заявки мастером или админом в группе
-    
+
     Args:
         callback: Callback query
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
     order_id = int(callback.data.split(":")[1])
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         from app.config import UserRole
-        
+
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-        
+
         # Проверяем, что заявка в статусе ASSIGNED или ACCEPTED
         if order.status not in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]:
             await callback.answer(
-                "Перенести можно только заявки в статусе 'Назначена' или 'Принята'",
-                show_alert=True
+                "Перенести можно только заявки в статусе 'Назначена' или 'Принята'", show_alert=True
             )
             return
-        
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            
+
             if not master:
                 await callback.answer(
-                    "❌ В этой группе не настроена работа для мастера",
-                    show_alert=True
+                    "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
                 return
-            
-            logger.info(f"Admin {callback.from_user.id} rescheduling as master {master.telegram_id}")
+
+            logger.info(
+                f"Admin {callback.from_user.id} rescheduling as master {master.telegram_id}"
+            )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
-            
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
-        
+
         # Проверяем права
         if not master or order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
-        
+
         # Сохраняем данные в state
         await state.update_data(
             order_id=order_id,
             reschedule_initiated_by=callback.from_user.id,
-            is_group_reschedule=True
+            is_group_reschedule=True,
         )
-        
+
         # Переходим к вводу нового времени
         await state.set_state(RescheduleOrderStates.enter_new_time)
-        
+
         current_time = order.scheduled_time or "не указано"
-        
+
         await callback.message.reply(
             f"📅 <b>Перенос заявки #{order_id}</b>\n\n"
             f"⏰ Сейчас: {current_time}\n\n"
             f"Напишите новое время:\n"
             f"<i>Например: завтра 14:00, сегодня 18:00, через 2 часа</i>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback.answer()
-        
+
     finally:
         await db.disconnect()
 

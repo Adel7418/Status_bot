@@ -33,16 +33,14 @@ from app.utils.sentry import init_sentry
 Path("logs").mkdir(exist_ok=True)
 
 # Настройка логирования с ротацией
-log_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 # Rotating file handler (макс 10MB, хранить 5 файлов)
 file_handler = RotatingFileHandler(
     "logs/bot.log",
     maxBytes=10 * 1024 * 1024,  # 10 MB
     backupCount=5,
-    encoding="utf-8"
+    encoding="utf-8",
 )
 file_handler.setFormatter(log_formatter)
 
@@ -160,7 +158,7 @@ async def main():
         # Инициализация хранилища состояний
         # Используем Redis для production, MemoryStorage для development
         redis_url = os.getenv("REDIS_URL")
-        
+
         # ОТЛАДКА: Явное логирование конфигурации storage
         logger.info("=" * 60)
         logger.info("🔧 Конфигурация FSM Storage:")
@@ -168,7 +166,7 @@ async def main():
         logger.info(f"  DEV_MODE: {Config.DEV_MODE}")
         logger.info(f"  Условие (redis_url and not DEV_MODE): {redis_url and not Config.DEV_MODE}")
         logger.info("=" * 60)
-        
+
         if redis_url and not Config.DEV_MODE:
             logger.info("✅ Используется RedisStorage для FSM: %s", redis_url)
             storage = RedisStorage.from_url(redis_url)
@@ -202,11 +200,11 @@ async def main():
         # Настройки: 2 запроса в секунду, burst до 4 запросов
         # С прогрессивным наказанием и автобаном после 30 нарушений
         rate_limit_middleware = RateLimitMiddleware(
-            rate=2,              # 2 запроса/сек
-            period=1,            # за 1 секунду
-            burst=4,             # максимум 4 подряд
-            max_violations=30,   # бан после 30 нарушений
-            violation_window=60  # в течении 60 секунд
+            rate=2,  # 2 запроса/сек
+            period=1,  # за 1 секунду
+            burst=4,  # максимум 4 подряд
+            max_violations=30,  # бан после 30 нарушений
+            violation_window=60,  # в течении 60 секунд
         )
         dp.message.middleware(rate_limit_middleware)
         dp.callback_query.middleware(rate_limit_middleware)
@@ -274,7 +272,7 @@ async def main():
                 logger.error("Ошибка при отключении БД: %s", e)
 
         # Закрытие storage (для Redis)
-        if dp and hasattr(dp.storage, 'close'):
+        if dp and hasattr(dp.storage, "close"):
             try:
                 await dp.storage.close()
                 logger.info("Storage закрыт")

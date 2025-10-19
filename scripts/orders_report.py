@@ -9,38 +9,40 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
 def get_orders_report(db_path: str):
     """Генерирует полный отчет по заказам"""
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     print("=" * 80)
     print("ПОЛНЫЙ ОТЧЕТ ПО ЗАКАЗАМ И МАСТЕРАМ")
     print("=" * 80)
     print(f"База данных: {db_path}")
     print(f"Дата отчета: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
     print()
-    
+
     # Общая статистика
     cursor.execute("SELECT COUNT(*) FROM orders")
     total_orders = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM orders WHERE status = 'CLOSED'")
     closed_orders = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM masters")
     total_masters = cursor.fetchone()[0]
-    
+
     print("ОБЩАЯ СТАТИСТИКА:")
     print(f"Всего заказов: {total_orders}")
     print(f"Завершенных заказов: {closed_orders}")
     print(f"Всего мастеров: {total_masters}")
     print()
-    
+
     # Заказы с выездами за город
-    cursor.execute("""
-        SELECT o.id, o.equipment_type, o.client_name, o.client_address, 
+    cursor.execute(
+        """
+        SELECT o.id, o.equipment_type, o.client_name, o.client_address,
                o.status, o.out_of_city, o.has_review, o.total_amount,
                o.materials_cost, o.master_profit, o.company_profit,
                o.created_at, o.updated_at,
@@ -52,10 +54,11 @@ def get_orders_report(db_path: str):
         LEFT JOIN users u_dispatcher ON o.dispatcher_id = u_dispatcher.telegram_id
         WHERE o.out_of_city = 1 OR o.out_of_city IS NOT NULL
         ORDER BY o.id DESC
-    """)
-    
+    """
+    )
+
     out_of_city_orders = cursor.fetchall()
-    
+
     print("ЗАКАЗЫ С ВЫЕЗДАМИ ЗА ГОРОД:")
     print("-" * 80)
     if out_of_city_orders:
@@ -63,8 +66,12 @@ def get_orders_report(db_path: str):
             print(f"Заказ #{order[0]}: {order[1]} | Клиент: {order[2]}")
             print(f"  Адрес: {order[3]}")
             print(f"  Статус: {order[4]}")
-            print(f"  Выезд за город: {'Да' if order[5] == 1 else 'Нет' if order[5] == 0 else 'Не указано'}")
-            print(f"  Отзыв: {'Есть' if order[6] == 1 else 'Нет' if order[6] == 0 else 'Не указано'}")
+            print(
+                f"  Выезд за город: {'Да' if order[5] == 1 else 'Нет' if order[5] == 0 else 'Не указано'}"
+            )
+            print(
+                f"  Отзыв: {'Есть' if order[6] == 1 else 'Нет' if order[6] == 0 else 'Не указано'}"
+            )
             print(f"  Сумма: {order[7]:.2f} руб | Материалы: {order[8]:.2f} руб")
             print(f"  Прибыль мастера: {order[9]:.2f} руб | Прибыль компании: {order[10]:.2f} руб")
             print(f"  Мастер: {order[13] or 'Не назначен'}")
@@ -75,10 +82,11 @@ def get_orders_report(db_path: str):
     else:
         print("Заказы с выездами не найдены")
     print()
-    
+
     # Все завершенные заказы
-    cursor.execute("""
-        SELECT o.id, o.equipment_type, o.client_name, o.client_address, 
+    cursor.execute(
+        """
+        SELECT o.id, o.equipment_type, o.client_name, o.client_address,
                o.status, o.out_of_city, o.has_review, o.total_amount,
                o.materials_cost, o.master_profit, o.company_profit,
                o.created_at, o.updated_at,
@@ -90,18 +98,23 @@ def get_orders_report(db_path: str):
         LEFT JOIN users u_dispatcher ON o.dispatcher_id = u_dispatcher.telegram_id
         WHERE o.status = 'CLOSED'
         ORDER BY o.id DESC
-    """)
-    
+    """
+    )
+
     closed_orders_data = cursor.fetchall()
-    
+
     print("ВСЕ ЗАВЕРШЕННЫЕ ЗАКАЗЫ:")
     print("-" * 80)
     if closed_orders_data:
         for order in closed_orders_data:
             print(f"Заказ #{order[0]}: {order[1]} | Клиент: {order[2]}")
             print(f"  Адрес: {order[3]}")
-            print(f"  Выезд за город: {'Да' if order[5] == 1 else 'Нет' if order[5] == 0 else 'Не указано'}")
-            print(f"  Отзыв: {'Есть' if order[6] == 1 else 'Нет' if order[6] == 0 else 'Не указано'}")
+            print(
+                f"  Выезд за город: {'Да' if order[5] == 1 else 'Нет' if order[5] == 0 else 'Не указано'}"
+            )
+            print(
+                f"  Отзыв: {'Есть' if order[6] == 1 else 'Нет' if order[6] == 0 else 'Не указано'}"
+            )
             print(f"  Сумма: {order[7]:.2f} руб | Материалы: {order[8]:.2f} руб")
             print(f"  Прибыль мастера: {order[9]:.2f} руб | Прибыль компании: {order[10]:.2f} руб")
             print(f"  Мастер: {order[13] or 'Не назначен'}")
@@ -111,9 +124,10 @@ def get_orders_report(db_path: str):
     else:
         print("Завершенные заказы не найдены")
     print()
-    
+
     # Статистика по мастерам
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT m.id, u.first_name || ' ' || u.last_name as master_name,
                COUNT(o.id) as orders_count,
                SUM(CASE WHEN o.status = 'CLOSED' THEN 1 ELSE 0 END) as closed_orders,
@@ -126,10 +140,11 @@ def get_orders_report(db_path: str):
         LEFT JOIN orders o ON m.id = o.assigned_master_id
         GROUP BY m.id, u.first_name, u.last_name
         ORDER BY total_profit DESC
-    """)
-    
+    """
+    )
+
     masters_stats = cursor.fetchall()
-    
+
     print("СТАТИСТИКА ПО МАСТЕРАМ:")
     print("-" * 80)
     if masters_stats:
@@ -145,19 +160,21 @@ def get_orders_report(db_path: str):
     else:
         print("Мастера не найдены")
     print()
-    
+
     # Проблемные заказы (с некорректными данными)
-    cursor.execute("""
-        SELECT id, equipment_type, client_name, status, out_of_city, has_review, 
+    cursor.execute(
+        """
+        SELECT id, equipment_type, client_name, status, out_of_city, has_review,
                total_amount, materials_cost, master_profit, company_profit
-        FROM orders 
+        FROM orders
         WHERE (out_of_city IS NOT NULL AND out_of_city != 0 AND out_of_city != 1)
            OR (has_review IS NOT NULL AND has_review != 0 AND has_review != 1)
         ORDER BY id DESC
-    """)
-    
+    """
+    )
+
     problematic_orders = cursor.fetchall()
-    
+
     if problematic_orders:
         print("ПРОБЛЕМНЫЕ ЗАКАЗЫ (с некорректными данными):")
         print("-" * 80)
@@ -168,8 +185,9 @@ def get_orders_report(db_path: str):
             print(f"  has_review: {order[5]} (тип: {type(order[5])})")
             print(f"  Суммы: {order[6]}, {order[7]}, {order[8]}, {order[9]}")
             print()
-    
+
     conn.close()
+
 
 def main():
     """Основная функция"""
@@ -178,15 +196,16 @@ def main():
     else:
         # По умолчанию используем dev базу
         db_path = "bot_database_dev.db"
-    
+
     if not Path(db_path).exists():
         print(f"ОШИБКА: База данных {db_path} не найдена!")
         return
-    
+
     try:
         get_orders_report(db_path)
     except Exception as e:
         print(f"ОШИБКА при генерации отчета: {e}")
+
 
 if __name__ == "__main__":
     main()

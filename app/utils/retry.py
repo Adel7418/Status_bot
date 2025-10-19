@@ -3,8 +3,9 @@ Retry механизм для Bot API запросов с экспоненциа
 """
 import asyncio
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from aiogram.exceptions import (
     TelegramAPIError,
@@ -51,39 +52,39 @@ def retry_on_telegram_error(
 ) -> Callable:
     """
     Декоратор для повтора Bot API запросов с экспоненциальным backoff
-    
+
     Args:
         max_attempts: Максимальное количество попыток
         base_delay: Базовая задержка между попытками (секунды)
         max_delay: Максимальная задержка между попытками (секунды)
         exponential_base: База для экспоненциального роста задержки
         exceptions: Кортеж исключений для повтора
-        
+
     Returns:
         Декоратор функции
-        
+
     Example:
         @retry_on_telegram_error(max_attempts=5)
         async def send_notification(bot, chat_id, text):
             return await bot.send_message(chat_id, text)
     """
-    
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T | None:
             last_exception = None
-            
+
             for attempt in range(1, max_attempts + 1):
                 try:
                     # Выполняем функцию
                     return await func(*args, **kwargs)
-                    
+
                 except TelegramRetryAfter as e:
                     # Специальная обработка для 429 Too Many Requests
                     # Telegram указывает точное время ожидания
                     retry_after = e.retry_after
                     wait_time = min(retry_after, max_delay)
-                    
+
                     logger.warning(
                         "%s: Flood control exceeded (429). "
                         "Retry after %s seconds. Attempt %d/%d",
@@ -92,7 +93,7 @@ def retry_on_telegram_error(
                         attempt,
                         max_attempts,
                     )
-                    
+
                     if attempt < max_attempts:
                         logger.info("Waiting %s seconds before retry...", wait_time)
                         await asyncio.sleep(wait_time)
@@ -104,11 +105,11 @@ def retry_on_telegram_error(
                             func.__name__,
                         )
                         return None
-                        
+
                 except exceptions as e:
                     # Обработка сетевых ошибок и ошибок сервера
                     delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
-                    
+
                     logger.warning(
                         "%s: %s occurred. Attempt %d/%d. Error: %s",
                         func.__name__,
@@ -117,7 +118,7 @@ def retry_on_telegram_error(
                         max_attempts,
                         str(e),
                     )
-                    
+
                     if attempt < max_attempts:
                         logger.info("Retrying in %.2f seconds...", delay)
                         await asyncio.sleep(delay)
@@ -130,7 +131,7 @@ def retry_on_telegram_error(
                             str(e),
                         )
                         return None
-                        
+
                 except NON_RETRYABLE_EXCEPTIONS as e:
                     # Ошибки, которые не имеет смысла повторять
                     logger.error(
@@ -140,7 +141,7 @@ def retry_on_telegram_error(
                         str(e),
                     )
                     return None
-                    
+
                 except TelegramAPIError as e:
                     # Другие Telegram ошибки (на всякий случай)
                     logger.error(
@@ -150,7 +151,7 @@ def retry_on_telegram_error(
                         str(e),
                     )
                     return None
-                    
+
                 except Exception as e:
                     # Неожиданные ошибки (не Telegram)
                     logger.exception(
@@ -160,7 +161,7 @@ def retry_on_telegram_error(
                         str(e),
                     )
                     return None
-            
+
             # Если дошли сюда - все попытки исчерпаны
             if last_exception:
                 logger.error(
@@ -170,8 +171,9 @@ def retry_on_telegram_error(
                     str(last_exception),
                 )
             return None
-            
+
         return wrapper
+
     return decorator
 
 
@@ -184,22 +186,22 @@ async def safe_send_message(
 ) -> Any | None:
     """
     Безопасная отправка сообщения с автоматическим retry
-    
+
     Args:
         bot: Экземпляр бота
         chat_id: ID чата
         text: Текст сообщения
         max_attempts: Максимальное количество попыток
         **kwargs: Дополнительные параметры для send_message
-        
+
     Returns:
         Message объект или None при ошибке
     """
-    
+
     @retry_on_telegram_error(max_attempts=max_attempts)
     async def _send():
         return await bot.send_message(chat_id, text, **kwargs)
-    
+
     return await _send()
 
 
@@ -212,7 +214,7 @@ async def safe_answer_callback(
 ) -> bool:
     """
     Безопасный ответ на callback query с retry и защитой от двойного клика
-    
+
     Args:
         callback_query: CallbackQuery объект
         text: Текст ответа
@@ -221,25 +223,25 @@ async def safe_answer_callback(
                    Рекомендуется 5-10 сек для критичных операций, 2-3 сек для обычных.
                    По умолчанию 3 секунды для защиты от случайных двойных кликов.
         **kwargs: Дополнительные параметры (show_alert и т.д.)
-        
+
     Returns:
         True при успехе, False при ошибке
-        
+
     Example:
         # Критичная операция (создание/изменение данных)
         await safe_answer_callback(callback, "Заявка принята!", cache_time=10)
-        
+
         # Обычная навигация
         await safe_answer_callback(callback, cache_time=2)
     """
     # Устанавливаем cache_time по умолчанию, если не передан
     if cache_time is None:
         cache_time = 3  # 3 секунды защиты от случайных двойных кликов
-    
+
     @retry_on_telegram_error(max_attempts=max_attempts, base_delay=0.5)
     async def _answer():
         return await callback_query.answer(text, cache_time=cache_time, **kwargs)
-    
+
     result = await _answer()
     return result is not None
 
@@ -252,21 +254,21 @@ async def safe_edit_message(
 ) -> Any | None:
     """
     Безопасное редактирование сообщения с retry
-    
+
     Args:
         message: Message объект
         text: Новый текст
         max_attempts: Максимальное количество попыток
         **kwargs: Дополнительные параметры
-        
+
     Returns:
         Message объект или None при ошибке
     """
-    
+
     @retry_on_telegram_error(max_attempts=max_attempts)
     async def _edit():
         return await message.edit_text(text, **kwargs)
-    
+
     return await _edit()
 
 
@@ -278,21 +280,20 @@ async def safe_delete_message(
 ) -> bool:
     """
     Безопасное удаление сообщения с retry
-    
+
     Args:
         bot: Экземпляр бота
         chat_id: ID чата
         message_id: ID сообщения
         max_attempts: Максимальное количество попыток
-        
+
     Returns:
         True при успехе, False при ошибке
     """
-    
+
     @retry_on_telegram_error(max_attempts=max_attempts, base_delay=0.5)
     async def _delete():
         return await bot.delete_message(chat_id, message_id)
-    
+
     result = await _delete()
     return result is not None
-

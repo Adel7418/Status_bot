@@ -103,7 +103,7 @@ Middleware добавляет в `data`:
 async def handler(message: Message, user_role: str, user_roles: list):
     # user_role = "DISPATCHER" (основная)
     # user_roles = ["DISPATCHER", "MASTER"]
-    
+
     if UserRole.MASTER in user_roles:
         # Пользователь имеет роль мастера
         pass
@@ -224,4 +224,3 @@ result = any(role in user_roles for role in self.roles)
 ## Заключение
 
 Система множественных ролей делает бот более гибким и удобным. Теперь один пользователь может совмещать несколько функций, что особенно полезно в небольших командах, где диспетчеры также могут выполнять работу мастеров.
-

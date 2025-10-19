@@ -60,13 +60,13 @@ print_section "2. Состояние Git репозитория"
 if [ -d .git ]; then
     echo "Текущая ветка:"
     git branch --show-current
-    
+
     echo -e "\nПоследний коммит:"
     git log -1 --oneline
-    
+
     echo -e "\nСтатус:"
     git status -s
-    
+
     echo -e "\nРазница с origin/main:"
     git fetch origin main 2>/dev/null
     COMMITS_BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null)
@@ -109,14 +109,14 @@ if [ -f .env ]; then
     print_success ".env файл найден"
     echo "Переменные (без секретов):"
     grep -v "TOKEN\|PASSWORD\|SECRET" .env | grep -v "^#" | grep -v "^$" | head -15
-    
+
     echo -e "\nПроверка обязательных переменных:"
     if grep -q "BOT_TOKEN=.*[^example]" .env; then
         print_success "BOT_TOKEN установлен"
     else
         print_error "BOT_TOKEN не установлен или использует example"
     fi
-    
+
     if grep -q "ADMIN_IDS=.*[0-9]" .env; then
         print_success "ADMIN_IDS установлен"
     else
@@ -140,7 +140,7 @@ print_section "7. Последние логи бота"
 if docker ps | grep -q telegram_repair_bot_prod; then
     echo "Последние 25 строк логов:"
     docker compose -f docker/docker-compose.prod.yml logs --tail=25 bot 2>/dev/null
-    
+
     echo -e "\nОшибки в логах (если есть):"
     docker compose -f docker/docker-compose.prod.yml logs bot 2>/dev/null | grep -i "error\|exception\|traceback" | tail -10 || print_success "Ошибок не обнаружено"
 else
@@ -161,7 +161,7 @@ if docker ps | grep -q redis; then
     print_success "Redis контейнер запущен"
     echo "Проверка подключения:"
     docker compose -f docker/docker-compose.prod.yml exec -T redis redis-cli ping 2>/dev/null || print_error "Redis не отвечает"
-    
+
     echo -e "\nКоличество ключей:"
     docker compose -f docker/docker-compose.prod.yml exec -T redis redis-cli DBSIZE 2>/dev/null
 else
@@ -192,7 +192,7 @@ if [ -f data/bot_database.db ]; then
     print_success "База данных найдена: $DB_SIZE"
     echo "Последнее изменение:"
     ls -lh data/bot_database.db | awk '{print $6, $7, $8}'
-    
+
     echo -e "\nПроверка БД из контейнера:"
     docker compose -f docker/docker-compose.prod.yml exec -T bot python -c "
 import sqlite3
@@ -215,7 +215,7 @@ print_section "13. Резервные копии"
 if [ -d backups ] && [ "$(ls -A backups 2>/dev/null)" ]; then
     echo "Последний backup:"
     ls -lht backups/ | head -2
-    
+
     BACKUP_COUNT=$(ls backups/*.db 2>/dev/null | wc -l)
     print_success "Найдено backup'ов: $BACKUP_COUNT"
 else
@@ -234,7 +234,7 @@ print_section "15. Проверка сети Docker"
 if docker ps | grep -q telegram; then
     echo "Docker networks:"
     docker network ls | grep -E "NETWORK|bot"
-    
+
     echo -e "\nПроверка доступности Telegram API:"
     docker compose -f docker/docker-compose.prod.yml exec -T bot ping -c 3 api.telegram.org 2>/dev/null || print_warning "Не удалось проверить подключение"
 else
@@ -289,4 +289,3 @@ echo -e "\n${BLUE}Для просмотра полного руководств�
 echo "cat docs/troubleshooting/BOT_UPDATE_ISSUES.md"
 
 print_header "КОНЕЦ ДИАГНОСТИКИ"
-

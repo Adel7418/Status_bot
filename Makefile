@@ -297,4 +297,3 @@ git-release:  ## Полный релиз: add + commit + push + tag (испол�
 	@git tag -a $(VERSION) -m "Release $(VERSION): $(MSG)"
 	@git push origin $(VERSION)
 	@echo "✅ Релиз $(VERSION) готов и отправлен!"
-

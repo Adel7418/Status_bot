@@ -41,16 +41,16 @@ dp = Dispatcher(storage=storage)
 finally:
     # Гарантированная очистка ресурсов
     logger.info("Начало процедуры остановки...")
-    
+
     if scheduler:
         await scheduler.stop()  # Останавливаем планировщик
-    
+
     if db:
         await db.disconnect()  # Закрываем БД
-    
+
     if bot:
         await bot.session.close()  # ✅ Закрываем aiohttp session
-    
+
     logger.info("Бот полностью остановлен")
 ```
 
@@ -75,12 +75,12 @@ finally:
 async def some_handler(message: Message, state: FSMContext):
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.create_order(...)
     finally:
         await db.disconnect()
-    
+
     await state.clear()  # ❌ Не вызовется при exception!
 ```
 
@@ -88,12 +88,12 @@ async def some_handler(message: Message, state: FSMContext):
 ```python
 async def some_handler(message: Message, state: FSMContext):
     db = None
-    
+
     try:
         db = Database()
         await db.connect()
         order = await db.create_order(...)
-        
+
     finally:
         # Гарантированная очистка
         if db:
@@ -190,11 +190,11 @@ from aiogram.fsm.context import FSMContext
 
 async def test_state_cleared_on_error(mock_message, mock_state):
     """FSM state должен очищаться даже при ошибках"""
-    
+
     # Имитируем ошибку в handler
     with pytest.raises(Exception):
         await some_handler_with_error(mock_message, mock_state)
-    
+
     # Проверяем что state очищен
     current_state = await mock_state.get_state()
     assert current_state is None
@@ -205,15 +205,15 @@ async def test_state_cleared_on_error(mock_message, mock_state):
 ```python
 async def test_redis_persistence(bot, redis_storage):
     """States должны сохраняться в Redis"""
-    
+
     # Устанавливаем state
     await redis_storage.set_state(
-        bot=bot, 
-        chat_id=123, 
-        user_id=456, 
+        bot=bot,
+        chat_id=123,
+        user_id=456,
         state="CreateOrderStates:equipment_type"
     )
-    
+
     # Проверяем что сохранился
     state = await redis_storage.get_state(bot=bot, chat_id=123, user_id=456)
     assert state == "CreateOrderStates:equipment_type"
@@ -290,9 +290,6 @@ finally:
 
 ---
 
-**Версия:** 1.0  
-**Дата:** 12.10.2025  
+**Версия:** 1.0
+**Дата:** 12.10.2025
 **Статус:** ✅ Актуально
-
-
-

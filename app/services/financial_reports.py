@@ -2,13 +2,14 @@
 Сервис для генерации финансовых отчетов
 """
 
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
 import logging
+from datetime import datetime, timedelta
+from typing import Any
 
 from app.database.db import Database
-from app.database.models import FinancialReport, MasterFinancialReport, Order, Master
-from app.utils.helpers import calculate_profit_split, get_now
+from app.database.models import FinancialReport, MasterFinancialReport, Order
+from app.utils.helpers import get_now
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,7 @@ class FinancialReportsService:
         end_date = start_date + timedelta(days=1)
 
         return await self._generate_report(
-            report_type="DAILY",
-            period_start=start_date,
-            period_end=end_date
+            report_type="DAILY", period_start=start_date, period_end=end_date
         )
 
     async def generate_weekly_report(self, week_start: datetime) -> FinancialReport:
@@ -58,9 +57,7 @@ class FinancialReportsService:
         end_date = start_date + timedelta(days=7)
 
         return await self._generate_report(
-            report_type="WEEKLY",
-            period_start=start_date,
-            period_end=end_date
+            report_type="WEEKLY", period_start=start_date, period_end=end_date
         )
 
     async def generate_monthly_report(self, year: int, month: int) -> FinancialReport:
@@ -75,7 +72,7 @@ class FinancialReportsService:
             Объект финансового отчета
         """
         from app.utils.helpers import MOSCOW_TZ
-        
+
         # Создаем даты с московским часовым поясом
         start_date = datetime(year, month, 1, tzinfo=MOSCOW_TZ)
         if month == 12:
@@ -84,9 +81,7 @@ class FinancialReportsService:
             end_date = datetime(year, month + 1, 1, tzinfo=MOSCOW_TZ)
 
         return await self._generate_report(
-            report_type="MONTHLY",
-            period_start=start_date,
-            period_end=end_date
+            report_type="MONTHLY", period_start=start_date, period_end=end_date
         )
 
     async def _generate_report(
@@ -115,7 +110,7 @@ class FinancialReportsService:
                     report_type=report_type,
                     period_start=period_start,
                     period_end=period_end,
-                    created_at=get_now()
+                    created_at=get_now(),
                 )
                 report.id = await self.db.create_financial_report(report)
                 return report
@@ -141,7 +136,7 @@ class FinancialReportsService:
                 total_company_profit=total_company_profit,
                 total_master_profit=total_master_profit,
                 average_check=average_check,
-                created_at=get_now()
+                created_at=get_now(),
             )
 
             # Сохраняем отчет в базу
@@ -155,7 +150,7 @@ class FinancialReportsService:
         finally:
             await self.db.disconnect()
 
-    async def _generate_master_reports(self, report_id: int, orders: List[Order]):
+    async def _generate_master_reports(self, report_id: int, orders: list[Order]):
         """
         Генерация отчетов по мастерам
 
@@ -164,7 +159,7 @@ class FinancialReportsService:
             orders: Список заказов
         """
         # Группируем заказы по мастерам
-        masters_orders: Dict[int, List[Order]] = {}
+        masters_orders: dict[int, list[Order]] = {}
         for order in orders:
             if order.assigned_master_id:
                 if order.assigned_master_id not in masters_orders:
@@ -202,12 +197,12 @@ class FinancialReportsService:
                 total_company_profit=total_company_profit,
                 average_check=average_check,
                 reviews_count=reviews_count,
-                out_of_city_count=out_of_city_count
+                out_of_city_count=out_of_city_count,
             )
 
             await self.db.create_master_financial_report(master_report)
 
-    async def get_report_summary(self, report_id: int) -> Dict[str, Any]:
+    async def get_report_summary(self, report_id: int) -> dict[str, Any]:
         """
         Получение сводки отчета
 
@@ -231,9 +226,15 @@ class FinancialReportsService:
                 "master_reports": master_reports,
                 "summary": {
                     "total_masters": len(master_reports),
-                    "most_profitable_master": max(master_reports, key=lambda x: x.total_master_profit) if master_reports else None,
-                    "highest_average_check": max(master_reports, key=lambda x: x.average_check) if master_reports else None,
-                }
+                    "most_profitable_master": max(
+                        master_reports, key=lambda x: x.total_master_profit
+                    )
+                    if master_reports
+                    else None,
+                    "highest_average_check": max(master_reports, key=lambda x: x.average_check)
+                    if master_reports
+                    else None,
+                },
             }
 
         finally:
@@ -269,7 +270,7 @@ class FinancialReportsService:
         text = f"📊 <b>Финансовый отчет {period_text}</b>\n\n"
 
         # Общие показатели
-        text += f"📈 <b>Общие показатели:</b>\n"
+        text += "📈 <b>Общие показатели:</b>\n"
         text += f"• Заказов: {report.total_orders}\n"
         text += f"• Общая сумма: {report.total_amount:,.2f} ₽\n"
         text += f"• Расходный материал: {report.total_materials_cost:,.2f} ₽\n"
@@ -277,7 +278,7 @@ class FinancialReportsService:
         text += f"• Средний чек: {report.average_check:,.2f} ₽\n\n"
 
         # Распределение прибыли
-        text += f"💰 <b>Распределение прибыли:</b>\n"
+        text += "💰 <b>Распределение прибыли:</b>\n"
         text += f"• Компания: {report.total_company_profit:,.2f} ₽\n"
         text += f"• Мастера: {report.total_master_profit:,.2f} ₽\n\n"
 
@@ -285,8 +286,10 @@ class FinancialReportsService:
         if master_reports:
             text += f"👨‍🔧 <b>По мастерам ({len(master_reports)}):</b>\n"
             text += f"{'='*40}\n\n"
-            
-            for idx, master_report in enumerate(sorted(master_reports, key=lambda x: x.total_master_profit, reverse=True), 1):
+
+            for idx, master_report in enumerate(
+                sorted(master_reports, key=lambda x: x.total_master_profit, reverse=True), 1
+            ):
                 text += f"<b>{idx}. {master_report.master_name}</b>\n"
                 text += f"├ Заказов: {master_report.orders_count}\n"
                 text += f"├ Общая сумма: {master_report.total_amount:,.2f} ₽\n"
@@ -295,19 +298,17 @@ class FinancialReportsService:
                 text += f"├ Средний чек: {master_report.average_check:,.2f} ₽\n"
                 text += f"├ К выплате мастеру: <b>{master_report.total_master_profit:,.2f} ₽</b>\n"
                 text += f"└ Компания получила: {master_report.total_company_profit:,.2f} ₽\n"
-                
+
                 # Дополнительная информация
                 extras = []
                 if master_report.reviews_count > 0:
                     extras.append(f"⭐ Отзывы: {master_report.reviews_count}")
                 if master_report.out_of_city_count > 0:
                     extras.append(f"🚗 Выезды: {master_report.out_of_city_count}")
-                
+
                 if extras:
                     text += f"  {' | '.join(extras)}\n"
-                
+
                 text += "\n"
 
         return text
-
-

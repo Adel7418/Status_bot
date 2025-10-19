@@ -111,7 +111,7 @@ class TaskScheduler:
     async def _send_scheduled_time_reminder(self, order, scheduled_datetime: datetime):
         """
         Отправка напоминания за 2 часа до визита
-        
+
         Args:
             order: Заявка
             scheduled_datetime: Запланированное время визита
@@ -121,7 +121,7 @@ class TaskScheduler:
             master = await self.db.get_master_by_id(order.assigned_master_id)
             if not master:
                 return
-            
+
             reminder_text = (
                 f"⏰ <b>Напоминание о визите через 2 часа!</b>\n\n"
                 f"📋 Заявка #{order.id}\n"
@@ -132,67 +132,65 @@ class TaskScheduler:
                 f"⏰ Запланированное время: {scheduled_datetime.strftime('%H:%M')}\n\n"
                 f"Не забудьте подготовиться к выезду!"
             )
-            
+
             # Определяем, куда отправлять
             target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
-            
+
             await safe_send_message(
-                self.bot,
-                target_chat_id,
-                reminder_text,
-                parse_mode="HTML",
-                max_attempts=3
+                self.bot, target_chat_id, reminder_text, parse_mode="HTML", max_attempts=3
             )
-            
-            logger.info(f"2-hour reminder sent for order #{order.id} to {'group' if master.work_chat_id else 'DM'} {target_chat_id}")
-            
+
+            logger.info(
+                f"2-hour reminder sent for order #{order.id} to {'group' if master.work_chat_id else 'DM'} {target_chat_id}"
+            )
+
         except Exception as e:
             logger.error(f"Failed to send scheduled time reminder for order #{order.id}: {e}")
-    
+
     def _check_scheduled_time_alert(self, order, now: datetime) -> bool:
         """
         Проверка запланированного времени для перенесенных заявок.
         Отправляет напоминание за 2 часа до визита.
-        
+
         Args:
             order: Заявка
             now: Текущее время
-            
+
         Returns:
             True если напоминание было отправлено или время еще не подошло
         """
         import re
         from datetime import datetime, timedelta
-        
+
         scheduled_time = order.scheduled_time.lower().strip()
-        
+
         # Пытаемся найти время в формате HH:MM
-        time_pattern = r'(\d{1,2}):(\d{2})'
+        time_pattern = r"(\d{1,2}):(\d{2})"
         time_match = re.search(time_pattern, scheduled_time)
-        
+
         if not time_match:
             return False  # Не удалось распарсить время
-        
+
         hour = int(time_match.group(1))
         minute = int(time_match.group(2))
-        
+
         # Определяем дату
         target_date = now.date()
-        
+
         # Ключевые слова для определения даты
-        if 'завтра' in scheduled_time:
+        if "завтра" in scheduled_time:
             target_date = (now + timedelta(days=1)).date()
-        elif 'послезавтра' in scheduled_time:
+        elif "послезавтра" in scheduled_time:
             target_date = (now + timedelta(days=2)).date()
-        elif 'через' in scheduled_time and 'дн' in scheduled_time:
+        elif "через" in scheduled_time and "дн" in scheduled_time:
             # Пытаемся найти количество дней
-            days_match = re.search(r'через\s+(\d+)\s+дн', scheduled_time)
+            days_match = re.search(r"через\s+(\d+)\s+дн", scheduled_time)
             if days_match:
                 days = int(days_match.group(1))
                 target_date = (now + timedelta(days=days)).date()
-        
+
         # Пытаемся найти дату в формате DD.MM.YYYY
-        date_pattern = r'(\d{1,2})\.(\d{1,2})\.(\d{4})'
+        date_pattern = r"(\d{1,2})\.(\d{1,2})\.(\d{4})"
         date_match = re.search(date_pattern, scheduled_time)
         if date_match:
             day = int(date_match.group(1))
@@ -202,37 +200,42 @@ class TaskScheduler:
                 target_date = datetime(year, month, day).date()
             except ValueError:
                 pass  # Неверная дата
-        
+
         # Создаем целевое время визита
         try:
-            scheduled_datetime = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+            scheduled_datetime = datetime.combine(
+                target_date, datetime.min.time().replace(hour=hour, minute=minute)
+            )
             # Добавляем timezone как у now
             scheduled_datetime = scheduled_datetime.replace(tzinfo=now.tzinfo)
         except ValueError:
             return False  # Неверное время
-        
+
         # Если время визита уже прошло, не отправляем напоминание
         if scheduled_datetime <= now:
             return False
-        
+
         # Проверяем, осталось ли менее 2 часов до визита
         time_until_visit = scheduled_datetime - now
-        
+
         # Если осталось от 1:30 до 2:30 часов - отправляем напоминание
         if timedelta(hours=1, minutes=30) <= time_until_visit <= timedelta(hours=2, minutes=30):
-            logger.info(f"Sending 2-hour reminder for rescheduled order #{order.id}, scheduled at {scheduled_datetime}")
+            logger.info(
+                f"Sending 2-hour reminder for rescheduled order #{order.id}, scheduled at {scheduled_datetime}"
+            )
             # Отправляем напоминание асинхронно
             import asyncio
+
             try:
                 asyncio.create_task(self._send_scheduled_time_reminder(order, scheduled_datetime))
             except Exception as e:
                 logger.error(f"Failed to create reminder task: {e}")
             return True
-        
+
         # Если до визита больше 2:30 часов - ждем
         if time_until_visit > timedelta(hours=2, minutes=30):
             return True  # Не проверяем по стандартному SLA
-        
+
         return False
 
     async def check_order_sla(self):
@@ -269,7 +272,10 @@ class TaskScheduler:
 
                 # Для заявок с указанным временем прибытия - используем умные напоминания
                 # Работает для статусов ASSIGNED и ACCEPTED
-                if order.scheduled_time and order.status in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]:
+                if order.scheduled_time and order.status in [
+                    OrderStatus.ASSIGNED,
+                    OrderStatus.ACCEPTED,
+                ]:
                     scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
                     if scheduled_alert_sent:
                         continue  # Пропускаем стандартную проверку SLA для этой заявки
@@ -354,9 +360,7 @@ class TaskScheduler:
 
             # Отправляем администраторам
             for admin_id in Config.ADMIN_IDS:
-                await safe_send_message(
-                    self.bot, admin_id, text, parse_mode="HTML", max_attempts=5
-                )
+                await safe_send_message(self.bot, admin_id, text, parse_mode="HTML", max_attempts=5)
 
             # Отправляем диспетчерам
             for dispatcher_id in Config.DISPATCHER_IDS:
@@ -386,13 +390,13 @@ class TaskScheduler:
                     continue
 
                 time_assigned = now - order.updated_at
-                
+
                 # Для заявок с указанным временем прибытия - используем умные напоминания
                 if order.scheduled_time:
                     scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
                     if scheduled_alert_sent:
                         continue  # Пропускаем напоминание для этой заявки
-                
+
                 # Используем стандартный порог напоминания
                 remind_threshold = base_remind_threshold
 
@@ -500,7 +504,7 @@ class TaskScheduler:
             if unassigned_alerts:
                 # Получаем всех админов и диспетчеров
                 admins_and_dispatchers = await self.db.get_admins_and_dispatchers()
-                
+
                 # Формируем текст уведомления
                 text = "⚠️ <b>Неназначенные заявки!</b>\n\n"
                 text += f"Найдено заявок без мастера: {len(unassigned_alerts)}\n\n"
@@ -518,18 +522,14 @@ class TaskScheduler:
 
                 if len(unassigned_alerts) > 5:
                     text += f"<i>И еще {len(unassigned_alerts) - 5} заявок...</i>\n\n"
-                
+
                 text += "⚠️ <b>Требуется назначить мастеров!</b>"
 
                 # Отправляем всем админам и диспетчерам
                 for user in admins_and_dispatchers:
                     try:
                         await safe_send_message(
-                            self.bot,
-                            user.telegram_id,
-                            text,
-                            parse_mode="HTML",
-                            max_attempts=3
+                            self.bot, user.telegram_id, text, parse_mode="HTML", max_attempts=3
                         )
                         logger.info(f"Unassigned order reminder sent to {user.telegram_id}")
                     except Exception as e:
@@ -550,12 +550,12 @@ class TaskScheduler:
         """Отправляет ежедневный отчет"""
         try:
             from app.services.reports_notifier import ReportsNotifier
-            
+
             notifier = ReportsNotifier(self.bot)
             await notifier.send_daily_report()
-            
+
             logger.info("Ежедневный отчет отправлен")
-            
+
         except Exception as e:
             logger.error(f"Ошибка отправки ежедневного отчета: {e}")
 
@@ -563,12 +563,12 @@ class TaskScheduler:
         """Отправляет еженедельный отчет"""
         try:
             from app.services.reports_notifier import ReportsNotifier
-            
+
             notifier = ReportsNotifier(self.bot)
             await notifier.send_weekly_report()
-            
+
             logger.info("Еженедельный отчет отправлен")
-            
+
         except Exception as e:
             logger.error(f"Ошибка отправки еженедельного отчета: {e}")
 
@@ -576,11 +576,11 @@ class TaskScheduler:
         """Отправляет ежемесячный отчет"""
         try:
             from app.services.reports_notifier import ReportsNotifier
-            
+
             notifier = ReportsNotifier(self.bot)
             await notifier.send_monthly_report()
-            
+
             logger.info("Ежемесячный отчет отправлен")
-            
+
         except Exception as e:
             logger.error(f"Ошибка отправки ежемесячного отчета: {e}")

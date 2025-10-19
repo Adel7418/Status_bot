@@ -2,6 +2,7 @@
 from app.core.config import Config, Messages
 from app.core.constants import EquipmentType, OrderStatus, UserRole
 
+
 __all__ = [
     "Config",
     "Messages",
@@ -9,4 +10,3 @@ __all__ = [
     "OrderStatus",
     "EquipmentType",
 ]
-

@@ -43,7 +43,7 @@ async def db() -> AsyncGenerator[Database, None]:
     await database.disconnect()
 
 
-@pytest.fixture
+@pytest.fixture()
 def bot_token() -> str:
     """
     Фикстура для тестового токена бота
@@ -72,7 +72,7 @@ async def dp() -> Dispatcher:
     await storage.close()
 
 
-@pytest.fixture
+@pytest.fixture()
 def admin_id() -> int:
     """
     Фикстура для ID администратора
@@ -80,7 +80,7 @@ def admin_id() -> int:
     return 123456789
 
 
-@pytest.fixture
+@pytest.fixture()
 def dispatcher_id() -> int:
     """
     Фикстура для ID диспетчера
@@ -88,7 +88,7 @@ def dispatcher_id() -> int:
     return 987654321
 
 
-@pytest.fixture
+@pytest.fixture()
 def master_id() -> int:
     """
     Фикстура для ID мастера
@@ -96,7 +96,7 @@ def master_id() -> int:
     return 111222333
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_config(admin_id: int, dispatcher_id: int, monkeypatch) -> None:
     """
     Фикстура для замены конфигурации на тестовую

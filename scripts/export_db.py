@@ -39,7 +39,9 @@ def export_database(db_path: str = "bot_database.db", output_path: str = None) -
     }
 
     # Получение списка таблиц
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+    )
     tables = [row[0] for row in cursor.fetchall()]
 
     print(f"📊 Найдено таблиц: {len(tables)}")
@@ -53,7 +55,10 @@ def export_database(db_path: str = "bot_database.db", output_path: str = None) -
         cursor.execute(f"PRAGMA table_info({table})")
         schema = cursor.fetchall()
         export_data["metadata"][table] = {
-            "columns": [{"name": col[1], "type": col[2], "notnull": bool(col[3]), "pk": bool(col[5])} for col in schema]
+            "columns": [
+                {"name": col[1], "type": col[2], "notnull": bool(col[3]), "pk": bool(col[5])}
+                for col in schema
+            ]
         }
 
         # Экспорт данных
@@ -94,10 +99,19 @@ def main():
     parser = argparse.ArgumentParser(description="Экспорт базы данных SQLite в JSON")
 
     parser.add_argument(
-        "--database", "-d", type=str, default="bot_database.db", help="Путь к файлу базы данных (по умолчанию: bot_database.db)"
+        "--database",
+        "-d",
+        type=str,
+        default="bot_database.db",
+        help="Путь к файлу базы данных (по умолчанию: bot_database.db)",
     )
 
-    parser.add_argument("--output", "-o", type=str, help="Путь для сохранения JSON (по умолчанию: db_export_<timestamp>.json)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        help="Путь для сохранения JSON (по умолчанию: db_export_<timestamp>.json)",
+    )
 
     args = parser.parse_args()
 
@@ -115,4 +129,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

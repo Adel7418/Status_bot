@@ -1,0 +1,90 @@
+# Автоматическая маркировка Pull Requests на основе измененных файлов
+
+# Handlers
+'handlers':
+  - changed-files:
+    - any-glob-to-any-file: 'app/handlers/**/*'
+
+# Middleware
+'middleware':
+  - changed-files:
+    - any-glob-to-any-file: 'app/middlewares/**/*'
+
+# Services
+'services':
+  - changed-files:
+    - any-glob-to-any-file: 'app/services/**/*'
+
+# Database
+'database':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'app/database/**/*'
+      - 'migrations/**/*'
+
+# UI/Keyboards
+'ui':
+  - changed-files:
+    - any-glob-to-any-file: 'app/keyboards/**/*'
+
+# Tests
+'tests':
+  - changed-files:
+    - any-glob-to-any-file: 'tests/**/*'
+
+# Documentation
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - '*.md'
+      - 'README*'
+
+# Dependencies
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'setup.py'
+
+# Docker
+'docker':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker/**/*'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+
+# CI/CD
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - '.pre-commit-config.yaml'
+      - 'Makefile'
+
+# Security
+'security':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'app/utils/pii_masking.py'
+      - 'app/middlewares/rate_limit.py'
+
+# Migrations
+'migration':
+  - changed-files:
+    - any-glob-to-any-file: 'migrations/versions/**/*'
+
+# Configuration
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'app/config.py'
+      - 'app/core/config.py'
+      - 'alembic.ini'
+      - '.env*'
+
+# Breaking change (по ключевым словам в заголовке)
+'breaking-change':
+  - head-branch: ['^breaking/', '^major/']

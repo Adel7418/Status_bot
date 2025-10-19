@@ -206,6 +206,5 @@ copy bot_database.db bot_database_backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%.d
 
 ---
 
-**Версия:** 1.0  
+**Версия:** 1.0
 **Дата:** 11.10.2025
-

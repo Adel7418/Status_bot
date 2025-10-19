@@ -2,12 +2,12 @@
 import pytest
 from pydantic import ValidationError
 
-from app.schemas import OrderCreateSchema, MasterCreateSchema, UserCreateSchema
+from app.schemas import MasterCreateSchema, OrderCreateSchema, UserCreateSchema
 
 
 class TestOrderCreateSchema:
     """Тесты валидации создания заявок"""
-    
+
     def test_valid_order_creation(self):
         """Тест успешного создания заявки с валидными данными"""
         order_data = {
@@ -18,12 +18,12 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         order = OrderCreateSchema(**order_data)
         assert order.equipment_type == "Стиральные машины"
         assert order.client_phone == "+79001234567"
         assert len(order.client_name) >= 5
-    
+
     def test_phone_formatting(self):
         """Тест автоматического форматирования телефона"""
         order_data = {
@@ -34,10 +34,10 @@ class TestOrderCreateSchema:
             "client_phone": "89001234567",  # без +7
             "dispatcher_id": 123456789,
         }
-        
+
         order = OrderCreateSchema(**order_data)
         assert order.client_phone == "+79001234567"  # автоматически форматируется
-    
+
     def test_invalid_equipment_type(self):
         """Тест невалидного типа техники"""
         order_data = {
@@ -48,12 +48,12 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
-        
+
         assert "Недопустимый тип техники" in str(exc_info.value)
-    
+
     def test_short_description(self):
         """Тест слишком короткого описания"""
         order_data = {
@@ -64,10 +64,10 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError):
             OrderCreateSchema(**order_data)
-    
+
     def test_sql_injection_protection(self):
         """Тест защиты от SQL injection в описании"""
         order_data = {
@@ -78,12 +78,12 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
-        
+
         assert "недопустимые символы" in str(exc_info.value).lower()
-    
+
     def test_invalid_client_name(self):
         """Тест невалидного имени (слишком короткое)"""
         order_data = {
@@ -94,12 +94,12 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
-        
+
         assert "минимум 5 символов" in str(exc_info.value).lower()
-    
+
     def test_valid_single_name(self):
         """Тест валидного имени (одно слово, 5+ символов)"""
         order_data = {
@@ -110,11 +110,11 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         order = OrderCreateSchema(**order_data)
         assert order.client_name == "Александр"
         assert len(order.client_name) >= 5
-    
+
     def test_address_without_number(self):
         """Тест адреса без номера дома"""
         order_data = {
@@ -125,12 +125,12 @@ class TestOrderCreateSchema:
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
-        
+
         assert "номер дома" in str(exc_info.value).lower()
-    
+
     def test_invalid_phone_format(self):
         """Тест невалидного формата телефона"""
         order_data = {
@@ -141,14 +141,14 @@ class TestOrderCreateSchema:
             "client_phone": "123",  # слишком короткий
             "dispatcher_id": 123456789,
         }
-        
+
         with pytest.raises(ValidationError):
             OrderCreateSchema(**order_data)
 
 
 class TestMasterCreateSchema:
     """Тесты валидации создания мастеров"""
-    
+
     def test_valid_master_creation(self):
         """Тест успешного создания мастера"""
         master_data = {
@@ -157,11 +157,11 @@ class TestMasterCreateSchema:
             "specialization": "Ремонт стиральных машин",
             "is_approved": False,
         }
-        
+
         master = MasterCreateSchema(**master_data)
         assert master.telegram_id == 123456789
         assert master.phone == "+79001234567"
-    
+
     def test_invalid_telegram_id(self):
         """Тест невалидного Telegram ID"""
         master_data = {
@@ -169,10 +169,10 @@ class TestMasterCreateSchema:
             "phone": "+79001234567",
             "specialization": "Ремонт техники",
         }
-        
+
         with pytest.raises(ValidationError):
             MasterCreateSchema(**master_data)
-    
+
     def test_short_specialization(self):
         """Тест слишком короткой специализации"""
         master_data = {
@@ -180,14 +180,14 @@ class TestMasterCreateSchema:
             "phone": "+79001234567",
             "specialization": "Ре",  # слишком короткое
         }
-        
+
         with pytest.raises(ValidationError):
             MasterCreateSchema(**master_data)
 
 
 class TestUserCreateSchema:
     """Тесты валидации создания пользователей"""
-    
+
     def test_valid_user_creation(self):
         """Тест успешного создания пользователя"""
         user_data = {
@@ -197,11 +197,11 @@ class TestUserCreateSchema:
             "last_name": "Петров",
             "role": "DISPATCHER",
         }
-        
+
         user = UserCreateSchema(**user_data)
         assert user.telegram_id == 123456789
         assert user.username == "ivan_petrov"
-    
+
     def test_username_with_at(self):
         """Тест username с @ (должен убраться автоматически)"""
         user_data = {
@@ -210,10 +210,10 @@ class TestUserCreateSchema:
             "first_name": "Иван",
             "role": "MASTER",
         }
-        
+
         user = UserCreateSchema(**user_data)
         assert user.username == "ivan_petrov"  # @ убрался
-    
+
     def test_invalid_role(self):
         """Тест невалидной роли"""
         user_data = {
@@ -222,7 +222,7 @@ class TestUserCreateSchema:
             "first_name": "Иван",
             "role": "SUPERHERO",  # недопустимая роль
         }
-        
+
         with pytest.raises(ValidationError):
             UserCreateSchema(**user_data)
 
@@ -236,12 +236,11 @@ if __name__ == "__main__":
         print("✅ Valid order creation - OK")
     except Exception as e:
         print(f"❌ Valid order creation - FAILED: {e}")
-    
+
     try:
         test.test_sql_injection_protection()
         print("✅ SQL injection protection - OK")
     except Exception as e:
         print(f"❌ SQL injection protection - FAILED: {e}")
-    
-    print("\nAll quick tests passed!")
 
+    print("\nAll quick tests passed!")

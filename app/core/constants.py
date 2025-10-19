@@ -87,4 +87,3 @@ class EquipmentType:
             cls.WATER_HEATER,
             cls.TV,
         ]
-

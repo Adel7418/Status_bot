@@ -33,14 +33,14 @@ jobs:
           body: |
             ## What's Changed
             ${{ steps.changelog.outputs.changelog }}
-            
+
             ## Installation
-            
+
             ### Docker
             ```bash
             docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ```
-            
+
             ### Manual
             ```bash
             git clone https://github.com/${{ github.repository }}.git
@@ -53,4 +53,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

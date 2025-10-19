@@ -29,7 +29,11 @@ class Config:
     ]
 
     # Developer Mode (режим разработчика)
-    DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")  # По умолчанию true для локальной разработки
+    DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in (
+        "true",
+        "1",
+        "yes",
+    )  # По умолчанию true для локальной разработки
 
     # Путь к базе данных
     # Используем DATABASE_PATH напрямую из .env без автоматического добавления _dev
@@ -37,10 +41,10 @@ class Config:
 
     # Уровень логирования
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    
+
     # Интервал проверки SLA заявок (в минутах)
     SLA_CHECK_INTERVAL: int = int(os.getenv("SLA_CHECK_INTERVAL", "30"))
-    
+
     # Интервал напоминаний о непринятых заявках (в минутах)
     REMINDER_INTERVAL: int = int(os.getenv("REMINDER_INTERVAL", "5"))
 
@@ -99,4 +103,3 @@ class Messages:
 MAX_DESCRIPTION_LENGTH = 500
 MAX_NOTES_LENGTH = 1000
 PHONE_REGEX = r"^\+?[0-9]{10,15}$"
-

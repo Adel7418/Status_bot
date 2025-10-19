@@ -3,14 +3,14 @@ Domain layer для бизнес-логики
 """
 
 from app.domain.order_state_machine import (
-    OrderStateMachine,
     InvalidStateTransitionError,
+    OrderStateMachine,
     OrderStateTransitionResult,
 )
+
 
 __all__ = [
     "OrderStateMachine",
     "InvalidStateTransitionError",
     "OrderStateTransitionResult",
 ]
-

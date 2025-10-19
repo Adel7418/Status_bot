@@ -2,7 +2,6 @@
 Тесты для утилит маскирования персональных данных (PII)
 """
 
-import pytest
 
 from app.utils.pii_masking import (
     mask_address,
@@ -286,4 +285,3 @@ class TestMaskDict:
 
         # Все остается как есть
         assert masked == data
-

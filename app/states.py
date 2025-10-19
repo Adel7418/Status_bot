@@ -81,7 +81,9 @@ class AdminCloseOrderStates(StatesGroup):
 class LongRepairStates(StatesGroup):
     """Состояния для перевода заявки в длительный ремонт"""
 
-    enter_completion_date_and_prepayment = State()  # Ввод срока окончания + предоплаты (опционально)
+    enter_completion_date_and_prepayment = (
+        State()
+    )  # Ввод срока окончания + предоплаты (опционально)
 
 
 class RescheduleOrderStates(StatesGroup):

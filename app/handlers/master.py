@@ -3,7 +3,6 @@
 """
 
 import logging
-from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -13,7 +12,7 @@ from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard
 from app.states import CompleteOrderStates, LongRepairStates, RescheduleOrderStates
-from app.utils import calculate_profit_split, format_datetime, get_now, log_action
+from app.utils import format_datetime, get_now, log_action
 
 
 logger = logging.getLogger(__name__)
@@ -37,10 +36,10 @@ async def btn_my_orders(message: Message, state: FSMContext):
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
         return
-    
+
     await state.clear()
 
     db = Database()
@@ -174,36 +173,38 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
             if order.prepayment_amount:
                 text += f"💰 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
             text += "\n"
-        
+
         # Показываем финансовую информацию для закрытых заявок
         if order.status == OrderStatus.CLOSED and order.total_amount:
             net_profit = order.total_amount - (order.materials_cost or 0)
-            
+
             # Определяем базовую ставку
             base_rate = "50/50" if net_profit >= 7000 else "40/60"
-            
-            text += f"\n💰 <b>Финансовая информация:</b>\n"
+
+            text += "\n💰 <b>Финансовая информация:</b>\n"
             text += f"• Сумма заказа: <b>{order.total_amount:.2f} ₽</b>\n"
             text += f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
             text += f"\n📊 <b>Распределение ({base_rate}):</b>\n"
-            
+
             if order.master_profit:
                 master_percent = (order.master_profit / net_profit * 100) if net_profit > 0 else 0
-                text += f"• Ваша прибыль: <b>{order.master_profit:.2f} ₽</b> ({master_percent:.0f}%)\n"
+                text += (
+                    f"• Ваша прибыль: <b>{order.master_profit:.2f} ₽</b> ({master_percent:.0f}%)\n"
+                )
             if order.company_profit:
                 company_percent = (order.company_profit / net_profit * 100) if net_profit > 0 else 0
                 text += f"• Прибыль компании: <b>{order.company_profit:.2f} ₽</b> ({company_percent:.0f}%)\n"
-            
+
             # Надбавки и бонусы (показываем только если явно True)
             bonuses = []
             if order.has_review is True:
                 bonuses.append("✅ Отзыв (+10% вам)")
             if order.out_of_city is True:
                 bonuses.append("✅ Выезд за город")
-            
+
             if bonuses:
                 text += f"\n🎁 <b>Надбавки:</b> {', '.join(bonuses)}\n"
-            
+
             text += "\n"
 
         if order.created_at:
@@ -247,7 +248,7 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
             order_id=order_id,
             status=OrderStatus.ACCEPTED,
             changed_by=callback.from_user.id,
-            user_roles=user_roles  # Передаём роли для валидации
+            user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Добавляем в лог
@@ -260,6 +261,7 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -278,36 +280,31 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n"
         )
-        
+
         # Добавляем заметки если есть
         if order.notes:
             acceptance_text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
-        
+
         # Добавляем время прибытия если указано
         if order.scheduled_time:
             acceptance_text += f"\n⏰ <b>Время прибытия к клиенту:</b> {order.scheduled_time}\n"
-        
+
         acceptance_text += (
-            f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>\n"
-            f"Когда будете на месте, нажмите кнопку ниже."
+            "\n<b>Телефон клиента будет доступен после прибытия на объект.</b>\n"
+            "Когда будете на месте, нажмите кнопку ниже."
         )
-        
+
         # Обновляем сообщение с кнопкой "Я на объекте"
         from aiogram.types import InlineKeyboardButton
         from aiogram.utils.keyboard import InlineKeyboardBuilder
-        
+
         keyboard_builder = InlineKeyboardBuilder()
         keyboard_builder.row(
-            InlineKeyboardButton(
-                text="🏠 Я на объекте",
-                callback_data=f"onsite_order:{order_id}"
-            )
+            InlineKeyboardButton(text="🏠 Я на объекте", callback_data=f"onsite_order:{order_id}")
         )
-        
+
         await callback.message.edit_text(
-            acceptance_text,
-            parse_mode="HTML",
-            reply_markup=keyboard_builder.as_markup()
+            acceptance_text, parse_mode="HTML", reply_markup=keyboard_builder.as_markup()
         )
 
         log_action(callback.from_user.id, "ACCEPT_ORDER", f"Order #{order_id}")
@@ -317,6 +314,7 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
 
     # Защита от двойного клика: 10 секунд для критичной операции
     from app.utils import safe_answer_callback
+
     await safe_answer_callback(callback, "Заявка принята!", cache_time=10)
 
 
@@ -355,12 +353,13 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             action="REFUSE_ORDER_MASTER",
             details=f"Master refused order #{order_id}",
         )
-        
+
         # Меню обновится автоматически в update_order_status
 
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -382,6 +381,7 @@ async def callback_refuse_order_master(callback: CallbackQuery):
 
     # Защита от двойного клика: 8 секунд для критичной операции
     from app.utils import safe_answer_callback
+
     await safe_answer_callback(callback, "Заявка отклонена", cache_time=8)
 
 
@@ -413,7 +413,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
             order_id=order_id,
             status=OrderStatus.ONSITE,
             changed_by=callback.from_user.id,
-            user_roles=user_roles
+            user_roles=user_roles,
         )
 
         # Добавляем в лог
@@ -426,6 +426,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -438,28 +439,22 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         # Обновляем сообщение с кнопками завершения
         from aiogram.types import InlineKeyboardButton
         from aiogram.utils.keyboard import InlineKeyboardBuilder
-        
+
         keyboard_builder = InlineKeyboardBuilder()
         keyboard_builder.row(
-            InlineKeyboardButton(
-                text="💰 Завершить",
-                callback_data=f"complete_order:{order_id}"
-            )
+            InlineKeyboardButton(text="💰 Завершить", callback_data=f"complete_order:{order_id}")
         )
         keyboard_builder.row(
-            InlineKeyboardButton(
-                text="⏳ Длительный ремонт",
-                callback_data=f"dr_order:{order_id}"
-            )
+            InlineKeyboardButton(text="⏳ Длительный ремонт", callback_data=f"dr_order:{order_id}")
         )
-        
+
         await callback.message.edit_text(
             f"🏠 <b>Статус обновлен!</b>\n\n"
             f"Заявка #{order_id} - вы на объекте.\n\n"
             f"📞 <b>Телефон клиента:</b> {order.client_phone}\n\n"
             f"После завершения работы нажмите кнопку ниже.",
             parse_mode="HTML",
-            reply_markup=keyboard_builder.as_markup()
+            reply_markup=keyboard_builder.as_markup(),
         )
 
         log_action(callback.from_user.id, "ONSITE_ORDER", f"Order #{order_id}")
@@ -526,7 +521,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
         state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
-    
+
     logger.debug(f"[DR] Starting DR process for order #{order_id} by user {callback.from_user.id}")
 
     db = Database()
@@ -540,18 +535,20 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
 
         # Проверяем права
         if not master or order.assigned_master_id != master.id:
-            logger.warning(f"[DR] Access denied - Master ID: {master.id if master else None}, Assigned: {order.assigned_master_id if order else None}")
+            logger.warning(
+                f"[DR] Access denied - Master ID: {master.id if master else None}, Assigned: {order.assigned_master_id if order else None}"
+            )
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
         # Сохраняем order_id в state
         await state.update_data(order_id=order_id)
-        
-        logger.debug(f"[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
-        
+
+        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
+
         # Переходим к вводу срока окончания и предоплаты
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
-        
+
         await callback.message.edit_text(
             f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
@@ -562,9 +559,9 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
             f"• <code>завтра, предоплата 1500</code>\n"
             f"• <code>неделя</code>\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback.answer()
 
     finally:
@@ -575,129 +572,130 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
 async def process_dr_info(message: Message, state: FSMContext, user_roles: list):
     """
     Обработка ввода срока окончания и предоплаты для DR
-    
+
     Args:
         message: Сообщение
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
     import re
-    
+
     logger.debug(f"[DR] Processing DR info from user {message.from_user.id}")
-    
+
     # Получаем данные из state
     data = await state.get_data()
     order_id = data.get("order_id")
-    
+
     logger.debug(f"[DR] Order ID from state: {order_id}, FSM data: {data}")
-    
+
     # Парсим введенный текст
     text = message.text.strip()
     logger.debug(f"[DR] Input text: '{text}'")
-    
+
     # Ищем упоминание предоплаты и сумму
     prepayment_amount = None
     completion_date = text
-    
+
     # Паттерн для поиска предоплаты: "предоплата 2000" или "аванс 1500" и т.д.
     prepayment_patterns = [
-        r'предоплат[аы]?\s+(\d+(?:[.,]\d+)?)',
-        r'аванс\s+(\d+(?:[.,]\d+)?)',
-        r'предв\.?\s+(\d+(?:[.,]\d+)?)',
+        r"предоплат[аы]?\s+(\d+(?:[.,]\d+)?)",
+        r"аванс\s+(\d+(?:[.,]\d+)?)",
+        r"предв\.?\s+(\d+(?:[.,]\d+)?)",
     ]
-    
+
     for pattern in prepayment_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            prepayment_str = match.group(1).replace(',', '.')
+            prepayment_str = match.group(1).replace(",", ".")
             logger.debug(f"[DR] Found prepayment pattern: {pattern}, value: {prepayment_str}")
             try:
                 prepayment_amount = float(prepayment_str)
                 # Убираем упоминание предоплаты из срока
-                completion_date = re.sub(pattern, '', text, flags=re.IGNORECASE).strip()
+                completion_date = re.sub(pattern, "", text, flags=re.IGNORECASE).strip()
                 # Убираем лишние запятые и пробелы
-                completion_date = re.sub(r'\s*,\s*$', '', completion_date).strip()
-                logger.debug(f"[DR] Parsed - completion_date: '{completion_date}', prepayment: {prepayment_amount}")
+                completion_date = re.sub(r"\s*,\s*$", "", completion_date).strip()
+                logger.debug(
+                    f"[DR] Parsed - completion_date: '{completion_date}', prepayment: {prepayment_amount}"
+                )
                 break
             except ValueError as e:
                 logger.warning(f"[DR] Failed to parse prepayment amount '{prepayment_str}': {e}")
-                pass
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             logger.error(f"[DR] Error - Order not found: {order_id}")
             await message.reply("❌ Ошибка: заявка не найдена")
             await state.clear()
             return
-        
+
         # Для мастера проверяем, что он назначен на эту заявку
         # Для администратора проверка не нужна
         master = await db.get_master_by_telegram_id(message.from_user.id)
-        
+
         logger.debug(f"[DR] Order found: {order is not None}, Master found: {master is not None}")
-        
+
         # Если это не администратор, проверяем что мастер назначен
         if master and order.assigned_master_id != master.id:
             logger.error(f"[DR] Master {master.id} not assigned to order {order_id}")
             await message.reply("❌ Ошибка: эта заявка назначена другому мастеру")
             await state.clear()
             return
-        
+
         # Обновляем заявку
         logger.debug(
             f"[DR] Updating order #{order_id}: "
             f"completion_date='{completion_date}', prepayment={prepayment_amount}"
         )
-        
+
         # Сначала обновляем поля DR
         await db.connection.execute(
             """
-            UPDATE orders 
-            SET estimated_completion_date = ?, 
+            UPDATE orders
+            SET estimated_completion_date = ?,
                 prepayment_amount = ?
             WHERE id = ?
             """,
-            (completion_date, prepayment_amount, order_id)
+            (completion_date, prepayment_amount, order_id),
         )
         await db.connection.commit()
-        
+
         # Затем обновляем статус с валидацией через State Machine
         await db.update_order_status(
             order_id=order_id,
             status=OrderStatus.DR,
             changed_by=message.from_user.id,
-            user_roles=user_roles  # Передаём роли для валидации
+            user_roles=user_roles,  # Передаём роли для валидации
         )
-        
+
         logger.info(f"[DR] Order #{order_id} updated to DR status successfully")
-        
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="DR_ORDER",
             details=f"Order #{order_id} marked as long-term repair. Completion: {completion_date}, Prepayment: {prepayment_amount or 0}",
         )
-        
+
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
             f"⏰ <b>Примерный срок:</b> {completion_date}\n"
         )
-        
+
         if prepayment_amount:
             result_text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
         else:
-            result_text += f"💰 <b>Предоплата:</b> не было\n"
-        
-        result_text += f"\n<i>Диспетчер получит уведомление.</i>"
-        
+            result_text += "💰 <b>Предоплата:</b> не было\n"
+
+        result_text += "\n<i>Диспетчер получит уведомление.</i>"
+
         await message.reply(result_text, parse_mode="HTML")
-        
+
         # Уведомляем диспетчера
         if order.dispatcher_id:
             # Определяем кто перевел заявку в DR
@@ -706,32 +704,28 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             else:
                 # Администратор
                 initiator_name = message.from_user.full_name
-            
+
             notification = (
                 f"⏳ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
                 f"👨‍🔧 Инициатор: {initiator_name}\n"
                 f"⏰ Примерный срок: {completion_date}\n"
             )
-            
+
             if prepayment_amount:
                 notification += f"💰 Предоплата: {prepayment_amount:.2f} ₽"
-            
+
             logger.debug(f"[DR] Sending notification to dispatcher {order.dispatcher_id}")
-            
+
             try:
-                await message.bot.send_message(
-                    order.dispatcher_id,
-                    notification,
-                    parse_mode="HTML"
-                )
-                logger.debug(f"[DR] Dispatcher notification sent successfully")
+                await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
+                logger.debug("[DR] Dispatcher notification sent successfully")
             except Exception as e:
                 logger.error(f"[DR] Failed to notify dispatcher {order.dispatcher_id}: {e}")
-        
+
         log_action(message.from_user.id, "DR_ORDER", f"Order #{order_id}")
-        
+
         logger.info(f"[DR] ✅ Order #{order_id} successfully marked as DR")
-        
+
     except Exception as e:
         logger.exception(f"[DR] ❌ Error processing DR for order #{order_id}: {e}")
         await message.reply(
@@ -757,10 +751,10 @@ async def btn_my_stats(message: Message):
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
         return
-    
+
     db = Database()
     await db.connect()
 
@@ -823,13 +817,12 @@ async def process_total_amount(message: Message, state: FSMContext):
     try:
         total_amount = float(message.text.replace(",", ".").strip())
         if total_amount < 0:
-            await message.reply(
-                "❌ Сумма не может быть отрицательной.\n" "Попробуйте еще раз:"
-            )
+            await message.reply("❌ Сумма не может быть отрицательной.\n" "Попробуйте еще раз:")
             return
     except ValueError:
         await message.reply(
-            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 5000, 5000.50 или 0):"
+            "❌ Неверный формат суммы.\n"
+            "Пожалуйста, введите число (например: 5000, 5000.50 или 0):"
         )
         return
 
@@ -889,7 +882,7 @@ async def process_materials_cost(message: Message, state: FSMContext):
         f"❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
         f"(За отзыв вы получите дополнительно +10% к прибыли)",
         parse_mode="HTML",
-        reply_markup=get_yes_no_keyboard("confirm_review", order_id)
+        reply_markup=get_yes_no_keyboard("confirm_review", order_id),
     )
 
 
@@ -904,10 +897,11 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     """
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
+
     callback_data = parse_callback_data(callback_query.data)
     order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
-    
+
     # Определяем ответ
     has_review = answer == "yes"
 
@@ -918,17 +912,17 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     await state.set_state(CompleteOrderStates.confirm_out_of_city)
 
     review_text = "✅ Отзыв взят!" if has_review else "❌ Отзыв не взят"
-    
+
     from app.keyboards.inline import get_yes_no_keyboard
-    
+
     await callback_query.message.edit_text(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
         f"(За выезд за город вы получите дополнительно +10% к прибыли)",
         parse_mode="HTML",
-        reply_markup=get_yes_no_keyboard("confirm_out_of_city", int(order_id))
+        reply_markup=get_yes_no_keyboard("confirm_out_of_city", int(order_id)),
     )
-    
+
     await callback_query.answer()
 
 
@@ -961,10 +955,11 @@ async def process_out_of_city_confirmation_callback(
     """
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
+
     callback_data = parse_callback_data(callback_query.data)
     order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
-    
+
     # Определяем ответ
     out_of_city = answer == "yes"
 
@@ -973,14 +968,16 @@ async def process_out_of_city_confirmation_callback(
     total_amount = data.get("total_amount")
     materials_cost = data.get("materials_cost")
     has_review = data.get("has_review")
-    acting_as_master_id = data.get("acting_as_master_id")  # ID мастера, если админ действует от его имени
+    acting_as_master_id = data.get(
+        "acting_as_master_id"
+    )  # ID мастера, если админ действует от его имени
 
     db = Database()
     await db.connect()
 
     try:
         order = await db.get_order_by_id(int(order_id))
-        
+
         # Если админ действует от имени мастера
         if acting_as_master_id:
             master = await db.get_master_by_telegram_id(acting_as_master_id)
@@ -992,11 +989,14 @@ async def process_out_of_city_confirmation_callback(
             admin_id = None
 
         if not master or not order or order.assigned_master_id != master.id:
-            await callback_query.message.edit_text("❌ Ошибка: заявка не найдена или не принадлежит вам.")
+            await callback_query.message.edit_text(
+                "❌ Ошибка: заявка не найдена или не принадлежит вам."
+            )
             return
 
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
         from app.handlers.master import calculate_profit_split
+
         master_profit, company_profit = calculate_profit_split(
             total_amount, materials_cost, has_review, out_of_city
         )
@@ -1023,30 +1023,32 @@ async def process_out_of_city_confirmation_callback(
 
         # Обновляем статус на CLOSED (с валидацией через State Machine)
         from app.config import OrderStatus
+
         await db.update_order_status(
             order_id=int(order_id),
             status=OrderStatus.CLOSED,
             changed_by=callback_query.from_user.id,
-            user_roles=user_roles  # Передаём роли для валидации
+            user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Создаем отчет по заказу
         try:
             from app.services.order_reports import OrderReportsService
+
             order_reports_service = OrderReportsService()
-            
+
             # Получаем актуальные данные заказа
             updated_order = await db.get_order_by_id(int(order_id))
-            
+
             # Получаем данные диспетчера
             dispatcher = None
             if updated_order.dispatcher_id:
                 dispatcher = await db.get_user_by_telegram_id(updated_order.dispatcher_id)
-            
+
             # Создаем запись в отчете
             await order_reports_service.create_order_report(updated_order, master, dispatcher)
             logger.info(f"Order report created for order #{order_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to create order report for #{order_id}: {e}")
 
@@ -1074,9 +1076,9 @@ async def process_out_of_city_confirmation_callback(
             f"📋 <b>Дополнительно:</b>\n"
             f"└ Отзыв: {review_text}\n"
             f"└ Выезд за город: {out_of_city_text}",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback_query.answer("✅ Заявка успешно завершена!")
 
         # Очищаем состояние
@@ -1102,7 +1104,6 @@ async def process_out_of_city_confirmation_fallback(message: Message, state: FSM
         "❌ Пожалуйста, используйте кнопки для ответа.\n"
         "Если кнопки не отображаются, попробуйте перезапустить процесс завершения заказа."
     )
-
 
 
 @router.message(F.text == "⚙️ Настройки")
@@ -1167,22 +1168,21 @@ async def btn_settings_master(message: Message):
 async def callback_export_order_master(callback: CallbackQuery):
     """
     Экспорт заявки в Excel (для мастера)
-    
+
     Args:
         callback: Callback query
     """
     order_id = int(callback.data.split(":")[1])
-    
+
     await callback.answer("⏳ Генерирую Excel файл...")
-    
+
     from app.services.order_export import OrderExportService
-    
+
     excel_file = await OrderExportService.export_order_to_excel(order_id)
-    
+
     if excel_file:
         await callback.message.answer_document(
-            document=excel_file,
-            caption=f"📊 Детали заявки #{order_id}"
+            document=excel_file, caption=f"📊 Детали заявки #{order_id}"
         )
         logger.info(f"Order #{order_id} exported to Excel by master {callback.from_user.id}")
     else:
@@ -1196,49 +1196,48 @@ async def callback_export_order_master(callback: CallbackQuery):
 async def callback_reschedule_order(callback: CallbackQuery, state: FSMContext):
     """
     Начало процесса переноса заявки
-    
+
     Args:
         callback: Callback query
         state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-        
+
         # Проверяем, что заявка в статусе ASSIGNED или ACCEPTED
         if order.status not in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]:
             await callback.answer(
-                "Перенести можно только заявки в статусе 'Назначена' или 'Принята'", 
-                show_alert=True
+                "Перенести можно только заявки в статусе 'Назначена' или 'Принята'", show_alert=True
             )
             return
-        
+
         # Сохраняем данные в state
         await state.update_data(order_id=order_id, reschedule_initiated_by=callback.from_user.id)
-        
+
         # Переходим к вводу нового времени
         await state.set_state(RescheduleOrderStates.enter_new_time)
-        
+
         current_time = order.scheduled_time or "не указано"
-        
+
         await callback.message.edit_text(
             f"📅 <b>Перенос заявки #{order_id}</b>\n\n"
             f"⏰ Сейчас: {current_time}\n\n"
             f"Напишите новое время:\n"
             f"<i>Например: завтра 14:00, сегодня 18:00, через 2 часа</i>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         await callback.answer()
-        
+
     finally:
         await db.disconnect()
 
@@ -1247,24 +1246,24 @@ async def callback_reschedule_order(callback: CallbackQuery, state: FSMContext):
 async def process_reschedule_new_time(message: Message, state: FSMContext):
     """
     Обработка ввода нового времени для переноса заявки
-    
+
     Args:
         message: Сообщение
         state: FSM контекст
     """
     new_time = message.text.strip()
-    
+
     # Сохраняем новое время
     await state.update_data(new_scheduled_time=new_time)
-    
+
     # Переходим к запросу причины
     await state.set_state(RescheduleOrderStates.enter_reason)
-    
+
     await message.reply(
         f"✅ Новое время: <b>{new_time}</b>\n\n"
         f"Укажите причину переноса:\n"
         f"<i>(или отправьте '-' чтобы пропустить)</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
 
@@ -1272,75 +1271,75 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
 async def process_reschedule_reason(message: Message, state: FSMContext):
     """
     Обработка ввода причины переноса и завершение процесса
-    
+
     Args:
         message: Сообщение
         state: FSM контекст
     """
     reason = message.text.strip()
-    
+
     # Если пользователь указал "-", причины нет
     if reason == "-":
         reason = None
-    
+
     # Получаем данные из state
     data = await state.get_data()
     order_id = data.get("order_id")
     new_time = data.get("new_scheduled_time")
     initiated_by = data.get("reschedule_initiated_by")
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
-        
+
         # Обновляем заявку
         old_time = order.scheduled_time or "не указано"
-        
+
         await db.connection.execute(
             """
-            UPDATE orders 
+            UPDATE orders
             SET scheduled_time = ?,
                 rescheduled_count = rescheduled_count + 1,
                 last_rescheduled_at = ?,
                 reschedule_reason = ?
             WHERE id = ?
             """,
-            (new_time, get_now(), reason, order_id)
+            (new_time, get_now(), reason, order_id),
         )
         await db.connection.commit()
-        
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="RESCHEDULE_ORDER",
             details=f"Order #{order_id} rescheduled from '{old_time}' to '{new_time}'. Reason: {reason or 'не указана'}",
         )
-        
+
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} перенесена</b>\n\n"
             f"Было: {old_time}\n"
             f"Стало: <b>{new_time}</b>\n"
         )
-        
+
         if reason:
             result_text += f"\n📝 {reason}"
-        
-        result_text += f"\n\n<i>Диспетчер уведомлен</i>"
-        
+
+        result_text += "\n\n<i>Диспетчер уведомлен</i>"
+
         await message.reply(result_text, parse_mode="HTML")
-        
+
         # Уведомляем диспетчера
         if order.dispatcher_id:
             master = await db.get_master_by_telegram_id(initiated_by)
             master_name = master.get_display_name() if master else f"ID: {initiated_by}"
-            
+
             notification = (
                 f"📅 <b>Заявка #{order_id} перенесена</b>\n\n"
                 f"👨‍🔧 {master_name}\n"
@@ -1349,26 +1348,22 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
                 f"Было: {old_time}\n"
                 f"<b>Стало: {new_time}</b>\n"
             )
-            
+
             if reason:
                 notification += f"\n📝 {reason}"
-            
-            notification += f"\n\n💡 Свяжитесь с клиентом для подтверждения"
-            
+
+            notification += "\n\n💡 Свяжитесь с клиентом для подтверждения"
+
             try:
-                await message.bot.send_message(
-                    order.dispatcher_id,
-                    notification,
-                    parse_mode="HTML"
-                )
+                await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
                 logger.info(f"Reschedule notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
-        
+
         log_action(message.from_user.id, "RESCHEDULE_ORDER", f"Order #{order_id}")
-        
+
         logger.info(f"✅ Order #{order_id} successfully rescheduled to '{new_time}'")
-        
+
     except Exception as e:
         logger.exception(f"❌ Error rescheduling order #{order_id}: {e}")
         await message.reply(

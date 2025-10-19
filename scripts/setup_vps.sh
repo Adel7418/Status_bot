@@ -37,7 +37,7 @@ print_info "=========================================="
 echo ""
 
 # Проверка прав суперпользователя
-if [ "$EUID" -eq 0 ]; then 
+if [ "$EUID" -eq 0 ]; then
     print_warning "Скрипт запущен от root"
     IS_ROOT=true
 else
@@ -71,21 +71,21 @@ if command -v docker &> /dev/null; then
     print_warning "Docker уже установлен (версия $(docker --version))"
 else
     print_info "Установка Docker..."
-    
+
     # Удаление старых версий
     if [ "$IS_ROOT" = true ]; then
         apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
     else
         sudo apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
     fi
-    
+
     # Установка зависимостей
     if [ "$IS_ROOT" = true ]; then
         apt install -y ca-certificates curl gnupg lsb-release
     else
         sudo apt install -y ca-certificates curl gnupg lsb-release
     fi
-    
+
     # Добавление официального GPG ключа Docker
     if [ "$IS_ROOT" = true ]; then
         install -m 0755 -d /etc/apt/keyrings
@@ -96,7 +96,7 @@ else
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         sudo chmod a+r /etc/apt/keyrings/docker.gpg
     fi
-    
+
     # Добавление репозитория
     if [ "$IS_ROOT" = true ]; then
         echo \
@@ -107,7 +107,7 @@ else
           "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
           $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     fi
-    
+
     # Установка Docker
     if [ "$IS_ROOT" = true ]; then
         apt update
@@ -116,7 +116,7 @@ else
         sudo apt update
         sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     fi
-    
+
     print_success "Docker установлен"
 fi
 
@@ -188,4 +188,3 @@ echo "     git clone https://github.com/Adel7418/Status_bot.git ~/telegram_repai
 echo ""
 print_info "📖 Полное руководство: DEPLOY_VPS_LINUX_GUIDE.md"
 echo ""
-

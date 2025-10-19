@@ -1,7 +1,7 @@
 # ✅ Проект готов к деплою!
 
-**Дата:** 16.10.2025  
-**Версия:** v1.3.0  
+**Дата:** 16.10.2025
+**Версия:** v1.3.0
 **Статус:** 🚀 Production Ready
 
 ---
@@ -222,7 +222,7 @@ DEV_MODE=true
    ```bash
    # Проверка статуса
    docker-compose -f docker/docker-compose.prod.yml ps
-   
+
    # Проверка логов
    docker-compose -f docker/docker-compose.prod.yml logs -f bot | grep ERROR
    ```
@@ -231,7 +231,7 @@ DEV_MODE=true
    ```bash
    # CPU и Memory
    docker stats telegram_repair_bot_prod
-   
+
    # Диск
    df -h
    du -sh bot_database.db
@@ -241,7 +241,7 @@ DEV_MODE=true
    ```bash
    # Размер БД
    ls -lh bot_database.db
-   
+
    # Количество записей
    docker-compose -f docker/docker-compose.prod.yml exec bot python scripts/check_database.py
    ```
@@ -395,7 +395,6 @@ crontab -e
 
 **Удачного деплоя! 🚀**
 
-**Подготовил:** AI Assistant (Claude Sonnet 4.5)  
-**Дата:** 16.10.2025  
+**Подготовил:** AI Assistant (Claude Sonnet 4.5)
+**Дата:** 16.10.2025
 **Версия проекта:** v1.3.0
-

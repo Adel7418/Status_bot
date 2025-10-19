@@ -68,7 +68,7 @@ if docker compose -f docker/docker-compose.prod.yml exec bot alembic upgrade hea
     print_success "Миграции успешно применены через Alembic!"
 else
     print_warning "Alembic не сработал, применяем миграции через Python скрипт..."
-    
+
     # Применяем миграции через Python скрипт
     if docker compose -f docker/docker-compose.prod.yml exec bot python scripts/fix_migrations_prod.py; then
         print_success "Миграции успешно применены через Python скрипт!"

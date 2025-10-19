@@ -10,9 +10,16 @@ from typing import Any
 import aiosqlite
 
 from app.config import Config, OrderStatus, UserRole
-from app.database.models import AuditLog, Master, Order, User, FinancialReport, MasterFinancialReport
-from app.utils.helpers import get_now, MOSCOW_TZ
-from app.domain.order_state_machine import OrderStateMachine, InvalidStateTransitionError
+from app.database.models import (
+    AuditLog,
+    FinancialReport,
+    Master,
+    MasterFinancialReport,
+    Order,
+    User,
+)
+from app.domain.order_state_machine import InvalidStateTransitionError, OrderStateMachine
+from app.utils.helpers import MOSCOW_TZ, get_now
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +37,8 @@ class Database:
         """
         self.db_path = db_path or Config.DATABASE_PATH
         self.connection: aiosqlite.Connection | None = None
-    
+        self._service_factory = None
+
     async def connect(self):
         """Подключение к базе данных"""
         self.connection = await aiosqlite.connect(self.db_path)
@@ -45,27 +53,41 @@ class Database:
             await self.connection.close()
             logger.info("Отключено от базы данных")
 
+    @property
+    def services(self):
+        """
+        Получение Service Factory для доступа к сервисам
+
+        Returns:
+            ServiceFactory: Фабрика сервисов
+        """
+        if self._service_factory is None:
+            from app.services.service_factory import ServiceFactory
+
+            self._service_factory = ServiceFactory(self.connection)
+        return self._service_factory
+
     @asynccontextmanager
     async def transaction(self):
         """
         Context manager для транзакционной изоляции
-        
+
         Использует BEGIN IMMEDIATE для предотвращения race conditions в SQLite.
         Автоматически делает commit при успехе или rollback при ошибке.
-        
+
         Usage:
             async with db.transaction():
                 # Все операции внутри этого блока атомарны
                 await db.connection.execute(...)
                 await db.connection.execute(...)
                 # commit выполнится автоматически
-        
+
         Raises:
             Exception: Любая ошибка внутри транзакции вызовет rollback
         """
         if not self.connection:
             raise RuntimeError("База данных не подключена")
-        
+
         # BEGIN IMMEDIATE получает эксклюзивную блокировку сразу
         # Это предотвращает race conditions в SQLite
         await self.connection.execute("BEGIN IMMEDIATE")
@@ -81,10 +103,10 @@ class Database:
     async def init_db(self):
         """
         Инициализация базы данных
-        
+
         ВАЖНО: Схема БД управляется через Alembic миграции!
         Этот метод только проверяет существование таблиц для обратной совместимости.
-        
+
         Для применения миграций используйте:
         $ alembic upgrade head
         """
@@ -98,10 +120,7 @@ class Database:
         table_exists = await cursor.fetchone()
 
         if not table_exists:
-            logger.warning(
-                "⚠️  Таблицы БД не найдены! "
-                "Запустите миграции: alembic upgrade head"
-            )
+            logger.warning("⚠️  Таблицы БД не найдены! " "Запустите миграции: alembic upgrade head")
             # Создаем базовую схему для обратной совместимости
             await self._create_legacy_schema()
         else:
@@ -116,7 +135,7 @@ class Database:
         DEPRECATED: Используйте Alembic миграции!
         """
         logger.warning("⚠️  Создание legacy схемы. Рекомендуется использовать Alembic!")
-        
+
         # Минимальная схема для работы
         await self.connection.execute(
             """
@@ -348,7 +367,7 @@ class Database:
     async def add_user_role(self, telegram_id: int, role: str) -> bool:
         """
         Добавление роли пользователю (не удаляя существующие)
-        
+
         Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
@@ -371,14 +390,14 @@ class Database:
                 "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
             )
             # commit() выполнится автоматически
-        
+
         logger.info("Роль %s добавлена пользователю %s. Роли: %s", role, telegram_id, new_roles)
         return True
 
     async def remove_user_role(self, telegram_id: int, role: str) -> bool:
         """
         Удаление роли у пользователя
-        
+
         Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
@@ -401,7 +420,7 @@ class Database:
                 "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
             )
             # commit() выполнится автоматически
-        
+
         logger.info(f"Роль {role} удалена у пользователя {telegram_id}. Роли: {new_roles}")
         return True
 
@@ -458,16 +477,16 @@ class Database:
     async def get_admins_and_dispatchers(self, exclude_user_id: int = None) -> list[User]:
         """
         Получение всех админов и диспетчеров
-        
+
         Args:
             exclude_user_id: ID пользователя для исключения (например, создателя заявки)
-        
+
         Returns:
             Список пользователей с ролями ADMIN или DISPATCHER
         """
         users = await self.get_all_users()
         result = []
-        
+
         for user in users:
             # Проверяем, есть ли у пользователя роль админа или диспетчера
             if user.has_role(UserRole.ADMIN) or user.has_role(UserRole.DISPATCHER):
@@ -475,7 +494,7 @@ class Database:
                 if exclude_user_id and user.telegram_id == exclude_user_id:
                     continue
                 result.append(user)
-        
+
         return result
 
     # ==================== MASTERS ====================
@@ -729,20 +748,22 @@ class Database:
         """
         # Логируем перед обновлением
         logger.info(f"Updating work_chat_id for master {telegram_id} to {work_chat_id}")
-        
+
         await self.connection.execute(
             "UPDATE masters SET work_chat_id = ? WHERE telegram_id = ?", (work_chat_id, telegram_id)
         )
         await self.connection.commit()
-        
+
         # Проверяем результат обновления
         cursor = await self.connection.execute(
             "SELECT work_chat_id FROM masters WHERE telegram_id = ?", (telegram_id,)
         )
         result = await cursor.fetchone()
         actual_work_chat_id = result["work_chat_id"] if result else None
-        
-        logger.info(f"Work chat для мастера {telegram_id} установлен: {work_chat_id}, фактически в БД: {actual_work_chat_id}")
+
+        logger.info(
+            f"Work chat для мастера {telegram_id} установлен: {work_chat_id}, фактически в БД: {actual_work_chat_id}"
+        )
         return True
 
     # ==================== ORDERS ====================
@@ -812,8 +833,7 @@ class Database:
         )
 
         logger.info(f"Создана заявка #{order.id}")
-        
-        
+
         return order
 
     async def get_order_by_id(self, order_id: int) -> Order | None:
@@ -886,7 +906,8 @@ class Database:
                 ),
                 estimated_completion_date=(
                     row["estimated_completion_date"]
-                    if "estimated_completion_date" in row.keys() and row["estimated_completion_date"] is not None
+                    if "estimated_completion_date" in row.keys()
+                    and row["estimated_completion_date"] is not None
                     else None
                 ),
                 prepayment_amount=(
@@ -894,8 +915,12 @@ class Database:
                     if "prepayment_amount" in row.keys() and row["prepayment_amount"] is not None
                     else None
                 ),
-                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ) if row["created_at"] else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ) if row["updated_at"] else None,
+                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["created_at"]
+                else None,
+                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["updated_at"]
+                else None,
                 dispatcher_name=row["dispatcher_name"],
                 master_name=row["master_name"],
             )
@@ -985,10 +1010,14 @@ class Database:
                         else None
                     ),
                     created_at=(
-                        datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ) if row["created_at"] else None
+                        datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                        if row["created_at"]
+                        else None
                     ),
                     updated_at=(
-                        datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ) if row["updated_at"] else None
+                        datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                        if row["updated_at"]
+                        else None
                     ),
                     dispatcher_name=row["dispatcher_name"],
                     master_name=row["master_name"],
@@ -1007,7 +1036,7 @@ class Database:
     ) -> bool:
         """
         Обновление статуса заявки с валидацией переходов и логированием изменений
-        
+
         Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
@@ -1045,13 +1074,9 @@ class Database:
                         user_roles=user_roles,
                         raise_exception=True,
                     )
-                    logger.info(
-                        f"✅ Валидация перехода пройдена: {old_status} → {status}"
-                    )
+                    logger.info(f"✅ Валидация перехода пройдена: {old_status} → {status}")
                 except InvalidStateTransitionError as e:
-                    logger.error(
-                        f"❌ Недопустимый переход статуса для заявки #{order_id}: {e}"
-                    )
+                    logger.error(f"❌ Недопустимый переход статуса для заявки #{order_id}: {e}")
                     raise  # Пробрасываем исключение выше
 
             # Обновляем статус заявки
@@ -1094,7 +1119,7 @@ class Database:
         """
         cursor = await self.connection.execute(
             """
-            SELECT 
+            SELECT
                 h.id,
                 h.order_id,
                 h.old_status,
@@ -1121,7 +1146,9 @@ class Database:
                     "old_status": row["old_status"],
                     "new_status": row["new_status"],
                     "changed_by": row["changed_by"],
-                    "changed_by_name": row["changed_by_name"].strip() if row["changed_by_name"] else None,
+                    "changed_by_name": row["changed_by_name"].strip()
+                    if row["changed_by_name"]
+                    else None,
                     "changed_at": row["changed_at"],
                     "notes": row["notes"],
                 }
@@ -1134,7 +1161,7 @@ class Database:
     ) -> bool:
         """
         Назначение мастера на заявку с валидацией перехода статуса
-        
+
         Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
@@ -1318,10 +1345,14 @@ class Database:
                         else None
                     ),
                     created_at=(
-                        datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ) if row["created_at"] else None
+                        datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                        if row["created_at"]
+                        else None
                     ),
                     updated_at=(
-                        datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ) if row["updated_at"] else None
+                        datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                        if row["updated_at"]
+                        else None
                     ),
                     dispatcher_name=row["dispatcher_name"],
                     master_name=row["master_name"],
@@ -1498,7 +1529,7 @@ class Database:
             Список заказов
         """
         query = """
-            SELECT o.*, 
+            SELECT o.*,
                    mu.first_name || ' ' || COALESCE(mu.last_name, '') as master_name,
                    d.first_name || ' ' || COALESCE(d.last_name, '') as dispatcher_name
             FROM orders o
@@ -1540,8 +1571,12 @@ class Database:
                 company_profit=row["company_profit"],
                 has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
                 out_of_city=bool(row["out_of_city"]) if row["out_of_city"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ) if row["created_at"] else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ) if row["updated_at"] else None,
+                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["created_at"]
+                else None,
+                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["updated_at"]
+                else None,
             )
 
             # Добавляем имена мастеров и диспетчеров
@@ -1621,7 +1656,9 @@ class Database:
         return FinancialReport(
             id=row["id"],
             report_type=row["report_type"],
-            period_start=datetime.fromisoformat(row["period_start"]) if row["period_start"] else None,
+            period_start=datetime.fromisoformat(row["period_start"])
+            if row["period_start"]
+            else None,
             period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
             total_orders=row["total_orders"],
             total_amount=row["total_amount"],
@@ -1682,7 +1719,7 @@ class Database:
         """
         cursor = await self.connection.execute(
             "SELECT * FROM master_financial_reports WHERE report_id = ? ORDER BY total_master_profit DESC",
-            (report_id,)
+            (report_id,),
         )
         rows = await cursor.fetchall()
 
@@ -1727,7 +1764,9 @@ class Database:
             report = FinancialReport(
                 id=row["id"],
                 report_type=row["report_type"],
-                period_start=datetime.fromisoformat(row["period_start"]) if row["period_start"] else None,
+                period_start=datetime.fromisoformat(row["period_start"])
+                if row["period_start"]
+                else None,
                 period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
                 total_orders=row["total_orders"],
                 total_amount=row["total_amount"],

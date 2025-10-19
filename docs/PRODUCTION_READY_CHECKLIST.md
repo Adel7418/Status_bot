@@ -364,9 +364,8 @@ pre-commit run black --all-files
 
 ---
 
-**Версия:** 1.2.0  
-**Статус:** ✅ Production Ready  
+**Версия:** 1.2.0
+**Статус:** ✅ Production Ready
 **Дата:** 12.12.2024
 
 **Happy Coding! 🚀**
-

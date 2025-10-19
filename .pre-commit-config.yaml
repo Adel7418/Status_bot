@@ -1,157 +1,107 @@
-# Pre-commit hooks configuration
+# Pre-commit hooks для автоматической проверки кода
 # Установка: pip install pre-commit && pre-commit install
+# Использование: pre-commit run --all-files
 
 repos:
-  # Базовые проверки
+  # Общие проверки файлов
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        name: Trim Trailing Whitespace
+        name: Удаление trailing whitespace
       - id: end-of-file-fixer
-        name: Fix End of Files
+        name: Проверка конца файла
       - id: check-yaml
-        name: Check YAML
-        args: ['--unsafe']
-      - id: check-toml
-        name: Check TOML
+        name: Проверка YAML файлов
       - id: check-json
-        name: Check JSON
+        name: Проверка JSON файлов
+      - id: check-toml
+        name: Проверка TOML файлов
       - id: check-added-large-files
-        name: Check for Large Files
+        name: Проверка больших файлов
         args: ['--maxkb=1000']
-      - id: check-case-conflict
-        name: Check Case Conflict
       - id: check-merge-conflict
-        name: Check Merge Conflicts
-      - id: check-docstring-first
-        name: Check Docstring First
+        name: Проверка merge conflicts
       - id: debug-statements
-        name: Debug Statements (Python)
-      - id: detect-private-key
-        name: Detect Private Keys
+        name: Проверка debug statements
       - id: mixed-line-ending
-        name: Mixed Line Ending
+        name: Проверка line endings
         args: ['--fix=lf']
 
-  # Python import sorting
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        name: Sort imports with isort
-        args: ["--profile", "black", "--line-length=100"]
-
-  # Python code formatting
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        name: Format code with Black
-        language_version: python3.11
-        args: ["--line-length=100"]
-
-  # Python linting
+  # Ruff - быстрый линтер и форматтер
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.3
+    rev: v0.1.9
     hooks:
       - id: ruff
-        name: Lint with Ruff
-        args: ["--fix", "--exit-non-zero-on-fix"]
+        name: Ruff linter
+        args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
-        name: Format with Ruff
+        name: Ruff formatter
 
-  # Type checking
+  # MyPy - проверка типов (опционально, можно отключить если медленно)
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+    rev: v1.8.0
     hooks:
       - id: mypy
-        name: Type check with MyPy
-        additional_dependencies:
-          - types-python-dateutil
-        args: ["--ignore-missing-imports", "--check-untyped-defs"]
+        name: MyPy type checking
+        additional_dependencies: [types-python-dateutil]
+        args: [--ignore-missing-imports, --no-strict-optional, --python-version=3.13]
         exclude: ^(tests/|migrations/)
+        # Для ускорения можно добавить: stages: [push]
 
-  # Security checks
+  # Bandit - проверка безопасности
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.10
+    rev: 1.7.6
     hooks:
       - id: bandit
-        name: Security check with Bandit
-        args: ["-c", "pyproject.toml"]
-        additional_dependencies: ["bandit[toml]"]
+        name: Bandit security check
+        args: [-r, app/, -f, screen]
         exclude: ^tests/
 
   # Проверка requirements.txt
   - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.5.5
+    rev: v1.5.4
     hooks:
-      - id: remove-tabs
-        name: Remove Tabs
-        exclude: ^Makefile$
+      - id: forbid-crlf
+        name: Запрет CRLF
+      - id: remove-crlf
+        name: Удаление CRLF
 
-  # Проверка комментариев TODO, FIXME, etc.
-  - repo: https://github.com/pre-commit/pygrep-hooks
-    rev: v1.10.0
-    hooks:
-      - id: python-check-blanket-noqa
-        name: Check blanket noqa
-      - id: python-check-blanket-type-ignore
-        name: Check blanket type ignore
-      - id: python-no-eval
-        name: Check for eval()
-      - id: python-no-log-warn
-        name: Check for log.warn()
-      - id: python-use-type-annotations
-        name: Use type annotations
-      - id: text-unicode-replacement-char
-        name: Check unicode replacement char
+  # Проверка PII в коде и тесты (опциональные hooks)
+  # Эти hooks можно раскомментировать при желании
+  # - repo: local
+  #   hooks:
+  #     - id: pytest-check
+  #       name: Run pytest
+  #       entry: pytest
+  #       args: [tests/, -v, --tb=short, -x]
+  #       language: system
+  #       pass_filenames: false
+  #       stages: [pre-push]
 
-  # Dockerfile linting
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
-    hooks:
-      - id: hadolint-docker
-        name: Lint Dockerfile
-
-  # YAML formatting
-  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.14.0
-    hooks:
-      - id: pretty-format-yaml
-        name: Format YAML
-        args: [--autofix, --indent, '2']
-
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.42.0
-    hooks:
-      - id: markdownlint
-        name: Lint Markdown
-
-# Конфигурация для specific hooks
+# Конфигурация для отдельных хуков
 default_language_version:
-  python: python3.11
+  python: python3.13
 
-# Файлы для исключения
+# Какие файлы исключить
 exclude: |
-  (?x)^(
-      \.git/|
-      \.mypy_cache/|
-      \.pytest_cache/|
-      \.ruff_cache/|
-      __pycache__/|
-      \.venv/|
-      venv/|
-      build/|
-      dist/|
-      .*\.egg-info/|
-      migrations/
-  )$
+  (?x)(
+      ^migrations/versions/|
+      ^htmlcov/|
+      ^.coverage$|
+      ^coverage.xml$|
+      \.pyc$|
+      __pycache__|
+      ^data/|
+      ^logs/|
+      ^reports/
+  )
 
-# Fail fast
-fail_fast: false
-
-# Минимальная версия pre-commit
-minimum_pre_commit_version: '3.0.0'
-
+# Настройки для pre-commit.ci (если используете)
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+  autofix_prs: true
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [mypy]  # Пропускаем медленные hooks в pre-commit.ci

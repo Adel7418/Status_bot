@@ -213,11 +213,11 @@ def process_data(
 ) -> Optional[Result]:
     """
     Process data with timeout.
-    
+
     Args:
         data: List of dictionaries to process
         timeout: Timeout in seconds
-        
+
     Returns:
         Result object or None if failed
     """
@@ -230,20 +230,20 @@ def process_data(
 def complex_function(arg1: str, arg2: int) -> bool:
     """
     One-line summary.
-    
+
     Longer description if needed.
     Multiple paragraphs are OK.
-    
+
     Args:
         arg1: Description of arg1
         arg2: Description of arg2
-        
+
     Returns:
         Description of return value
-        
+
     Raises:
         ValueError: When arg2 is negative
-        
+
     Example:
         >>> complex_function("test", 42)
         True
@@ -280,13 +280,13 @@ from app.feature import my_function
 
 class TestFeature:
     """Tests for Feature functionality."""
-    
+
     @pytest.mark.asyncio
     async def test_my_function(self):
         """Test my_function with valid input."""
         result = await my_function("test")
         assert result == expected_value
-    
+
     @pytest.mark.asyncio
     async def test_my_function_invalid_input(self):
         """Test my_function raises error on invalid input."""
@@ -370,4 +370,3 @@ open htmlcov/index.html
 ---
 
 **Спасибо за вклад в проект! 🎉**
-

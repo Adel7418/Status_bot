@@ -1,0 +1,134 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run tests before deploy
+      run: |
+        pip install -r requirements-dev.txt
+        pytest tests/ -v --tb=short
+
+    - name: Create deployment package
+      run: |
+        tar -czf telegram-repair-bot.tar.gz \
+          app/ \
+          migrations/ \
+          scripts/ \
+          bot.py \
+          requirements.txt \
+          alembic.ini \
+          docker/ \
+          --exclude='*.pyc' \
+          --exclude='__pycache__' \
+          --exclude='*.log' \
+          --exclude='*.db'
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-package-${{ github.sha }}
+        path: telegram-repair-bot.tar.gz
+        retention-days: 30
+
+    # Раскомментируйте и настройте для реального деплоя
+    # - name: Deploy to server via SSH
+    #   uses: appleboy/ssh-action@v1.0.0
+    #   with:
+    #     host: ${{ secrets.SERVER_HOST }}
+    #     username: ${{ secrets.SERVER_USER }}
+    #     key: ${{ secrets.SERVER_SSH_KEY }}
+    #     port: ${{ secrets.SERVER_PORT }}
+    #     script: |
+    #       cd /opt/telegram-repair-bot
+    #       git pull origin main
+    #       docker-compose down
+    #       docker-compose up -d --build
+    #       docker-compose logs -f --tail=50
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Deployment to ${{ github.event.inputs.environment || 'production' }} successful!"
+        echo "Version: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Deployment to ${{ github.event.inputs.environment || 'production' }} failed!"
+        exit 1
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: deploy
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Получаем предыдущий тег
+        PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+        if [ -z "$PREVIOUS_TAG" ]; then
+          # Первый релиз
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+        else
+          # Изменения с предыдущего релиза
+          CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        fi
+
+        # Сохраняем в файл
+        echo "$CHANGELOG" > CHANGELOG.txt
+        echo "Generated changelog"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: CHANGELOG.txt
+        draft: false
+        prerelease: false
+        files: |
+          LICENSE
+          README.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

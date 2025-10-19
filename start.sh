@@ -27,7 +27,7 @@ if ! python3 -c "import aiogram" &> /dev/null; then
     echo -e "${YELLOW}[ВНИМАНИЕ]${NC} Зависимости не установлены!"
     echo "Установка зависимостей..."
     pip3 install -r requirements.txt
-    
+
     if [ $? -ne 0 ]; then
         echo -e "${RED}[ОШИБКА]${NC} Не удалось установить зависимости!"
         exit 1
@@ -63,4 +63,3 @@ if [ $? -ne 0 ]; then
     echo "===================================="
     exit 1
 fi
-

@@ -15,6 +15,14 @@ from app.handlers.master import router as master_router
 # ВАЖНО: common_router должен быть последним, чтобы не перехватывать сообщения других роутеров
 # developer_router первым для команд разработчика (только для админов)
 # financial_reports_router ПЕРЕД dispatcher_router, чтобы перехватывать кнопку "📊 Отчеты"
-routers = [developer_router, admin_router, financial_reports_router, dispatcher_router, master_router, group_router, common_router]
+routers = [
+    developer_router,
+    admin_router,
+    financial_reports_router,
+    dispatcher_router,
+    master_router,
+    group_router,
+    common_router,
+]
 
 __all__ = ["routers"]

@@ -6,6 +6,7 @@ import logging
 import os
 from typing import Optional
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +59,3 @@ def init_sentry() -> Optional[str]:
     except Exception as e:
         logger.error(f"Ошибка инициализации Sentry: {e}")
         return None
-
-
-

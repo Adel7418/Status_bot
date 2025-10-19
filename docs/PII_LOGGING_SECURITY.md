@@ -1,7 +1,7 @@
 # Руководство по безопасному логированию (PII Security)
 
-**Дата создания:** 19 октября 2025  
-**Статус:** ✅ Внедрено  
+**Дата создания:** 19 октября 2025
+**Статус:** ✅ Внедрено
 **Соответствие:** GDPR, 152-ФЗ РФ, ISO 27001
 
 ---
@@ -297,7 +297,7 @@ LOG_RETENTION_DAYS = 30
 for log_file in os.listdir("logs/"):
     file_path = os.path.join("logs", log_file)
     file_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(file_path))
-    
+
     if file_age > timedelta(days=LOG_RETENTION_DAYS):
         os.remove(file_path)
 ```
@@ -310,10 +310,10 @@ def test_no_pii_in_logs():
     """Тест: логи не содержат PII"""
     with open("logs/bot.log") as f:
         content = f.read()
-        
+
     # Проверка на телефоны
     assert not re.search(r'\+7\d{10}', content), "Phone number found in logs!"
-    
+
     # Проверка на email
     assert not re.search(r'\b[\w.-]+@[\w.-]+\.\w+\b', content), "Email found in logs!"
 ```
@@ -346,4 +346,3 @@ def test_no_pii_in_logs():
 ---
 
 **Итог:** ✅ Проект соответствует требованиям GDPR/152-ФЗ по защите персональных данных в логах.
-

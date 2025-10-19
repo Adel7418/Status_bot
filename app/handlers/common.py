@@ -24,10 +24,10 @@ router = Router(name="common")
 async def get_menu_with_counter(user_roles: list[str]) -> ReplyKeyboardMarkup:
     """
     Получение главного меню
-    
+
     Args:
         user_roles: Список ролей пользователя
-        
+
     Returns:
         ReplyKeyboardMarkup
     """
@@ -51,15 +51,19 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
 
     # Проверяем, если это личное сообщение и пользователь ТОЛЬКО мастер
     is_private = message.chat.type == "private"
-    is_only_master = UserRole.MASTER in user_roles and UserRole.ADMIN not in user_roles and UserRole.DISPATCHER not in user_roles
-    
+    is_only_master = (
+        UserRole.MASTER in user_roles
+        and UserRole.ADMIN not in user_roles
+        and UserRole.DISPATCHER not in user_roles
+    )
+
     if is_private and is_only_master:
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.\n\n"
             "📌 Все заявки и уведомления вы будете получать в вашей рабочей группе.\n\n"
             "Если у вас нет доступа к рабочей группе - обратитесь к администратору.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
         logger.info(f"Master {message.from_user.id} tried to use bot in private chat")
         return
@@ -93,7 +97,7 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
 
     # Получаем меню с счетчиком новых заявок
     menu_keyboard = await get_menu_with_counter(user_roles)
-    
+
     # Отправляем приветствие с клавиатурой
     await message.answer(welcome_text, reply_markup=menu_keyboard)
 
@@ -388,6 +392,3 @@ async def handle_unknown_text(message: Message, user_role: str, user_roles: list
             "❓ Не понимаю эту команду. Используйте меню ниже или /help для справки.",
             reply_markup=get_main_menu_keyboard(user_roles),
         )
-
-
-

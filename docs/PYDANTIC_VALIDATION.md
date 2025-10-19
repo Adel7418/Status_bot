@@ -52,12 +52,12 @@ suspicious_patterns = [
 @router.message(CreateOrderStates.description)
 async def process_description(message: Message, state: FSMContext):
     description = message.text.strip()
-    
+
     # Валидация через Pydantic
     try:
         class DescriptionValidator(BaseModel):
             description: str = Field(..., min_length=10, max_length=500)
-            
+
             @field_validator('description')
             @classmethod
             def validate_description(cls, v: str) -> str:
@@ -65,10 +65,10 @@ async def process_description(message: Message, state: FSMContext):
                 if re.search(suspicious_pattern, v):
                     raise ValueError("Недопустимые символы")
                 return v
-        
+
         validated = DescriptionValidator(description=description)
         description = validated.description
-        
+
     except ValidationError as e:
         await message.answer(f"❌ {e.errors()[0]['msg']}")
         return
@@ -81,7 +81,7 @@ async def process_description(message: Message, state: FSMContext):
 @router.message(CreateOrderStates.confirm, F.text == "✅ Подтвердить")
 async def confirm_create_order(message: Message, state: FSMContext):
     data = await state.get_data()
-    
+
     # ФИНАЛЬНАЯ ВАЛИДАЦИЯ
     try:
         order_data = OrderCreateSchema(
@@ -100,7 +100,7 @@ async def confirm_create_order(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Ошибка валидации данных")
         return
-    
+
     # Сохраняем ТОЛЬКО валидированные данные
     order = await db.create_order(
         equipment_type=order_data.equipment_type,  # из Pydantic модели
@@ -135,7 +135,7 @@ order_data = {
 }
 
 order = OrderCreateSchema(**order_data)
-# ValidationError: Недопустимый тип техники. 
+# ValidationError: Недопустимый тип техники.
 # Допустимые: Стиральные машины, Духовой шкаф, ...
 ```
 
@@ -288,10 +288,10 @@ try:
         client_phone="89001234567",
         dispatcher_id=message.from_user.id,
     )
-    
+
     # Все данные валидны, сохраняем
     await db.create_order(**order_data.model_dump())
-    
+
 except ValidationError as e:
     # Валидация не прошла
     error_msg = e.errors()[0]['msg']
@@ -309,9 +309,9 @@ try:
         specialization="Ремонт стиральных машин",
         is_approved=False,
     )
-    
+
     await db.create_master(**master_data.model_dump())
-    
+
 except ValidationError as e:
     logger.error(f"Master validation failed: {e}")
 ```
@@ -324,9 +324,9 @@ try:
     update_data = OrderUpdateSchema(
         client_phone="89009999999",  # будет +79009999999
     )
-    
+
     await db.update_order(order_id, **update_data.model_dump(exclude_none=True))
-    
+
 except ValidationError as e:
     await message.answer(f"❌ {e.errors()[0]['msg']}")
 ```
@@ -378,7 +378,6 @@ telegram_id = 999_999_999_999
 
 ---
 
-*Документация создана: 2025-10-12*  
-*Версия: 1.0*  
+*Документация создана: 2025-10-12*
+*Версия: 1.0*
 *Автор: AI Assistant*
-

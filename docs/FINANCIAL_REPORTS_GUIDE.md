@@ -241,7 +241,7 @@ docker compose -f docker-compose.prod.yml start bot
 **Решение:** Проверьте, что в указанном периоде есть завершенные заказы (статус CLOSED)
 
 ### Проблема: Ошибка при создании Excel
-**Решение:** 
+**Решение:**
 1. Проверьте, что установлен `openpyxl`: `pip install openpyxl`
 2. Проверьте права на запись в папку `reports/`
 
@@ -257,6 +257,5 @@ docker compose -f docker-compose.prod.yml start bot
 
 ---
 
-**Версия:** 1.0  
+**Версия:** 1.0
 **Дата:** 14.01.2025
-

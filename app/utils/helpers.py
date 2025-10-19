@@ -4,7 +4,7 @@
 
 import logging
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 
 
@@ -21,7 +21,7 @@ MOSCOW_TZ = timezone(timedelta(hours=3))
 def get_now() -> datetime:
     """
     Получить текущее время в московском часовом поясе
-    
+
     Returns:
         datetime объект с московским timezone
     """
@@ -119,12 +119,12 @@ def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
 def escape_html(text: str | None) -> str:
     """
     Экранирование специальных символов для HTML
-    
+
     Защита от HTML injection при использовании parse_mode="HTML"
-    
+
     Args:
         text: Исходный текст
-        
+
     Returns:
         Экранированный текст безопасный для HTML
     """
@@ -136,9 +136,9 @@ def escape_html(text: str | None) -> str:
 def escape_markdown(text: str) -> str:
     """
     Экранирование специальных символов для Markdown
-    
+
     ⚠️ DEPRECATED: Используйте escape_html() если parse_mode="HTML"
-    
+
     Эта функция оставлена для обратной совместимости, но не используется в текущем проекте.
     Весь проект использует parse_mode="HTML", поэтому нужен escape_html().
 
@@ -246,8 +246,6 @@ def log_action(user_id: int, action: str, details: str | None = None):
     if details:
         log_msg += f" - {details}"
     logger.info(log_msg)
-
-
 
 
 def calculate_profit_split(

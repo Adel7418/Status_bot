@@ -272,17 +272,17 @@ db_file = "backups/bot_database_2025-10-12_15-43-55.db"
 try:
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
-    
+
     # Проверка таблиц
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = cursor.fetchall()
-    
+
     print(f"✅ База данных целая. Найдено таблиц: {len(tables)}")
     for table in tables:
         cursor.execute(f"SELECT COUNT(*) FROM {table[0]}")
         count = cursor.fetchone()[0]
         print(f"   {table[0]}: {count} записей")
-    
+
     conn.close()
 except Exception as e:
     print(f"❌ Ошибка: {e}")
@@ -325,7 +325,7 @@ Write-Host "Восстановлено из: $($latest.Name)"
 
 ---
 
-**Дата создания:** 12 октября 2025  
+**Дата создания:** 12 октября 2025
 **Версия:** 1.0
 
 ---
@@ -339,4 +339,3 @@ Write-Host "Восстановлено из: $($latest.Name)"
 🕐 Последний backup: 2025-10-12 15:43:55
 ✅ Автоочистка: Включена (30 дней)
 ```
-

@@ -1,7 +1,7 @@
 # 🚀 Deployment Instructions
 
-**Дата:** 12 декабря 2024  
-**Версия:** 1.2.1  
+**Дата:** 12 декабря 2024
+**Версия:** 1.2.1
 **Статус:** ✅ Готов к deployment
 
 ---
@@ -507,9 +507,8 @@ docker-compose -f docker/docker-compose.prod.yml up -d bot
 
 ---
 
-**Версия:** 1.2.1  
-**Статус:** ✅ **READY FOR PRODUCTION DEPLOYMENT**  
+**Версия:** 1.2.1
+**Статус:** ✅ **READY FOR PRODUCTION DEPLOYMENT**
 **Дата:** 12 декабря 2024
 
 **🚀 Good luck with deployment!**
-

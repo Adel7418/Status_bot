@@ -124,7 +124,7 @@ docker compose -f docker/docker-compose.prod.yml exec bot python scripts/fix_mig
    ```python
    # Было
    down_revision = '003'
-   
+
    # Стало
    down_revision = '003_add_dr_fields'
    ```
@@ -158,7 +158,7 @@ docker compose -f docker/docker-compose.prod.yml exec bot python scripts/fix_mig
 ```python
 class Order:
     # ... существующие поля ...
-    
+
     # Добавляем новое поле
     priority: str | None = None  # NEW, URGENT, CRITICAL
 ```

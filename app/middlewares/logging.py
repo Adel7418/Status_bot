@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class LoggingMiddleware(BaseMiddleware):
     """
     Middleware для централизованного логирования всех событий
-    
+
     Логирует:
     - Входящие сообщения и callback queries
     - User ID, username, chat type
@@ -32,7 +32,7 @@ class LoggingMiddleware(BaseMiddleware):
     def __init__(self, log_level: int = logging.INFO):
         """
         Инициализация
-        
+
         Args:
             log_level: Уровень логирования (по умолчанию INFO)
         """
@@ -47,12 +47,12 @@ class LoggingMiddleware(BaseMiddleware):
     ) -> Any:
         """
         Обработка события с логированием
-        
+
         Args:
             handler: Следующий handler
             event: Событие (Message или CallbackQuery)
             data: Данные
-            
+
         Returns:
             Результат выполнения handler
         """
@@ -88,7 +88,7 @@ class LoggingMiddleware(BaseMiddleware):
                 text_preview = "[other media]"
 
             # Убираем эмодзи из логов для совместимости с cp1251
-            clean_text = text_preview.encode('ascii', errors='ignore').decode('ascii')
+            clean_text = text_preview.encode("ascii", errors="ignore").decode("ascii")
             logger.log(
                 self.log_level,
                 f"[MSG] Message from {user_info} in {chat_type}: {clean_text}",
@@ -112,9 +112,7 @@ class LoggingMiddleware(BaseMiddleware):
             # Логируем успешную обработку
             if duration > 1.0:
                 # Если обработка > 1 сек - логируем как WARNING
-                logger.warning(
-                    f"[SLOW] Handler processed in {duration:.2f}s by {user_info}"
-                )
+                logger.warning(f"[SLOW] Handler processed in {duration:.2f}s by {user_info}")
             else:
                 logger.log(
                     logging.DEBUG,
@@ -126,9 +124,6 @@ class LoggingMiddleware(BaseMiddleware):
         except Exception as e:
             # Логируем ошибку
             duration = time.time() - start_time
-            logger.error(
-                f"[ERROR] After {duration:.2f}s for {user_info}: {type(e).__name__}: {e}"
-            )
+            logger.error(f"[ERROR] After {duration:.2f}s for {user_info}: {type(e).__name__}: {e}")
             # Пробрасываем исключение дальше (для global error handler)
             raise
-

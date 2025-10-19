@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.11', '3.12']
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         run: |
           # Ruff linter
           ruff check . --output-format=github
-          
+
           # Black formatter check
           black --check --diff .
 
@@ -64,4 +64,3 @@ jobs:
           path: |
             htmlcov/
             .coverage
-
