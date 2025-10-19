@@ -3,6 +3,7 @@
 """
 
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
@@ -11,6 +12,7 @@ import aiosqlite
 from app.config import Config, OrderStatus, UserRole
 from app.database.models import AuditLog, Master, Order, User, FinancialReport, MasterFinancialReport
 from app.utils.helpers import get_now, MOSCOW_TZ
+from app.domain.order_state_machine import OrderStateMachine, InvalidStateTransitionError
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,39 @@ class Database:
         if self.connection:
             await self.connection.close()
             logger.info("Отключено от базы данных")
+
+    @asynccontextmanager
+    async def transaction(self):
+        """
+        Context manager для транзакционной изоляции
+        
+        Использует BEGIN IMMEDIATE для предотвращения race conditions в SQLite.
+        Автоматически делает commit при успехе или rollback при ошибке.
+        
+        Usage:
+            async with db.transaction():
+                # Все операции внутри этого блока атомарны
+                await db.connection.execute(...)
+                await db.connection.execute(...)
+                # commit выполнится автоматически
+        
+        Raises:
+            Exception: Любая ошибка внутри транзакции вызовет rollback
+        """
+        if not self.connection:
+            raise RuntimeError("База данных не подключена")
+        
+        # BEGIN IMMEDIATE получает эксклюзивную блокировку сразу
+        # Это предотвращает race conditions в SQLite
+        await self.connection.execute("BEGIN IMMEDIATE")
+        try:
+            yield self.connection
+            await self.connection.commit()
+            logger.debug("✅ Транзакция успешно завершена (commit)")
+        except Exception as e:
+            await self.connection.rollback()
+            logger.error(f"❌ Транзакция отменена (rollback): {e}")
+            raise
 
     async def init_db(self):
         """
@@ -313,6 +348,8 @@ class Database:
     async def add_user_role(self, telegram_id: int, role: str) -> bool:
         """
         Добавление роли пользователю (не удаляя существующие)
+        
+        Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
             telegram_id: Telegram ID
@@ -321,24 +358,28 @@ class Database:
         Returns:
             True если успешно
         """
-        user = await self.get_user_by_telegram_id(telegram_id)
-        if not user:
-            logger.error(f"Пользователь {telegram_id} не найден")
-            return False
+        async with self.transaction():
+            user = await self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                logger.error(f"Пользователь {telegram_id} не найден")
+                return False
 
-        # Используем метод модели для добавления роли
-        new_roles = user.add_role(role)
+            # Используем метод модели для добавления роли
+            new_roles = user.add_role(role)
 
-        await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
-        )
-        await self.connection.commit()
+            await self.connection.execute(
+                "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
+            )
+            # commit() выполнится автоматически
+        
         logger.info("Роль %s добавлена пользователю %s. Роли: %s", role, telegram_id, new_roles)
         return True
 
     async def remove_user_role(self, telegram_id: int, role: str) -> bool:
         """
         Удаление роли у пользователя
+        
+        Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
             telegram_id: Telegram ID
@@ -347,18 +388,20 @@ class Database:
         Returns:
             True если успешно
         """
-        user = await self.get_user_by_telegram_id(telegram_id)
-        if not user:
-            logger.error(f"Пользователь {telegram_id} не найден")
-            return False
+        async with self.transaction():
+            user = await self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                logger.error(f"Пользователь {telegram_id} не найден")
+                return False
 
-        # Используем метод модели для удаления роли
-        new_roles = user.remove_role(role)
+            # Используем метод модели для удаления роли
+            new_roles = user.remove_role(role)
 
-        await self.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
-        )
-        await self.connection.commit()
+            await self.connection.execute(
+                "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
+            )
+            # commit() выполнится автоматически
+        
         logger.info(f"Роль {role} удалена у пользователя {telegram_id}. Роли: {new_roles}")
         return True
 
@@ -651,86 +694,6 @@ class Database:
                 )
             )
         return masters
-
-    async def get_pending_masters(self) -> list[Master]:
-        """
-        Получение мастеров, ожидающих одобрения
-
-        Returns:
-            Список мастеров
-        """
-        cursor = await self.connection.execute(
-            """
-            SELECT m.*, u.username, u.first_name, u.last_name
-            FROM masters m
-            LEFT JOIN users u ON m.telegram_id = u.telegram_id
-            WHERE m.is_approved = 0
-            ORDER BY m.created_at ASC
-            """
-        )
-        rows = await cursor.fetchall()
-
-        masters = []
-        for row in rows:
-            masters.append(
-                Master(
-                    id=row["id"],
-                    telegram_id=row["telegram_id"],
-                    phone=row["phone"],
-                    specialization=row["specialization"],
-                    is_active=bool(row["is_active"]),
-                    is_approved=bool(row["is_approved"]),
-                    work_chat_id=(
-                        row["work_chat_id"]
-                        if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
-                        else None
-                    ),
-                    created_at=(
-                        datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
-                    ),
-                    username=row["username"],
-                    first_name=row["first_name"],
-                    last_name=row["last_name"],
-                )
-            )
-        return masters
-
-    async def approve_master(self, telegram_id: int) -> bool:
-        """
-        Одобрение мастера
-
-        Args:
-            telegram_id: Telegram ID мастера
-
-        Returns:
-            True если успешно
-        """
-        await self.connection.execute(
-            "UPDATE masters SET is_approved = 1 WHERE telegram_id = ?", (telegram_id,)
-        )
-        await self.connection.commit()
-
-        # Обновляем роль пользователя
-        await self.update_user_role(telegram_id, UserRole.MASTER)
-
-        logger.info(f"Мастер {telegram_id} одобрен")
-        return True
-
-    async def reject_master(self, telegram_id: int) -> bool:
-        """
-        Отклонение мастера (удаление из базы)
-
-        Args:
-            telegram_id: Telegram ID мастера
-
-        Returns:
-            True если успешно
-        """
-        await self.connection.execute("DELETE FROM masters WHERE telegram_id = ?", (telegram_id,))
-        await self.connection.commit()
-
-        logger.info(f"Мастер {telegram_id} отклонен и удален")
-        return True
 
     async def update_master_status(self, telegram_id: int, is_active: bool) -> bool:
         """
@@ -1034,50 +997,89 @@ class Database:
         return orders
 
     async def update_order_status(
-        self, order_id: int, status: str, changed_by: int | None = None, notes: str | None = None
+        self,
+        order_id: int,
+        status: str,
+        changed_by: int | None = None,
+        notes: str | None = None,
+        user_roles: list[str] | None = None,
+        skip_validation: bool = False,
     ) -> bool:
         """
-        Обновление статуса заявки с логированием изменений
+        Обновление статуса заявки с валидацией переходов и логированием изменений
+        
+        Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
             order_id: ID заявки
             status: Новый статус
             changed_by: ID пользователя, который изменил статус
             notes: Дополнительные заметки об изменении
+            user_roles: Роли пользователя для проверки прав
+            skip_validation: Пропустить валидацию (для миграций/admin)
 
         Returns:
             True если успешно
+
+        Raises:
+            InvalidStateTransitionError: Если переход недопустим
         """
-        # Получаем текущий статус перед изменением
-        cursor = await self.connection.execute(
-            "SELECT status FROM orders WHERE id = ?", (order_id,)
-        )
-        row = await cursor.fetchone()
-        old_status = row["status"] if row else None
+        async with self.transaction():
+            # Получаем текущий статус перед изменением с блокировкой
+            cursor = await self.connection.execute(
+                "SELECT status FROM orders WHERE id = ?", (order_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                logger.error(f"Заявка #{order_id} не найдена")
+                return False
 
-        # Обновляем статус заявки
-        await self.connection.execute(
-            "UPDATE orders SET status = ?, updated_at = ? WHERE id = ?",
-            (status, get_now().isoformat(), order_id),
-        )
+            old_status = row["status"]
 
-        # Логируем изменение статуса в историю
-        await self.connection.execute(
-            """
-            INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, notes)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (order_id, old_status, status, changed_by, notes),
-        )
+            # Валидация перехода статуса (если не пропущена)
+            if not skip_validation:
+                try:
+                    OrderStateMachine.validate_transition(
+                        from_state=old_status,
+                        to_state=status,
+                        user_roles=user_roles,
+                        raise_exception=True,
+                    )
+                    logger.info(
+                        f"✅ Валидация перехода пройдена: {old_status} → {status}"
+                    )
+                except InvalidStateTransitionError as e:
+                    logger.error(
+                        f"❌ Недопустимый переход статуса для заявки #{order_id}: {e}"
+                    )
+                    raise  # Пробрасываем исключение выше
 
-        await self.connection.commit()
+            # Обновляем статус заявки
+            await self.connection.execute(
+                "UPDATE orders SET status = ?, updated_at = ? WHERE id = ?",
+                (status, get_now().isoformat(), order_id),
+            )
+
+            # Логируем изменение статуса в историю
+            transition_description = OrderStateMachine.get_transition_description(
+                old_status, status
+            )
+            history_notes = notes or transition_description
+
+            await self.connection.execute(
+                """
+                INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, notes)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (order_id, old_status, status, changed_by, history_notes),
+            )
+            # commit() выполнится автоматически при выходе из context manager
 
         logger.info(
             f"Статус заявки #{order_id} изменен с {old_status} на {status}"
             + (f" пользователем {changed_by}" if changed_by else "")
         )
-        
-        
+
         return True
 
     async def get_order_status_history(self, order_id: int) -> list[dict]:
@@ -1127,26 +1129,55 @@ class Database:
 
         return history
 
-    async def assign_master_to_order(self, order_id: int, master_id: int) -> bool:
+    async def assign_master_to_order(
+        self, order_id: int, master_id: int, user_roles: list[str] | None = None
+    ) -> bool:
         """
-        Назначение мастера на заявку
+        Назначение мастера на заявку с валидацией перехода статуса
+        
+        Использует транзакционную изоляцию для предотвращения race conditions.
 
         Args:
             order_id: ID заявки
             master_id: ID мастера
+            user_roles: Роли пользователя (для валидации)
 
         Returns:
             True если успешно
+
+        Raises:
+            InvalidStateTransitionError: Если переход в ASSIGNED недопустим
         """
-        await self.connection.execute(
-            """
-            UPDATE orders
-            SET assigned_master_id = ?, status = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (master_id, OrderStatus.ASSIGNED, get_now().isoformat(), order_id),
-        )
-        await self.connection.commit()
+        async with self.transaction():
+            # Получаем текущий статус с блокировкой
+            cursor = await self.connection.execute(
+                "SELECT status FROM orders WHERE id = ?", (order_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                logger.error(f"Заявка #{order_id} не найдена")
+                return False
+
+            current_status = row["status"]
+
+            # Валидация перехода в ASSIGNED
+            OrderStateMachine.validate_transition(
+                from_state=current_status,
+                to_state=OrderStatus.ASSIGNED,
+                user_roles=user_roles or [UserRole.ADMIN, UserRole.DISPATCHER],
+                raise_exception=True,
+            )
+
+            # Обновляем заявку
+            await self.connection.execute(
+                """
+                UPDATE orders
+                SET assigned_master_id = ?, status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (master_id, OrderStatus.ASSIGNED, get_now().isoformat(), order_id),
+            )
+            # commit() выполнится автоматически при выходе из context manager
 
         logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
         return True

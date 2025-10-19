@@ -573,6 +573,16 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         user_role: Роль пользователя
     """
     data = await state.get_data()
+    
+    # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: проверяем флаг создания заявки
+    if data.get("creating_order"):
+        # Заявка уже создается, игнорируем повторный клик
+        logger.warning(f"Duplicate order creation attempt by user {message.from_user.id}")
+        return
+    
+    # Устанавливаем флаг, что заявка создается
+    await state.update_data(creating_order=True)
+    
     db = None
     order = None
 
@@ -966,12 +976,13 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
 
 @router.callback_query(F.data.startswith("select_master_for_order:"))
 @handle_errors
-async def callback_select_master_for_order(callback: CallbackQuery, user_role: str):
+async def callback_select_master_for_order(callback: CallbackQuery, user_role: str, user_roles: list):
     """
     Назначение выбранного мастера на заявку
 
     Args:
         callback: Callback query
+        user_roles: Список ролей пользователя
         user_role: Роль пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
@@ -1002,8 +1013,12 @@ async def callback_select_master_for_order(callback: CallbackQuery, user_role: s
             # Не назначаем мастера, возвращаемся
             return
 
-        # Назначаем мастера (только если есть work_chat_id)
-        await db.assign_master_to_order(order_id, master_id)
+        # Назначаем мастера (только если есть work_chat_id) с валидацией
+        await db.assign_master_to_order(
+            order_id=order_id,
+            master_id=master_id,
+            user_roles=user_roles  # Передаём роли для валидации
+        )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -1150,13 +1165,14 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
 
 
 @router.callback_query(F.data.startswith("select_new_master_for_order:"))
-async def callback_select_new_master_for_order(callback: CallbackQuery, user_role: str):
+async def callback_select_new_master_for_order(callback: CallbackQuery, user_role: str, user_roles: list):
     """
     Назначение нового мастера на заявку (переназначение)
 
     Args:
         callback: Callback query
-        user_role: Роль пользователя
+        user_role: Роль пользователя (основная)
+        user_roles: Список ролей пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
@@ -1191,8 +1207,12 @@ async def callback_select_new_master_for_order(callback: CallbackQuery, user_rol
             # Не переназначаем мастера, возвращаемся
             return
 
-        # Переназначаем мастера (только если есть work_chat_id)
-        await db.assign_master_to_order(order_id, new_master_id)
+        # Переназначаем мастера (только если есть work_chat_id) с валидацией
+        await db.assign_master_to_order(
+            order_id=order_id,
+            master_id=new_master_id,
+            user_roles=user_roles  # Передаём роли для валидации
+        )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -1400,13 +1420,14 @@ async def callback_close_order(callback: CallbackQuery, user_role: str, state: F
 
 
 @router.callback_query(F.data.startswith("refuse_order:"))
-async def callback_refuse_order(callback: CallbackQuery, user_role: str):
+async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_roles: list):
     """
     Отклонение заявки
 
     Args:
         callback: Callback query
-        user_role: Роль пользователя
+        user_role: Роль пользователя (основная, для обратной совместимости)
+        user_roles: Список ролей пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
@@ -1419,7 +1440,10 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str):
     try:
         order = await db.get_order_by_id(order_id)
         await db.update_order_status(
-            order_id, OrderStatus.REFUSED, changed_by=callback.from_user.id
+            order_id=order_id,
+            status=OrderStatus.REFUSED,
+            changed_by=callback.from_user.id,
+            user_roles=user_roles  # Передаём роли для валидации
         )
 
         await db.add_audit_log(
@@ -2155,6 +2179,8 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    logger.info(f"Processing materials cost: {message.text}")
+    
     # Проверяем, что введена корректная сумма
     try:
         materials_cost = float(message.text.replace(",", ".").strip())
@@ -2174,39 +2200,47 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
     # Сохраняем сумму расходного материала
     await state.update_data(materials_cost=materials_cost)
 
+    # Получаем ID заказа для inline кнопок
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    logger.info(f"Order ID from state: {order_id}")
+
     # Переходим к запросу об отзыве
     await state.set_state(AdminCloseOrderStates.confirm_review)
+
+    from app.keyboards.inline import get_yes_no_keyboard
+
+    logger.info(f"Creating yes/no keyboard for order {order_id}")
+    keyboard = get_yes_no_keyboard("admin_confirm_review", order_id)
+    logger.info(f"Keyboard created: {keyboard}")
 
     await message.reply(
         f"✅ Сумма расходного материала: <b>{materials_cost:.2f} ₽</b>\n\n"
         f"❓ <b>Взял ли мастер отзыв у клиента?</b>\n"
-        f"(За отзыв мастер получит дополнительно +10% к прибыли)\n\n"
-        f"Ответьте:\n"
-        f"• <b>Да</b> - если взяли отзыв\n"
-        f"• <b>Нет</b> - если не взяли",
+        f"(За отзыв мастер получит дополнительно +10% к прибыли)",
         parse_mode="HTML",
+        reply_markup=keyboard
     )
+    logger.info("Message with keyboard sent successfully")
 
 
-@router.message(AdminCloseOrderStates.confirm_review)
-async def admin_process_review_confirmation(message: Message, state: FSMContext):
+@router.callback_query(lambda c: c.data.startswith("admin_confirm_review"))
+async def admin_process_review_confirmation_callback(callback_query: CallbackQuery, state: FSMContext):
     """
-    Обработка подтверждения наличия отзыва админом/диспетчером
+    Обработка подтверждения наличия отзыва админом/диспетчером через inline кнопки
 
     Args:
-        message: Сообщение
+        callback_query: Callback запрос
         state: FSM контекст
     """
-    # Проверяем ответ
-    answer = message.text.strip().lower()
-
-    if answer in ["да", "yes", "lf", "+"]:
-        has_review = True
-    elif answer in ["нет", "no", "ytn", "-"]:
-        has_review = False
-    else:
-        await message.reply("❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>", parse_mode="HTML")
-        return
+    # Извлекаем данные из callback
+    from app.utils import parse_callback_data
+    callback_data = parse_callback_data(callback_query.data)
+    order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
+    answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
+    
+    # Определяем ответ
+    has_review = answer == "yes"
 
     # Сохраняем ответ об отзыве
     await state.update_data(has_review=has_review)
@@ -2215,40 +2249,58 @@ async def admin_process_review_confirmation(message: Message, state: FSMContext)
     await state.set_state(AdminCloseOrderStates.confirm_out_of_city)
 
     review_text = "✅ Отзыв взят!" if has_review else "❌ Отзыв не взят"
-    await message.reply(
+    
+    from app.keyboards.inline import get_yes_no_keyboard
+    
+    await callback_query.message.edit_text(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
-        f"(За выезд за город мастер получит дополнительно +10% к прибыли)\n\n"
-        f"Ответьте:\n"
-        f"• <b>Да</b> - если был выезд за город\n"
-        f"• <b>Нет</b> - если выезда не было",
+        f"(За выезд за город мастер получит дополнительно +10% к прибыли)",
         parse_mode="HTML",
+        reply_markup=get_yes_no_keyboard("admin_confirm_out_of_city", int(order_id))
     )
+    
+    await callback_query.answer()
 
 
-@router.message(AdminCloseOrderStates.confirm_out_of_city)
-async def admin_process_out_of_city_confirmation(message: Message, state: FSMContext):
+@router.message(AdminCloseOrderStates.confirm_review)
+async def admin_process_review_confirmation_fallback(message: Message, state: FSMContext):
     """
-    Обработка подтверждения выезда за город и завершение заказа админом/диспетчером
+    Fallback обработка для текстовых сообщений (на случай если кнопки не работают)
 
     Args:
         message: Сообщение
         state: FSM контекст
     """
-    # Проверяем ответ
-    answer = message.text.strip().lower()
+    await message.reply(
+        "❌ Пожалуйста, используйте кнопки для ответа.\n"
+        "Если кнопки не отображаются, попробуйте перезапустить процесс завершения заказа."
+    )
 
-    if answer in ["да", "yes", "lf", "+"]:
-        out_of_city = True
-    elif answer in ["нет", "no", "ytn", "-"]:
-        out_of_city = False
-    else:
-        await message.reply("❌ Пожалуйста, ответьте <b>Да</b> или <b>Нет</b>", parse_mode="HTML")
-        return
+
+@router.callback_query(lambda c: c.data.startswith("admin_confirm_out_of_city"))
+async def admin_process_out_of_city_confirmation_callback(
+    callback_query: CallbackQuery, state: FSMContext, user_roles: list
+):
+    """
+    Обработка подтверждения выезда за город через inline кнопки и завершение заказа админом/диспетчером
+
+    Args:
+        callback_query: Callback запрос
+        state: FSM контекст
+        user_roles: Список ролей пользователя
+    """
+    # Извлекаем данные из callback
+    from app.utils import parse_callback_data
+    callback_data = parse_callback_data(callback_query.data)
+    order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
+    answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
+    
+    # Определяем ответ
+    out_of_city = answer == "yes"
 
     # Получаем данные из состояния
     data = await state.get_data()
-    order_id = data.get("order_id")
     total_amount = data.get("total_amount")
     materials_cost = data.get("materials_cost")
     has_review = data.get("has_review")
@@ -2257,10 +2309,10 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
     await db.connect()
 
     try:
-        order = await db.get_order_by_id(order_id)
+        order = await db.get_order_by_id(int(order_id))
         
         if not order:
-            await message.reply("❌ Заявка не найдена.")
+            await callback_query.message.edit_text("❌ Заявка не найдена.")
             await state.clear()
             return
 
@@ -2272,7 +2324,7 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
 
         # Обновляем заявку
         await db.update_order_amounts(
-            order_id=order_id,
+            order_id=int(order_id),
             total_amount=total_amount,
             materials_cost=materials_cost,
             master_profit=master_profit,
@@ -2281,8 +2333,14 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
             out_of_city=out_of_city,
         )
 
-        # Меняем статус на CLOSED
-        await db.update_order_status(order_id, OrderStatus.CLOSED, changed_by=message.from_user.id)
+        # Меняем статус на CLOSED (с валидацией через State Machine)
+        from app.config import OrderStatus
+        await db.update_order_status(
+            order_id=int(order_id),
+            status=OrderStatus.CLOSED,
+            changed_by=callback_query.from_user.id,
+            user_roles=user_roles  # Передаём роли для валидации
+        )
 
         # Создаем отчет по заказу
         try:
@@ -2290,7 +2348,7 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
             order_reports_service = OrderReportsService()
             
             # Получаем актуальные данные заказа
-            updated_order = await db.get_order_by_id(order_id)
+            updated_order = await db.get_order_by_id(int(order_id))
             
             # Получаем данные мастера и диспетчера
             master = None
@@ -2311,7 +2369,7 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
 
         # Логирование
         await db.add_audit_log(
-            user_id=message.from_user.id,
+            user_id=callback_query.from_user.id,
             action="CLOSE_ORDER",
             details=f"Closed order #{order_id} with financials",
         )
@@ -2336,8 +2394,8 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
             f"└ Выезд за город: {out_of_city_text}"
         )
 
-        await message.reply(summary_message, parse_mode="HTML")
-
+        await callback_query.message.edit_text(summary_message, parse_mode="HTML")
+        
         # Уведомление мастера (если есть)
         if order.assigned_master_id:
             master = await db.get_master_by_id(order.assigned_master_id)
@@ -2356,16 +2414,33 @@ async def admin_process_out_of_city_confirmation(message: Message, state: FSMCon
 
                 from aiogram import Bot
                 from app.config import Config
+                from app.utils.helpers import safe_send_message
                 bot = Bot(token=Config.BOT_TOKEN)
                 await safe_send_message(
                     bot, master.work_chat_id, master_message, parse_mode="HTML"
                 )
 
-        log_action(message.from_user.id, "CLOSE_ORDER", f"Order #{order_id}")
+        await callback_query.answer("✅ Заявка успешно закрыта!")
+        await state.clear()
 
     except Exception as e:
         logger.error(f"Error closing order: {e}")
-        await message.reply(f"❌ Ошибка при закрытии заявки: {str(e)}")
+        await callback_query.message.edit_text(f"❌ Ошибка при закрытии заявки: {str(e)}")
     finally:
         await db.disconnect()
-        await state.clear()
+
+
+@router.message(AdminCloseOrderStates.confirm_out_of_city)
+async def admin_process_out_of_city_confirmation_fallback(message: Message, state: FSMContext):
+    """
+    Fallback обработка для текстовых сообщений (на случай если кнопки не работают)
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    await message.reply(
+        "❌ Пожалуйста, используйте кнопки для ответа.\n"
+        "Если кнопки не отображаются, попробуйте перезапустить процесс завершения заказа."
+    )
+

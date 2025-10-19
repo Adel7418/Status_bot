@@ -21,6 +21,16 @@ from app.utils.retry import (
     safe_edit_message,
     safe_send_message,
 )
+from app.utils.pii_masking import (
+    mask_address,
+    mask_name,
+    mask_phone,
+    mask_username,
+    safe_log_order_details,
+    safe_str_order,
+    safe_str_user,
+    sanitize_log_message,
+)
 
 __all__ = [
     # Format utilities
@@ -49,4 +59,13 @@ __all__ = [
     "safe_answer_callback",
     "safe_edit_message",
     "safe_delete_message",
+    # PII Masking (GDPR compliance)
+    "mask_phone",
+    "mask_name",
+    "mask_address",
+    "mask_username",
+    "safe_str_user",
+    "safe_str_order",
+    "safe_log_order_details",
+    "sanitize_log_message",
 ]

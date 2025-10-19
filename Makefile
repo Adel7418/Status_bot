@@ -170,8 +170,8 @@ prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВН
 	docker builder prune -f
 	@echo "🔨 3. Пересборка Docker образа..."
 	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache --pull bot
-	@echo "🔄 4. Перезапуск контейнера..."
-	cd docker && docker-compose -f docker-compose.prod.yml up -d bot
+	@echo "🔄 4. Перезапуск всех сервисов (bot + redis)..."
+	cd docker && docker-compose -f docker-compose.prod.yml up -d
 	@echo "✅ Деплой завершен! Проверьте логи: make prod-logs"
 
 prod-deploy-version:  ## Деплой конкретной версии (использование: make prod-deploy-version VERSION=v1.2.3)

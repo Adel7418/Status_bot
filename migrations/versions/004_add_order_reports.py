@@ -1,7 +1,7 @@
 """Add order reports table
 
-Revision ID: 004
-Revises: 003
+Revision ID: 004_add_order_reports
+Revises: 003_add_dr_fields
 Create Date: 2025-10-15 06:15:00.000000
 
 """

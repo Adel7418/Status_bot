@@ -207,24 +207,38 @@ async def safe_answer_callback(
     callback_query,
     text: str | None = None,
     max_attempts: int = 2,
+    cache_time: int | None = None,
     **kwargs: Any,
 ) -> bool:
     """
-    Безопасный ответ на callback query с retry
+    Безопасный ответ на callback query с retry и защитой от двойного клика
     
     Args:
         callback_query: CallbackQuery объект
         text: Текст ответа
         max_attempts: Максимальное количество попыток
-        **kwargs: Дополнительные параметры
+        cache_time: Время кэширования ответа (секунды) для защиты от повторных кликов.
+                   Рекомендуется 5-10 сек для критичных операций, 2-3 сек для обычных.
+                   По умолчанию 3 секунды для защиты от случайных двойных кликов.
+        **kwargs: Дополнительные параметры (show_alert и т.д.)
         
     Returns:
         True при успехе, False при ошибке
+        
+    Example:
+        # Критичная операция (создание/изменение данных)
+        await safe_answer_callback(callback, "Заявка принята!", cache_time=10)
+        
+        # Обычная навигация
+        await safe_answer_callback(callback, cache_time=2)
     """
+    # Устанавливаем cache_time по умолчанию, если не передан
+    if cache_time is None:
+        cache_time = 3  # 3 секунды защиты от случайных двойных кликов
     
     @retry_on_telegram_error(max_attempts=max_attempts, base_delay=0.5)
     async def _answer():
-        return await callback_query.answer(text, **kwargs)
+        return await callback_query.answer(text, cache_time=cache_time, **kwargs)
     
     result = await _answer()
     return result is not None

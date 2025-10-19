@@ -13,6 +13,7 @@ from app.config import Messages, UserRole
 from app.database.models import User
 from app.decorators import handle_errors
 from app.keyboards.reply import get_main_menu_keyboard
+from app.utils import safe_str_user
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
         user_roles: Список всех ролей пользователя
     """
     logger.info(f"START command received from user {message.from_user.id}")
-    logger.info(f"User roles: {user_roles}, User object: {user}")
+    logger.info(f"User roles: {user_roles}, User: {safe_str_user(user)}")
 
     # Проверяем, если это личное сообщение и пользователь ТОЛЬКО мастер
     is_private = message.chat.type == "private"

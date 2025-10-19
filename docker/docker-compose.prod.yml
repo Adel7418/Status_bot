@@ -16,6 +16,7 @@ services:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=INFO
+      - DEV_MODE=false
     volumes:
       - bot_data:/app/data
       - bot_logs:/app/logs

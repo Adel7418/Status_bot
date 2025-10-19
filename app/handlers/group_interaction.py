@@ -101,9 +101,12 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Обновляем статус
+        # Обновляем статус (с валидацией через State Machine)
         await db.update_order_status(
-            order_id, OrderStatus.ACCEPTED, changed_by=callback.from_user.id
+            order_id=order_id,
+            status=OrderStatus.ACCEPTED,
+            changed_by=callback.from_user.id,
+            user_roles=user_roles  # Передаём роли для валидации
         )
 
         # Добавляем в лог
@@ -144,16 +147,17 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
             reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED),
         )
 
-        # Уведомляем диспетчера
+        # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"✅ Мастер {master.get_display_name()} принял заявку #{order_id} в группе",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback.bot,
+                order.dispatcher_id,
+                f"✅ Мастер {master.get_display_name()} принял заявку #{order_id} в группе",
+                parse_mode="HTML",
+            )
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
         log_action(callback.from_user.id, "ACCEPT_ORDER_GROUP", f"Order #{order_id}")
 
@@ -239,17 +243,18 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
             parse_mode="HTML",
         )
 
-        # Уведомляем диспетчера
+        # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"❌ Мастер {master.get_display_name()} отклонил заявку #{order_id} в группе\n"
-                    f"Необходимо назначить другого мастера.",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback.bot,
+                order.dispatcher_id,
+                f"❌ Мастер {master.get_display_name()} отклонил заявку #{order_id} в группе\n"
+                f"Необходимо назначить другого мастера.",
+                parse_mode="HTML",
+            )
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
         log_action(callback.from_user.id, "REFUSE_ORDER_GROUP", f"Order #{order_id}")
 
@@ -304,9 +309,12 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Обновляем статус
+        # Обновляем статус (с валидацией через State Machine)
         await db.update_order_status(
-            order_id, OrderStatus.ONSITE, changed_by=callback.from_user.id
+            order_id=order_id,
+            status=OrderStatus.ONSITE,
+            changed_by=callback.from_user.id,
+            user_roles=user_roles  # Передаём роли для валидации
         )
 
         # Добавляем в лог
@@ -334,16 +342,17 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
             reply_markup=get_group_order_keyboard(order, OrderStatus.ONSITE),
         )
 
-        # Уведомляем диспетчера
+        # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback.bot,
+                order.dispatcher_id,
+                f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
+                parse_mode="HTML",
+            )
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
         log_action(callback.from_user.id, "ONSITE_ORDER_GROUP", f"Order #{order_id}")
 

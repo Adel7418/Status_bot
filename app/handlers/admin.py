@@ -11,7 +11,6 @@ from aiogram.types import CallbackQuery, Message
 from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.keyboards.inline import (
-    get_master_approval_keyboard,
     get_master_management_keyboard,
     get_masters_list_keyboard,
 )
@@ -266,9 +265,6 @@ async def btn_masters(message: Message, state: FSMContext, user_role: str):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters"))
-    builder.row(
-        InlineKeyboardButton(text="⏳ Ожидают одобрения", callback_data="list_pending_masters")
-    )
     builder.row(InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master"))
 
     await message.answer(
@@ -326,161 +322,6 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
     await callback.answer()
-
-
-@router.callback_query(F.data == "list_pending_masters")
-async def callback_list_pending_masters(callback: CallbackQuery, user_role: str):
-    """
-    Вывод списка мастеров, ожидающих одобрения
-
-    Args:
-        callback: Callback query
-        user_role: Роль пользователя
-    """
-    if user_role != UserRole.ADMIN:
-        return
-
-    db = Database()
-    await db.connect()
-
-    try:
-        masters = await db.get_pending_masters()
-
-        if not masters:
-            await callback.message.edit_text("✅ Нет мастеров, ожидающих одобрения.")
-            await callback.answer()
-            return
-
-        text = "⏳ <b>Мастера, ожидающие одобрения:</b>\n\n"
-
-        for master in masters:
-            display_name = master.get_display_name()
-
-            text += (
-                f"👤 <b>{display_name}</b>\n"
-                f"🆔 Telegram ID: <code>{master.telegram_id}</code>\n"
-                f"📞 Телефон: {master.phone}\n"
-                f"🔧 Специализация: {master.specialization}\n\n"
-            )
-
-            # Добавляем клавиатуру для одобрения
-            keyboard = get_master_approval_keyboard(master.telegram_id)
-
-            await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
-            text = ""  # Сбрасываем для следующего мастера
-
-        if text:  # Если остался текст без клавиатуры
-            await callback.message.answer(text, parse_mode="HTML")
-
-        await callback.message.edit_text(
-            "⏳ Мастера, ожидающие одобрения отправлены отдельными сообщениями."
-        )
-
-    finally:
-        await db.disconnect()
-
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("approve_master:"))
-async def callback_approve_master(callback: CallbackQuery, user_role: str):
-    """
-    Одобрение мастера
-
-    Args:
-        callback: Callback query
-        user_role: Роль пользователя
-    """
-    if user_role != UserRole.ADMIN:
-        return
-
-    telegram_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
-
-    try:
-        # Одобряем мастера
-        await db.approve_master(telegram_id)
-
-        # Добавляем в лог
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="APPROVE_MASTER",
-            details=f"Approved master {telegram_id}",
-        )
-
-        # Уведомляем мастера
-        try:
-            await callback.bot.send_message(
-                telegram_id,
-                "✅ <b>Поздравляем!</b>\n\n"
-                "Ваша заявка на регистрацию в качестве мастера одобрена.\n"
-                "Теперь вы можете получать заявки на ремонт.\n\n"
-                "Используйте /start для начала работы.",
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logger.error(f"Failed to send approval notification to {telegram_id}: {e}")
-
-        await callback.message.edit_text(f"✅ Мастер (ID: {telegram_id}) успешно одобрен!")
-
-        log_action(callback.from_user.id, "APPROVE_MASTER", f"Master ID: {telegram_id}")
-
-    finally:
-        await db.disconnect()
-
-    await callback.answer("Мастер одобрен!")
-
-
-@router.callback_query(F.data.startswith("reject_master:"))
-async def callback_reject_master(callback: CallbackQuery, user_role: str):
-    """
-    Отклонение мастера
-
-    Args:
-        callback: Callback query
-        user_role: Роль пользователя
-    """
-    if user_role != UserRole.ADMIN:
-        return
-
-    telegram_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
-
-    try:
-        # Отклоняем мастера
-        await db.reject_master(telegram_id)
-
-        # Добавляем в лог
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="REJECT_MASTER",
-            details=f"Rejected master {telegram_id}",
-        )
-
-        # Уведомляем мастера
-        try:
-            await callback.bot.send_message(
-                telegram_id,
-                "❌ <b>Уведомление</b>\n\n"
-                "К сожалению, ваша заявка на регистрацию в качестве мастера отклонена.\n\n"
-                "Для получения дополнительной информации обратитесь к администратору.",
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logger.error(f"Failed to send rejection notification to {telegram_id}: {e}")
-
-        await callback.message.edit_text(f"❌ Мастер (ID: {telegram_id}) отклонен.")
-
-        log_action(callback.from_user.id, "REJECT_MASTER", f"Master ID: {telegram_id}")
-
-    finally:
-        await db.disconnect()
-
-    await callback.answer("Мастер отклонен")
 
 
 @router.callback_query(F.data == "add_master")
@@ -675,18 +516,19 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             details=f"Added master {data['telegram_id']}",
         )
 
-        # Уведомляем мастера
-        try:
-            await callback.bot.send_message(
-                data["telegram_id"],
-                "✅ <b>Поздравляем!</b>\n\n"
-                "Вы добавлены в систему как мастер.\n"
-                "Теперь вы можете получать заявки на ремонт.\n\n"
-                "Используйте /start для начала работы.",
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logger.error(f"Failed to send notification to master {data['telegram_id']}: {e}")
+        # Уведомляем мастера с retry механизмом
+        from app.utils import safe_send_message
+        result = await safe_send_message(
+            callback.bot,
+            data["telegram_id"],
+            "✅ <b>Поздравляем!</b>\n\n"
+            "Вы добавлены в систему как мастер.\n"
+            "Теперь вы можете получать заявки на ремонт.\n\n"
+            "Используйте /start для начала работы.",
+            parse_mode="HTML",
+        )
+        if not result:
+            logger.error(f"Failed to send notification to master {data['telegram_id']} after retries")
 
         await callback.message.edit_text(
             f"✅ <b>Мастер успешно добавлен!</b>\n\n"
@@ -971,9 +813,6 @@ async def callback_back_to_masters(callback: CallbackQuery, user_role: str):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters"))
-    builder.row(
-        InlineKeyboardButton(text="⏳ Ожидают одобрения", callback_data="list_pending_masters")
-    )
     builder.row(InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master"))
 
     await callback.message.edit_text(
@@ -1166,13 +1005,14 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
 
 
 @router.callback_query(F.data.startswith("admin_accept_order:"))
-async def callback_admin_accept_order(callback: CallbackQuery, user_role: str):
+async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, user_roles: list):
     """
     Принятие заявки админом от имени мастера
 
     Args:
         callback: Callback query
-        user_role: Роль пользователя
+        user_role: Роль пользователя (основная)
+        user_roles: Список ролей пользователя
     """
     if user_role != UserRole.ADMIN:
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
@@ -1200,9 +1040,13 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str):
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
-        # Обновляем статус
+        # Обновляем статус (админ может менять от имени мастера)
+        # Используем skip_validation=True так как админ имеет особые права
         await db.update_order_status(
-            order_id, OrderStatus.ACCEPTED, changed_by=callback.from_user.id
+            order_id=order_id,
+            status=OrderStatus.ACCEPTED,
+            changed_by=callback.from_user.id,
+            skip_validation=True  # Админ может менять статусы принудительно
         )
 
         # Добавляем в лог
@@ -1212,34 +1056,35 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str):
             details=f"Admin accepted order #{order_id} on behalf of master {master.telegram_id}",
         )
 
-        # Уведомляем диспетчера
+        # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"✅ Мастер {master.get_display_name()} принял заявку #{order_id}",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
-
-        # Уведомляем мастера
-        try:
-            await callback.bot.send_message(
-                master.telegram_id,
-                f"✅ <b>Заявка #{order_id} принята администратором от вашего имени!</b>\n\n"
-                f"🔧 <b>Детали заявки:</b>\n"
-                f"📱 Тип техники: {order.equipment_type}\n"
-                f"📝 Описание: {order.description}\n"
-                f"👤 Клиент: {order.client_name}\n"
-                f"📍 Адрес: {order.client_address}\n"
-                + (f"\n📝 <b>Заметки:</b> {order.notes}\n" if order.notes else "")
-                + (f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n" if order.scheduled_time else "")
-                + f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback.bot,
+                order.dispatcher_id,
+                f"✅ Мастер {master.get_display_name()} принял заявку #{order_id}",
                 parse_mode="HTML",
             )
-        except Exception as e:
-            logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+
+        # Уведомляем мастера с retry механизмом
+        result = await safe_send_message(
+            callback.bot,
+            master.telegram_id,
+            f"✅ <b>Заявка #{order_id} принята администратором от вашего имени!</b>\n\n"
+            f"🔧 <b>Детали заявки:</b>\n"
+            f"📱 Тип техники: {order.equipment_type}\n"
+            f"📝 Описание: {order.description}\n"
+            f"👤 Клиент: {order.client_name}\n"
+            f"📍 Адрес: {order.client_address}\n"
+            + (f"\n📝 <b>Заметки:</b> {order.notes}\n" if order.notes else "")
+            + (f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n" if order.scheduled_time else "")
+            + f"\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
+            parse_mode="HTML",
+        )
+        if not result:
+            logger.error(f"Failed to notify master {master.telegram_id} after retries")
 
         await callback.answer("Заявка принята от имени мастера!")
 
@@ -1279,13 +1124,14 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str):
 
 
 @router.callback_query(F.data.startswith("admin_onsite_order:"))
-async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str):
+async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, user_roles: list):
     """
     Отметка 'На объекте' админом от имени мастера
 
     Args:
         callback: Callback query
-        user_role: Роль пользователя
+        user_role: Роль пользователя (основная)
+        user_roles: Список ролей пользователя
     """
     if user_role != UserRole.ADMIN:
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
@@ -1313,9 +1159,13 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str):
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
-        # Обновляем статус
+        # Обновляем статус (админ может менять от имени мастера)
+        # Используем skip_validation=True так как админ имеет особые права
         await db.update_order_status(
-            order_id, OrderStatus.ONSITE, changed_by=callback.from_user.id
+            order_id=order_id,
+            status=OrderStatus.ONSITE,
+            changed_by=callback.from_user.id,
+            skip_validation=True  # Админ может менять статусы принудительно
         )
 
         # Добавляем в лог
@@ -1325,28 +1175,29 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str):
             details=f"Admin marked order #{order_id} as onsite on behalf of master {master.telegram_id}",
         )
 
-        # Уведомляем диспетчера
+        # Уведомляем диспетчера с retry механизмом
         if order.dispatcher_id:
-            try:
-                await callback.bot.send_message(
-                    order.dispatcher_id,
-                    f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
-                    parse_mode="HTML",
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
-
-        # Уведомляем мастера
-        try:
-            await callback.bot.send_message(
-                master.telegram_id,
-                f"🏠 <b>Статус заявки #{order_id} обновлен администратором!</b>\n\n"
-                f"Заявка отмечена как 'На объекте' от вашего имени.\n\n"
-                f"📞 <b>Телефон клиента:</b> {order.client_phone}",
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback.bot,
+                order.dispatcher_id,
+                f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
                 parse_mode="HTML",
             )
-        except Exception as e:
-            logger.error(f"Failed to notify master {master.telegram_id}: {e}")
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+
+        # Уведомляем мастера с retry механизмом
+        result = await safe_send_message(
+            callback.bot,
+            master.telegram_id,
+            f"🏠 <b>Статус заявки #{order_id} обновлен администратором!</b>\n\n"
+            f"Заявка отмечена как 'На объекте' от вашего имени.\n\n"
+            f"📞 <b>Телефон клиента:</b> {order.client_phone}",
+            parse_mode="HTML",
+        )
+        if not result:
+            logger.error(f"Failed to notify master {master.telegram_id} after retries")
 
         await callback.answer("Статус обновлен от имени мастера!")
 
@@ -1482,7 +1333,7 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
-        logger.debug(f"[DR] Order found, Master: {master.get_display_name()}")
+        logger.debug(f"[DR] Order found, Master ID: {master.telegram_id}")
 
         # Сохраняем order_id и мастера в state
         await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)

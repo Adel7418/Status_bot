@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -12,11 +13,18 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, UpdateType
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
 
 from app.config import Config
 from app.database import Database
 from app.handlers import routers
-from app.middlewares import LoggingMiddleware, RoleCheckMiddleware, global_error_handler
+from app.middlewares import (
+    LoggingMiddleware,
+    RateLimitMiddleware,
+    RoleCheckMiddleware,
+    ValidationHandlerMiddleware,
+    global_error_handler,
+)
 from app.services.scheduler import TaskScheduler
 from app.utils.sentry import init_sentry
 
@@ -150,7 +158,24 @@ async def main():
         bot = Bot(token=Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
         # Инициализация хранилища состояний
-        storage = MemoryStorage()
+        # Используем Redis для production, MemoryStorage для development
+        redis_url = os.getenv("REDIS_URL")
+        
+        # ОТЛАДКА: Явное логирование конфигурации storage
+        logger.info("=" * 60)
+        logger.info("🔧 Конфигурация FSM Storage:")
+        logger.info(f"  REDIS_URL: {redis_url}")
+        logger.info(f"  DEV_MODE: {Config.DEV_MODE}")
+        logger.info(f"  Условие (redis_url and not DEV_MODE): {redis_url and not Config.DEV_MODE}")
+        logger.info("=" * 60)
+        
+        if redis_url and not Config.DEV_MODE:
+            logger.info("✅ Используется RedisStorage для FSM: %s", redis_url)
+            storage = RedisStorage.from_url(redis_url)
+        else:
+            logger.warning("⚠️  Используется MemoryStorage (состояния потеряются при рестарте)")
+            logger.warning(f"   Причина: redis_url={redis_url}, DEV_MODE={Config.DEV_MODE}")
+            storage = MemoryStorage()
 
         # Инициализация диспетчера
         dp = Dispatcher(storage=storage)
@@ -173,10 +198,29 @@ async def main():
         dp.message.middleware(logging_middleware)
         dp.callback_query.middleware(logging_middleware)
 
-        # 2. Role check middleware (проверяет роли и регистрирует пользователей)
+        # 2. Rate Limit middleware (защита от spam и DoS атак)
+        # Настройки: 2 запроса в секунду, burst до 4 запросов
+        # С прогрессивным наказанием и автобаном после 30 нарушений
+        rate_limit_middleware = RateLimitMiddleware(
+            rate=2,              # 2 запроса/сек
+            period=1,            # за 1 секунду
+            burst=4,             # максимум 4 подряд
+            max_violations=30,   # бан после 30 нарушений
+            violation_window=60  # в течении 60 секунд
+        )
+        dp.message.middleware(rate_limit_middleware)
+        dp.callback_query.middleware(rate_limit_middleware)
+        logger.info("Rate limiting: 2 req/sec, burst 4, auto-ban after 30 violations/min")
+
+        # 3. Role check middleware (проверяет роли и регистрирует пользователей)
         role_middleware = RoleCheckMiddleware(db)
         dp.message.middleware(role_middleware)
         dp.callback_query.middleware(role_middleware)
+
+        # 4. Validation handler middleware (обрабатывает ошибки State Machine)
+        validation_middleware = ValidationHandlerMiddleware()
+        dp.message.middleware(validation_middleware)
+        dp.callback_query.middleware(validation_middleware)
 
         # Подключение роутеров
         for router in routers:
@@ -228,6 +272,14 @@ async def main():
                 await db.disconnect()
             except Exception as e:
                 logger.error("Ошибка при отключении БД: %s", e)
+
+        # Закрытие storage (для Redis)
+        if dp and hasattr(dp.storage, 'close'):
+            try:
+                await dp.storage.close()
+                logger.info("Storage закрыт")
+            except Exception as e:
+                logger.error("Ошибка при закрытии storage: %s", e)
 
         # Закрытие bot session (критично!)
         if bot:

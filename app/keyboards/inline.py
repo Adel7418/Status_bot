@@ -24,6 +24,7 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     if status == OrderStatus.ASSIGNED:
+        # Мастера видят кнопки в своей группе
         builder.row(
             InlineKeyboardButton(
                 text="✅ Принять заявку",
@@ -310,30 +311,6 @@ def get_masters_list_keyboard(
     return builder.as_markup()
 
 
-def get_master_approval_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
-    """
-    Клавиатура одобрения мастера
-
-    Args:
-        telegram_id: Telegram ID мастера
-
-    Returns:
-        InlineKeyboardMarkup
-    """
-    builder = InlineKeyboardBuilder()
-
-    builder.row(
-        InlineKeyboardButton(
-            text="✅ Одобрить", callback_data=create_callback_data("approve_master", telegram_id)
-        ),
-        InlineKeyboardButton(
-            text="❌ Отклонить", callback_data=create_callback_data("reject_master", telegram_id)
-        ),
-    )
-
-    return builder.as_markup()
-
-
 def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMarkup:
     """
     Клавиатура фильтрации заявок с счетчиками
@@ -545,6 +522,33 @@ def get_pagination_keyboard(
 
     builder.row(*buttons)
 
+    return builder.as_markup()
+
+
+def get_yes_no_keyboard(callback_prefix: str, order_id: int) -> InlineKeyboardMarkup:
+    """
+    Клавиатура с кнопками Да/Нет для подтверждения действий
+    
+    Args:
+        callback_prefix: Префикс для callback_data (например "confirm_review", "confirm_out_of_city")
+        order_id: ID заказа
+    
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Да",
+            callback_data=create_callback_data(callback_prefix, order_id, "yes")
+        ),
+        InlineKeyboardButton(
+            text="❌ Нет",
+            callback_data=create_callback_data(callback_prefix, order_id, "no")
+        )
+    )
+    
     return builder.as_markup()
 
 

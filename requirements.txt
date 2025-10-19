@@ -26,12 +26,11 @@ python-dateutil==2.9.0.post0
 alembic==1.13.1
 
 # ========================================
-# OPTIONAL: Redis для production FSM storage
-# Раскомментируйте для использования RedisStorage
+# Redis для production FSM storage
 # ========================================
 
-# redis==5.2.1
-# aiogram[redis]==3.16.0
+redis==5.2.1
+# Примечание: aiogram[redis] не нужен отдельно, используем redis напрямую
 
 # ========================================
 # OPTIONAL: Мониторинг и отладка

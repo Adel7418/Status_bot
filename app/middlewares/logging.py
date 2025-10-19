@@ -1,5 +1,7 @@
 """
 Middleware для логирования входящих событий и метрик производительности
+
+GDPR Compliance: Маскирует персональные данные в логах
 """
 
 import logging
@@ -9,6 +11,8 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message
+
+from app.utils.pii_masking import mask_username
 
 
 logger = logging.getLogger(__name__)
@@ -52,11 +56,12 @@ class LoggingMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler
         """
-        # Получаем пользователя
+        # Получаем пользователя (GDPR: маскируем username)
         user = event.from_user
         user_info = f"{user.id}"
         if user.username:
-            user_info += f" (@{user.username})"
+            masked_username = mask_username(user.username)
+            user_info += f" (@{masked_username})"
 
         # Стартуем таймер
         start_time = time.time()
