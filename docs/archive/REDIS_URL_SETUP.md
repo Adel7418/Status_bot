@@ -272,4 +272,3 @@ REDIS_URL=redis://localhost:ПРАВИЛЬНЫЙ_ПОРТ/0
 3. Доступен ли по сети: `redis-cli ping`
 
 Если нужна установка Redis, см. `QUICK_REDIS_SETUP.md`
-

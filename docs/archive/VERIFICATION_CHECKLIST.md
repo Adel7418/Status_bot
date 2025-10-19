@@ -164,4 +164,3 @@ A: Да, используйте `safe_log_order_details(order, show_client_info=
 - ✅ OWASP Top 10
 
 **Готово к production!** 🚀
-

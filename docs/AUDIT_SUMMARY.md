@@ -230,4 +230,3 @@ Performance optimization
 ---
 
 **Полный отчёт:** `AUDIT_OVERVIEW.md` (2 страницы детального анализа)
-

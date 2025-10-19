@@ -399,4 +399,3 @@ logger.info(f"Creating order #{order.id}")
 - Ответственный за внедрение: AI Assistant
 - Дата завершения: 19 октября 2025
 - Версия: 1.0
-

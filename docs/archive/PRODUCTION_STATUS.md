@@ -174,4 +174,3 @@ docker-compose -f docker-compose.prod.yml ps
 
 **Создано:** AI Assistant на основе аудита кодовой базы
 **Документация:** См. `AUDIT_SUMMARY.md` и `AUDIT_OVERVIEW.md`
-

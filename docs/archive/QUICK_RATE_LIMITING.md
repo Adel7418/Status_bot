@@ -99,4 +99,3 @@ WARNING - ⚠️ Rate limit exceeded for user 123456789
 ---
 
 **Полная документация:** `RATE_LIMITING_GUIDE.md`
-

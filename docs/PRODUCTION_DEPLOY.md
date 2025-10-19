@@ -398,4 +398,3 @@ docker-compose -f docker-compose.prod.yml logs -f bot
 
 **Контакты поддержки:** 5flora.adel5@gmail.com
 **Документация:** [README.md](README.md)
-

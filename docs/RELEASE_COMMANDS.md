@@ -63,4 +63,3 @@ make prod-deploy
 ---
 
 📖 Полная документация: `docs/VERSIONING_GUIDE.md`
-

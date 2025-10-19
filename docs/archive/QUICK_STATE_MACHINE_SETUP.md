@@ -205,4 +205,3 @@ async def my_handler(callback: CallbackQuery, user_roles: list):
 **Время тестирования:** 5 минут
 **Приоритет:** P0 - Критично
 **Статус:** ✅ Готово к работе
-
