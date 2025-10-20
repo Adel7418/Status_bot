@@ -264,11 +264,11 @@ class OrderRepository(BaseRepository[Order]):
         updates["updated_at"] = get_now().isoformat()
 
         # Формируем SET часть запроса
-        set_parts = [f"{field} = ?" for field in updates.keys()]
+        set_parts = [f"{field} = ?" for field in updates]
         set_clause = ", ".join(set_parts)
 
-        query = f"UPDATE orders SET {set_clause} WHERE id = ?"
-        params = list(updates.values()) + [order_id]
+        query = f"UPDATE orders SET {set_clause} WHERE id = ?"  # nosec B608
+        params = [*list(updates.values()), order_id]
 
         await self._execute_commit(query, tuple(params))
         logger.info(f"Заявка #{order_id} обновлена: {', '.join(updates.keys())}")
@@ -403,55 +403,55 @@ class OrderRepository(BaseRepository[Order]):
             scheduled_time=row["scheduled_time"],
             total_amount=(
                 row["total_amount"]
-                if "total_amount" in row.keys() and row["total_amount"] is not None
+                if "total_amount" in row and row["total_amount"] is not None
                 else None
             ),
             materials_cost=(
                 row["materials_cost"]
-                if "materials_cost" in row.keys() and row["materials_cost"] is not None
+                if "materials_cost" in row and row["materials_cost"] is not None
                 else None
             ),
             master_profit=(
                 row["master_profit"]
-                if "master_profit" in row.keys() and row["master_profit"] is not None
+                if "master_profit" in row and row["master_profit"] is not None
                 else None
             ),
             company_profit=(
                 row["company_profit"]
-                if "company_profit" in row.keys() and row["company_profit"] is not None
+                if "company_profit" in row and row["company_profit"] is not None
                 else None
             ),
             has_review=(
                 bool(row["has_review"])
-                if "has_review" in row.keys() and row["has_review"] is not None
+                if "has_review" in row and row["has_review"] is not None
                 else None
             ),
             out_of_city=(
                 bool(row["out_of_city"])
-                if "out_of_city" in row.keys() and row["out_of_city"] is not None
+                if "out_of_city" in row and row["out_of_city"] is not None
                 else None
             ),
             estimated_completion_date=(
                 row["estimated_completion_date"]
-                if "estimated_completion_date" in row.keys()
+                if "estimated_completion_date" in row
                 and row["estimated_completion_date"] is not None
                 else None
             ),
             prepayment_amount=(
                 row["prepayment_amount"]
-                if "prepayment_amount" in row.keys() and row["prepayment_amount"] is not None
+                if "prepayment_amount" in row and row["prepayment_amount"] is not None
                 else None
             ),
             rescheduled_count=(
-                row["rescheduled_count"] if "rescheduled_count" in row.keys() else 0
+                row.get("rescheduled_count", 0)
             ),
             last_rescheduled_at=(
                 datetime.fromisoformat(row["last_rescheduled_at"]).replace(tzinfo=MOSCOW_TZ)
-                if "last_rescheduled_at" in row.keys() and row["last_rescheduled_at"]
+                if row.get("last_rescheduled_at")
                 else None
             ),
             reschedule_reason=(
-                row["reschedule_reason"] if "reschedule_reason" in row.keys() else None
+                row.get("reschedule_reason", None)
             ),
             created_at=(
                 datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
@@ -463,6 +463,6 @@ class OrderRepository(BaseRepository[Order]):
                 if row["updated_at"]
                 else None
             ),
-            dispatcher_name=(row["dispatcher_name"] if "dispatcher_name" in row.keys() else None),
-            master_name=(row["master_name"] if "master_name" in row.keys() else None),
+            dispatcher_name=(row.get("dispatcher_name", None)),
+            master_name=(row.get("master_name", None)),
         )

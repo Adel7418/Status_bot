@@ -107,8 +107,8 @@ def require_role(roles: str | list[str]):
         @functools.wraps(func)
         async def wrapper(*args, user_role: str = UserRole.UNKNOWN, **kwargs):
             # Проверяем роль
-            logger.info(
-                f"DEBUG @require_role: func={func.__name__}, user_role='{user_role}', required={roles}, matched={user_role in roles}"
+            logger.debug(
+                f"@require_role: func={func.__name__}, user_role='{user_role}', required={roles}, matched={user_role in roles}"
             )
             if user_role not in roles:
                 logger.warning(
@@ -142,7 +142,7 @@ def require_role(roles: str | list[str]):
             return await func(*args, user_role=user_role, **kwargs)
 
         # Создаем новую сигнатуру с user_role параметром
-        wrapper.__signature__ = sig.replace(parameters=params)
+        wrapper.__signature__ = sig.replace(parameters=params)  # type: ignore[attr-defined]
 
         return wrapper
 

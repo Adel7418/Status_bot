@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
+import aiofiles
 from aiogram.types import BufferedInputFile
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -337,7 +338,7 @@ class MasterReportsService:
             logger.error(f"Файл отчета не найден: {file_path}")
             return None
 
-        with open(file_path, "rb") as f:
-            file_data = f.read()
+        async with aiofiles.open(file_path, "rb") as f:
+            file_data = await f.read()
 
         return BufferedInputFile(file_data, filename=report.file_name)

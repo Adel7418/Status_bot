@@ -8,6 +8,9 @@ aiogram==3.16.0  # Updated from 3.14.0
 # Async SQLite
 aiosqlite==0.20.0
 
+# Async File I/O
+aiofiles==24.1.0
+
 # SQLAlchemy ORM
 sqlalchemy[asyncio]==2.0.25
 asyncpg==0.29.0  # PostgreSQL async driver

@@ -6,7 +6,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import (
@@ -46,8 +46,8 @@ class ORMDatabase:
             database_url: URL базы данных (SQLite или PostgreSQL)
         """
         self.database_url = database_url or self._get_database_url()
-        self.engine: Optional[AsyncEngine] = None
-        self.session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+        self.engine: AsyncEngine | None = None
+        self.session_factory: async_sessionmaker[AsyncSession] | None = None
         self._is_sqlite = self.database_url.startswith("sqlite")
 
     def _get_database_url(self) -> str:
@@ -346,9 +346,9 @@ class ORMDatabase:
             stmt = select(Master).options(joinedload(Master.user))
 
             if only_approved:
-                stmt = stmt.where(Master.is_approved == True)
+                stmt = stmt.where(Master.is_approved is True)
             if only_active:
-                stmt = stmt.where(Master.is_active == True)
+                stmt = stmt.where(Master.is_active is True)
 
             stmt = stmt.order_by(Master.created_at.desc())
             result = await session.execute(stmt)
@@ -599,7 +599,7 @@ class ORMDatabase:
 
             logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
             return True
-    
+
     async def unassign_master_from_order(self, order_id: int) -> bool:
         """Снятие мастера с заявки"""
         async with self.get_session() as session:
@@ -733,7 +733,7 @@ class ORMDatabase:
                 order.master_profit = master_profit
             if company_profit is not None:
                 order.company_profit = company_profit
-            
+
             # Обновляем бонусы
             if has_review is not None:
                 order.has_review = has_review
@@ -820,7 +820,7 @@ class ORMDatabase:
 
             # Количество активных мастеров
             stmt = select(func.count(Master.id).label("count")).where(
-                and_(Master.is_active == True, Master.is_approved == True)
+                and_(Master.is_active is True, Master.is_approved is True)
             )
             result = await session.execute(stmt)
             stats["active_masters"] = result.scalar()

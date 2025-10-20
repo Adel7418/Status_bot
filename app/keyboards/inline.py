@@ -314,15 +314,15 @@ def get_masters_list_keyboard(
 def get_master_stats_keyboard(master_id: int) -> InlineKeyboardMarkup:
     """
     Клавиатура для статистики мастера с кнопками просмотра заявок
-    
+
     Args:
         master_id: ID мастера
-    
+
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
-    
+
     builder.row(
         InlineKeyboardButton(
             text="📥 Скачать Excel отчет",
@@ -335,36 +335,36 @@ def get_master_stats_keyboard(master_id: int) -> InlineKeyboardMarkup:
             callback_data=create_callback_data("master_reports_archive", str(master_id))
         )
     )
-    
+
     return builder.as_markup()
 
 
 def get_master_archived_reports_keyboard(reports: list, master_id: int) -> InlineKeyboardMarkup:
     """
     Клавиатура со списком архивных отчетов мастера
-    
+
     Args:
         reports: Список архивных отчетов
         master_id: ID мастера
-    
+
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
-    
+
     for report in reports:
-        period_start = report.period_start.strftime('%d.%m.%Y') if report.period_start else "?"
-        period_end = report.period_end.strftime('%d.%m.%Y') if report.period_end else "?"
-        
+        period_start = report.period_start.strftime("%d.%m.%Y") if report.period_start else "?"
+        period_end = report.period_end.strftime("%d.%m.%Y") if report.period_end else "?"
+
         button_text = f"📄 {period_start} - {period_end} ({report.total_orders} заявок)"
-        
+
         builder.row(
             InlineKeyboardButton(
                 text=button_text,
                 callback_data=create_callback_data("download_archive_report", f"{report.id}_{master_id}")
             )
         )
-    
+
     return builder.as_markup()
 
 

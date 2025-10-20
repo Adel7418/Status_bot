@@ -272,9 +272,8 @@ def sanitize_log_message(message: str) -> str:
     )
 
     # Маскируем email
-    message = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]", message)
+    return re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]", message)
 
-    return message
 
 
 # Константы для удобства

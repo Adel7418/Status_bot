@@ -49,8 +49,8 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(log_formatter)
 
 # Настройка root logger
-# Используем DEBUG для локальной разработки, INFO для production
-log_level = logging.DEBUG if Config.DEV_MODE else logging.INFO
+# Используем LOG_LEVEL из .env (по умолчанию INFO)
+log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
 
 logging.basicConfig(
     level=log_level,
@@ -59,15 +59,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Включаем DEBUG логирование ТОЛЬКО для локальной разработки
-if Config.DEV_MODE:
+# Настройка уровней логирования для различных модулей
+if log_level == logging.DEBUG:
     logging.getLogger("app").setLevel(logging.DEBUG)
     logging.getLogger("aiogram").setLevel(logging.INFO)  # aiogram остается INFO чтобы не спамить
     logging.getLogger("apscheduler").setLevel(logging.INFO)
-    logger.info("DEBUG режим включен для локальной разработки")
+    logger.info("DEBUG режим включен (LOG_LEVEL=DEBUG)")
 else:
-    # Production - минимальное логирование
-    logging.getLogger("app").setLevel(logging.INFO)
+    # Production/INFO - минимальное логирование
+    logging.getLogger("app").setLevel(log_level)
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
@@ -254,7 +254,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Получен сигнал остановки (Ctrl+C)")
     except Exception as e:
-        logger.error("Критическая ошибка: %s", e, exc_info=True)
+        logger.exception("Критическая ошибка: %s", e)
     finally:
         # Гарантированная очистка ресурсов
         logger.info("Начало процедуры остановки...")

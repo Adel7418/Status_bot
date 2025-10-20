@@ -6,8 +6,8 @@ from app.core.config import Config
 
 
 if Config.USE_ORM:
-    from .orm_database import ORMDatabase as Database  # type: ignore
+    from .orm_database import ORMDatabase as Database
 else:
-    from .db import Database  # type: ignore
+    from .db import Database
 
 __all__ = ["Database"]

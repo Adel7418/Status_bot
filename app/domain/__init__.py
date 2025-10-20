@@ -10,7 +10,7 @@ from app.domain.order_state_machine import (
 
 
 __all__ = [
-    "OrderStateMachine",
     "InvalidStateTransitionError",
+    "OrderStateMachine",
     "OrderStateTransitionResult",
 ]

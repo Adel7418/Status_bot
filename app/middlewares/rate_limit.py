@@ -5,13 +5,24 @@ Middleware для ограничения частоты запросов (Rate L
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypedDict
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message
 
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimitBucket(TypedDict):
+    """Структура данных для хранения информации о rate limiting для пользователя"""
+
+    tokens: float
+    last_update: float
+    violations: int
+    violation_timestamps: list[float]
+    banned_until: float | None
+    last_warning_sent: float
 
 
 class RateLimitMiddleware(BaseMiddleware):
@@ -51,15 +62,7 @@ class RateLimitMiddleware(BaseMiddleware):
         self.violation_window = violation_window
 
         # Хранилище для каждого пользователя
-        # {user_id: {
-        #     'tokens': N,
-        #     'last_update': timestamp,
-        #     'violations': N,
-        #     'violation_timestamps': [timestamps],
-        #     'banned_until': timestamp or None,
-        #     'last_warning_sent': timestamp  # Throttling предупреждений
-        # }}
-        self.buckets: dict[int, dict] = {}
+        self.buckets: dict[int, RateLimitBucket] = {}
 
     def _get_tokens(self, user_id: int) -> float:
         """
@@ -92,10 +95,11 @@ class RateLimitMiddleware(BaseMiddleware):
         tokens_to_add = time_passed * (self.rate / self.period)
 
         # Обновляем количество токенов (не больше burst)
-        bucket["tokens"] = min(self.burst, bucket["tokens"] + tokens_to_add)
+        new_tokens = min(self.burst, bucket["tokens"] + tokens_to_add)
+        bucket["tokens"] = new_tokens
         bucket["last_update"] = now
 
-        return bucket["tokens"]
+        return float(new_tokens)
 
     def _clean_old_violations(self, user_id: int) -> int:
         """
@@ -120,9 +124,10 @@ class RateLimitMiddleware(BaseMiddleware):
         ]
 
         # Обновляем счетчик
-        bucket["violations"] = len(bucket["violation_timestamps"])
+        violations_count = len(bucket["violation_timestamps"])
+        bucket["violations"] = violations_count
 
-        return bucket["violations"]
+        return violations_count
 
     def _add_violation(self, user_id: int) -> int:
         """
@@ -139,17 +144,18 @@ class RateLimitMiddleware(BaseMiddleware):
 
         # Добавляем timestamp нарушения
         bucket["violation_timestamps"].append(now)
-        bucket["violations"] = len(bucket["violation_timestamps"])
+        violations_count = len(bucket["violation_timestamps"])
+        bucket["violations"] = violations_count
 
         # Проверяем, не превысили ли лимит
-        if bucket["violations"] >= self.max_violations:
+        if violations_count >= self.max_violations:
             # Постоянный бан на 1 час
             bucket["banned_until"] = now + 3600
             logger.critical(
                 f"🚫 User {user_id} PERMANENTLY BANNED for {self.max_violations}+ violations"
             )
 
-        return bucket["violations"]
+        return violations_count
 
     def _consume_token(self, user_id: int) -> bool:
         """

@@ -3,7 +3,7 @@ Retry механизм для Bot API запросов с экспоненциа
 """
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any, TypeVar
 
@@ -69,7 +69,7 @@ def retry_on_telegram_error(
             return await bot.send_message(chat_id, text)
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T | None]]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T | None:
             last_exception = None
@@ -99,12 +99,11 @@ def retry_on_telegram_error(
                         await asyncio.sleep(wait_time)
                         last_exception = e
                         continue
-                    else:
-                        logger.error(
-                            "%s: Max attempts reached after flood control. Giving up.",
-                            func.__name__,
-                        )
-                        return None
+                    logger.error(
+                        "%s: Max attempts reached after flood control. Giving up.",
+                        func.__name__,
+                    )
+                    return None
 
                 except exceptions as e:
                     # Обработка сетевых ошибок и ошибок сервера
@@ -124,13 +123,12 @@ def retry_on_telegram_error(
                         await asyncio.sleep(delay)
                         last_exception = e
                         continue
-                    else:
-                        logger.error(
-                            "%s: Max attempts reached. Giving up. Last error: %s",
-                            func.__name__,
-                            str(e),
-                        )
-                        return None
+                    logger.error(
+                        "%s: Max attempts reached. Giving up. Last error: %s",
+                        func.__name__,
+                        str(e),
+                    )
+                    return None
 
                 except NON_RETRYABLE_EXCEPTIONS as e:
                     # Ошибки, которые не имеет смысла повторять
@@ -172,7 +170,7 @@ def retry_on_telegram_error(
                 )
             return None
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 

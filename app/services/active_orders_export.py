@@ -5,7 +5,6 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -24,7 +23,7 @@ class ActiveOrdersExportService:
     def __init__(self):
         self.db = Database()
 
-    async def export_active_orders_to_excel(self) -> Optional[str]:
+    async def export_active_orders_to_excel(self) -> str | None:
         """
         Экспорт всех активных (незакрытых) заявок в Excel
 
@@ -178,9 +177,7 @@ class ActiveOrdersExportService:
                     cell.border = thin_border
 
                     # Выравнивание
-                    if col_idx == 1:  # ID
-                        cell.alignment = center_alignment
-                    elif col_idx in [2]:  # Статус
+                    if col_idx == 1 or col_idx in [2]:  # ID
                         cell.alignment = center_alignment
                     else:
                         cell.alignment = left_alignment

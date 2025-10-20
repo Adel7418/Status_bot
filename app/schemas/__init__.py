@@ -9,13 +9,13 @@ from app.schemas.user import UserCreateSchema
 
 
 __all__ = [
-    # Order schemas
-    "OrderCreateSchema",
-    "OrderUpdateSchema",
-    "OrderAmountsSchema",
     # Master schemas
     "MasterCreateSchema",
     "MasterUpdateSchema",
+    "OrderAmountsSchema",
+    # Order schemas
+    "OrderCreateSchema",
+    "OrderUpdateSchema",
     # User schemas
     "UserCreateSchema",
 ]

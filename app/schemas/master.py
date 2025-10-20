@@ -1,6 +1,5 @@
 """Pydantic схемы для валидации мастеров"""
 import re
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -76,15 +75,15 @@ class MasterCreateSchema(BaseModel):
 class MasterUpdateSchema(BaseModel):
     """Схема для обновления данных мастера"""
 
-    phone: Optional[str] = Field(None, min_length=10, max_length=20)
-    specialization: Optional[str] = Field(None, min_length=3, max_length=200)
-    is_active: Optional[bool] = None
-    is_approved: Optional[bool] = None
-    work_chat_id: Optional[int] = None
+    phone: str | None = Field(None, min_length=10, max_length=20)
+    specialization: str | None = Field(None, min_length=3, max_length=200)
+    is_active: bool | None = None
+    is_approved: bool | None = None
+    work_chat_id: int | None = None
 
     @field_validator("phone")
     @classmethod
-    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+    def validate_phone(cls, v: str | None) -> str | None:
         if v is None:
             return None
 
@@ -103,7 +102,7 @@ class MasterUpdateSchema(BaseModel):
 
     @field_validator("specialization")
     @classmethod
-    def validate_specialization(cls, v: Optional[str]) -> Optional[str]:
+    def validate_specialization(cls, v: str | None) -> str | None:
         if v is None:
             return None
 
@@ -115,7 +114,7 @@ class MasterUpdateSchema(BaseModel):
 
     @field_validator("work_chat_id")
     @classmethod
-    def validate_work_chat_id(cls, v: Optional[int]) -> Optional[int]:
+    def validate_work_chat_id(cls, v: int | None) -> int | None:
         """Валидация ID рабочего чата"""
         if v is None:
             return None

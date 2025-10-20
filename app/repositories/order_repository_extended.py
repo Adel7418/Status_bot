@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from app.database.models import Order
 from app.repositories.order_repository import OrderRepository
@@ -21,7 +21,7 @@ class OrderRepositoryExtended(OrderRepository):
     # ===== SOFT DELETE =====
 
     async def soft_delete(
-        self, order_id: int, deleted_by: int, reason: Optional[str] = None
+        self, order_id: int, deleted_by: int, reason: str | None = None
     ) -> bool:
         """
         Мягкое удаление заявки
@@ -115,7 +115,7 @@ class OrderRepositoryExtended(OrderRepository):
 
     # ===== ПОИСК С УЧЕТОМ DELETED =====
 
-    async def get_by_id(self, order_id: int, include_deleted: bool = False) -> Optional[Order]:
+    async def get_by_id(self, order_id: int, include_deleted: bool = False) -> Order | None:
         """
         Получение заявки по ID
 
@@ -145,9 +145,9 @@ class OrderRepositoryExtended(OrderRepository):
 
     async def get_all(
         self,
-        status: Optional[str] = None,
-        master_id: Optional[int] = None,
-        limit: Optional[int] = None,
+        status: str | None = None,
+        master_id: int | None = None,
+        limit: int | None = None,
         include_deleted: bool = False,
     ) -> list[Order]:
         """
@@ -198,13 +198,13 @@ class OrderRepositoryExtended(OrderRepository):
 
     async def search_orders(
         self,
-        search_query: Optional[str] = None,
-        status: Optional[str] = None,
-        master_id: Optional[int] = None,
-        client_name: Optional[str] = None,
-        client_phone: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
+        search_query: str | None = None,
+        status: str | None = None,
+        master_id: int | None = None,
+        client_name: str | None = None,
+        client_phone: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
         include_deleted: bool = False,
         limit: int = 100,
     ) -> list[Order]:
@@ -377,10 +377,10 @@ class OrderRepositoryExtended(OrderRepository):
         where_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
 
         # Общее количество
-        total_row = await self._fetch_one(f"SELECT COUNT(*) as total FROM orders {where_clause}")
+        total_row = await self._fetch_one(f"SELECT COUNT(*) as total FROM orders {where_clause}")  # nosec B608
 
         # По статусам
-        status_rows = await self._fetch_all(
+        status_rows = await self._fetch_all(  # nosec B608
             f"""
             SELECT status, COUNT(*) as count
             FROM orders

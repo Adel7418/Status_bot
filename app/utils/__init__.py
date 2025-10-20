@@ -34,39 +34,39 @@ from app.utils.retry import (
 
 
 __all__ = [
-    # Format utilities
-    "format_datetime",
-    "format_date",
-    "format_phone",
-    "truncate_text",
+    # Business logic
+    "calculate_profit_split",
+    "create_callback_data",
     "escape_html",
     "escape_markdown",  # DEPRECATED: use escape_html for HTML mode
+    "format_date",
+    # Format utilities
+    "format_datetime",
+    "format_phone",
     # DateTime utilities
     "get_now",
     # User utilities
     "get_user_display_name",
-    # Callback utilities
-    "parse_callback_data",
-    "create_callback_data",
-    # Validation
-    "validate_phone",
     # Logging
     "log_action",
-    # Business logic
-    "calculate_profit_split",
-    # Retry utilities
-    "retry_on_telegram_error",
-    "safe_send_message",
-    "safe_answer_callback",
-    "safe_edit_message",
-    "safe_delete_message",
+    "mask_address",
+    "mask_name",
     # PII Masking (GDPR compliance)
     "mask_phone",
-    "mask_name",
-    "mask_address",
     "mask_username",
-    "safe_str_user",
-    "safe_str_order",
+    # Callback utilities
+    "parse_callback_data",
+    # Retry utilities
+    "retry_on_telegram_error",
+    "safe_answer_callback",
+    "safe_delete_message",
+    "safe_edit_message",
     "safe_log_order_details",
+    "safe_send_message",
+    "safe_str_order",
+    "safe_str_user",
     "sanitize_log_message",
+    "truncate_text",
+    # Validation
+    "validate_phone",
 ]

@@ -29,13 +29,13 @@ class ServiceFactory:
             db_connection: Подключение к базе данных
         """
         self.db_connection = db_connection
-        self._order_repo = None
-        self._user_repo = None
-        self._master_repo = None
-        self._order_service = None
-        self._user_service = None
-        self._master_service = None
-        self._state_machine = None
+        self._order_repo: OrderRepository | None = None
+        self._user_repo: UserRepository | None = None
+        self._master_repo: MasterRepository | None = None
+        self._order_service: OrderService | None = None
+        self._user_service: UserService | None = None
+        self._master_service: MasterService | None = None
+        self._state_machine: OrderStateMachine | None = None
 
     @property
     def order_repository(self) -> OrderRepository:

@@ -5,7 +5,7 @@
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import aiosqlite
 
@@ -20,6 +20,10 @@ from app.database.models import (
 )
 from app.domain.order_state_machine import InvalidStateTransitionError, OrderStateMachine
 from app.utils.helpers import MOSCOW_TZ, get_now
+
+
+if TYPE_CHECKING:
+    from app.services.service_factory import ServiceFactory
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +41,7 @@ class Database:
         """
         self.db_path = db_path or Config.DATABASE_PATH
         self.connection: aiosqlite.Connection | None = None
-        self._service_factory = None
+        self._service_factory: ServiceFactory | None = None
 
     async def connect(self):
         """Подключение к базе данных"""
@@ -474,7 +478,7 @@ class Database:
             )
         return users
 
-    async def get_admins_and_dispatchers(self, exclude_user_id: int = None) -> list[User]:
+    async def get_admins_and_dispatchers(self, exclude_user_id: int | None = None) -> list[User]:
         """
         Получение всех админов и диспетчеров
 
@@ -566,7 +570,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
+                    if "work_chat_id" in row and row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
@@ -607,7 +611,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
+                    if "work_chat_id" in row and row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
@@ -648,7 +652,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
+                    if "work_chat_id" in row and row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
@@ -677,7 +681,7 @@ class Database:
             LEFT JOIN users u ON m.telegram_id = u.telegram_id
             WHERE 1=1
         """
-        params = []
+        params: list[Any] = []
 
         if only_approved:
             query += " AND m.is_approved = 1"
@@ -701,7 +705,7 @@ class Database:
                     is_approved=bool(row["is_approved"]),
                     work_chat_id=(
                         row["work_chat_id"]
-                        if "work_chat_id" in row.keys() and row["work_chat_id"] is not None
+                        if "work_chat_id" in row and row["work_chat_id"] is not None
                         else None
                     ),
                     created_at=(
@@ -876,43 +880,43 @@ class Database:
                 scheduled_time=row["scheduled_time"],
                 total_amount=(
                     row["total_amount"]
-                    if "total_amount" in row.keys() and row["total_amount"] is not None
+                    if "total_amount" in row and row["total_amount"] is not None
                     else None
                 ),
                 materials_cost=(
                     row["materials_cost"]
-                    if "materials_cost" in row.keys() and row["materials_cost"] is not None
+                    if "materials_cost" in row and row["materials_cost"] is not None
                     else None
                 ),
                 master_profit=(
                     row["master_profit"]
-                    if "master_profit" in row.keys() and row["master_profit"] is not None
+                    if "master_profit" in row and row["master_profit"] is not None
                     else None
                 ),
                 company_profit=(
                     row["company_profit"]
-                    if "company_profit" in row.keys() and row["company_profit"] is not None
+                    if "company_profit" in row and row["company_profit"] is not None
                     else None
                 ),
                 has_review=(
                     bool(row["has_review"])
-                    if "has_review" in row.keys() and row["has_review"] is not None
+                    if "has_review" in row and row["has_review"] is not None
                     else None
                 ),
                 out_of_city=(
                     bool(row["out_of_city"])
-                    if "out_of_city" in row.keys() and row["out_of_city"] is not None
+                    if "out_of_city" in row and row["out_of_city"] is not None
                     else None
                 ),
                 estimated_completion_date=(
                     row["estimated_completion_date"]
-                    if "estimated_completion_date" in row.keys()
+                    if "estimated_completion_date" in row
                     and row["estimated_completion_date"] is not None
                     else None
                 ),
                 prepayment_amount=(
                     row["prepayment_amount"]
-                    if "prepayment_amount" in row.keys() and row["prepayment_amount"] is not None
+                    if "prepayment_amount" in row and row["prepayment_amount"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
@@ -950,7 +954,7 @@ class Database:
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE 1=1
         """
-        params = []
+        params: list[Any] = []
 
         if status:
             query += " AND o.status = ?"
@@ -983,30 +987,30 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
-                    scheduled_time=row["scheduled_time"] if "scheduled_time" in row else None,
+                    scheduled_time=row.get("scheduled_time", None),
                     total_amount=(
                         row["total_amount"]
-                        if "total_amount" in row.keys() and row["total_amount"] is not None
+                        if "total_amount" in row and row["total_amount"] is not None
                         else None
                     ),
                     materials_cost=(
                         row["materials_cost"]
-                        if "materials_cost" in row.keys() and row["materials_cost"] is not None
+                        if "materials_cost" in row and row["materials_cost"] is not None
                         else None
                     ),
                     master_profit=(
                         row["master_profit"]
-                        if "master_profit" in row.keys() and row["master_profit"] is not None
+                        if "master_profit" in row and row["master_profit"] is not None
                         else None
                     ),
                     company_profit=(
                         row["company_profit"]
-                        if "company_profit" in row.keys() and row["company_profit"] is not None
+                        if "company_profit" in row and row["company_profit"] is not None
                         else None
                     ),
                     has_review=(
                         bool(row["has_review"])
-                        if "has_review" in row.keys() and row["has_review"] is not None
+                        if "has_review" in row and row["has_review"] is not None
                         else None
                     ),
                     created_at=(
@@ -1235,7 +1239,7 @@ class Database:
             True если успешно
         """
         updates = []
-        params = []
+        params: list[Any] = []
 
         if equipment_type:
             updates.append("equipment_type = ?")
@@ -1263,7 +1267,7 @@ class Database:
         params.append(get_now().isoformat())  # Добавляем дату в конец
         params.append(order_id)
 
-        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"
+        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
         await self.connection.execute(query, params)
         await self.connection.commit()
 
@@ -1293,7 +1297,7 @@ class Database:
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE o.assigned_master_id = ?
         """
-        params = [master_id]
+        params: list[Any] = [master_id]
 
         if exclude_closed:
             query += " AND o.status NOT IN (?, ?)"
@@ -1318,30 +1322,30 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
-                    scheduled_time=row["scheduled_time"] if "scheduled_time" in row else None,
+                    scheduled_time=row.get("scheduled_time", None),
                     total_amount=(
                         row["total_amount"]
-                        if "total_amount" in row.keys() and row["total_amount"] is not None
+                        if "total_amount" in row and row["total_amount"] is not None
                         else None
                     ),
                     materials_cost=(
                         row["materials_cost"]
-                        if "materials_cost" in row.keys() and row["materials_cost"] is not None
+                        if "materials_cost" in row and row["materials_cost"] is not None
                         else None
                     ),
                     master_profit=(
                         row["master_profit"]
-                        if "master_profit" in row.keys() and row["master_profit"] is not None
+                        if "master_profit" in row and row["master_profit"] is not None
                         else None
                     ),
                     company_profit=(
                         row["company_profit"]
-                        if "company_profit" in row.keys() and row["company_profit"] is not None
+                        if "company_profit" in row and row["company_profit"] is not None
                         else None
                     ),
                     has_review=(
                         bool(row["has_review"])
-                        if "has_review" in row.keys() and row["has_review"] is not None
+                        if "has_review" in row and row["has_review"] is not None
                         else None
                     ),
                     created_at=(
@@ -1386,7 +1390,7 @@ class Database:
             True если успешно
         """
         updates = []
-        params = []
+        params: list[Any] = []
 
         if total_amount is not None:
             updates.append("total_amount = ?")
@@ -1419,7 +1423,7 @@ class Database:
         params.append(get_now().isoformat())  # Добавляем дату в конец
         params.append(order_id)
 
-        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"
+        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
         await self.connection.execute(query, params)
         await self.connection.commit()
 
@@ -1515,7 +1519,7 @@ class Database:
     # ==================== FINANCIAL REPORTS ====================
 
     async def get_orders_by_period(
-        self, start_date: datetime, end_date: datetime, status: str = None
+        self, start_date: datetime, end_date: datetime, status: str | None = None
     ) -> list[Order]:
         """
         Получение заказов за период (по дате закрытия!)
@@ -1637,7 +1641,7 @@ class Database:
             ),
         )
         await self.connection.commit()
-        return cursor.lastrowid
+        return cast(int, cursor.lastrowid)
 
     async def get_financial_report_by_id(self, report_id: int) -> FinancialReport | None:
         """
@@ -1709,7 +1713,7 @@ class Database:
             ),
         )
         await self.connection.commit()
-        return cursor.lastrowid
+        return cast(int, cursor.lastrowid)
 
     async def get_master_reports_by_report_id(self, report_id: int) -> list[MasterFinancialReport]:
         """
@@ -1787,18 +1791,17 @@ class Database:
 
     # ==================== АРХИВНЫЕ ОТЧЕТЫ МАСТЕРОВ ====================
 
-    async def save_master_report_archive(self, report: "MasterReportArchive") -> int:
+    async def save_master_report_archive(self, report: "MasterReportArchive") -> int:  # type: ignore[name-defined]
         """
         Сохранение архивного отчета мастера
-        
+
         Args:
             report: Данные отчета
-        
+
         Returns:
             ID созданной записи
         """
-        from app.database.models import MasterReportArchive
-        
+
         cursor = await self.connection.execute(
             """
             INSERT INTO master_reports_archive (
@@ -1822,23 +1825,23 @@ class Database:
             ),
         )
         await self.connection.commit()
-        return cursor.lastrowid
+        return cast(int, cursor.lastrowid)
 
     async def get_master_archived_reports(
         self, master_id: int, limit: int = 10
-    ) -> list["MasterReportArchive"]:
+    ) -> list["MasterReportArchive"]:  # type: ignore[name-defined]
         """
         Получение списка архивных отчетов мастера
-        
+
         Args:
             master_id: ID мастера
             limit: Лимит записей
-        
+
         Returns:
             Список архивных отчетов
         """
         from app.database.models import MasterReportArchive
-        
+
         cursor = await self.connection.execute(
             """
             SELECT * FROM master_reports_archive
@@ -1849,7 +1852,7 @@ class Database:
             (master_id, limit),
         )
         rows = await cursor.fetchall()
-        
+
         reports = []
         for row in rows:
             report = MasterReportArchive(
@@ -1870,34 +1873,36 @@ class Database:
                 notes=row["notes"],
             )
             reports.append(report)
-        
+
         return reports
 
-    async def get_master_report_archive_by_id(self, report_id: int) -> "MasterReportArchive | None":
+    async def get_master_report_archive_by_id(self, report_id: int) -> "MasterReportArchive | None":  # type: ignore[name-defined]
         """
         Получение архивного отчета по ID
-        
+
         Args:
             report_id: ID отчета
-        
+
         Returns:
             Архивный отчет или None
         """
         from app.database.models import MasterReportArchive
-        
+
         cursor = await self.connection.execute(
             "SELECT * FROM master_reports_archive WHERE id = ?",
             (report_id,),
         )
         row = await cursor.fetchone()
-        
+
         if not row:
             return None
-        
+
         return MasterReportArchive(
             id=row["id"],
             master_id=row["master_id"],
-            period_start=datetime.fromisoformat(row["period_start"]) if row["period_start"] else None,
+            period_start=datetime.fromisoformat(row["period_start"])
+            if row["period_start"]
+            else None,
             period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
             file_path=row["file_path"],
             file_name=row["file_name"],

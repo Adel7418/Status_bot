@@ -4,7 +4,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from app.database.models import Order
 from app.repositories.order_repository_extended import OrderRepositoryExtended
@@ -27,8 +26,8 @@ class SearchService:
 
     async def search(
         self,
-        query: Optional[str] = None,
-        filters: Optional[dict] = None,
+        query: str | None = None,
+        filters: dict | None = None,
         include_deleted: bool = False,
         limit: int = 50,
     ) -> list[Order]:
@@ -63,7 +62,7 @@ class SearchService:
         logger.info(f"Поиск выполнен: query='{query}', filters={filters}, found={len(results)}")
         return results
 
-    async def search_by_id(self, order_id: int, include_deleted: bool = False) -> Optional[Order]:
+    async def search_by_id(self, order_id: int, include_deleted: bool = False) -> Order | None:
         """
         Поиск заявки по ID
 
@@ -112,7 +111,7 @@ class SearchService:
         self,
         date_from: datetime,
         date_to: datetime,
-        status: Optional[str] = None,
+        status: str | None = None,
         include_deleted: bool = False,
     ) -> list[Order]:
         """

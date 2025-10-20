@@ -19,7 +19,7 @@ class IsPrivateChat(BaseFilter):
     """Фильтр для проверки, что сообщение из личного чата"""
 
     async def __call__(self, message: Message) -> bool:
-        return message.chat.type == "private"
+        return bool(message.chat.type == "private")
 
 
 class IsMasterWorkGroup(BaseFilter):
@@ -80,7 +80,7 @@ class IsMasterInGroup(BaseFilter):
                 return False
 
             # Проверяем, что эта группа - рабочая группа мастера
-            return master.work_chat_id == message.chat.id
+            return bool(master.work_chat_id == message.chat.id)
         finally:
             await db.disconnect()
 

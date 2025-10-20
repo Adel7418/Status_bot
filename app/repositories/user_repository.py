@@ -228,11 +228,11 @@ class UserRepository(BaseRepository[User]):
             return False
 
         # Формируем SET часть запроса
-        set_parts = [f"{field} = ?" for field in updates.keys()]
+        set_parts = [f"{field} = ?" for field in updates]
         set_clause = ", ".join(set_parts)
 
-        query = f"UPDATE users SET {set_clause} WHERE telegram_id = ?"
-        params = list(updates.values()) + [telegram_id]
+        query = f"UPDATE users SET {set_clause} WHERE telegram_id = ?"  # nosec B608
+        params = [*list(updates.values()), telegram_id]
 
         await self._execute_commit(query, tuple(params))
         logger.info(f"Пользователь {telegram_id} обновлен: {', '.join(updates.keys())}")

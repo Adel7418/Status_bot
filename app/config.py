@@ -9,12 +9,12 @@ from app.core.constants import EquipmentType, OrderStatus, UserRole
 
 
 __all__ = [
-    "Config",
-    "Messages",
-    "UserRole",
-    "OrderStatus",
-    "EquipmentType",
     "MAX_DESCRIPTION_LENGTH",
     "MAX_NOTES_LENGTH",
     "PHONE_REGEX",
+    "Config",
+    "EquipmentType",
+    "Messages",
+    "OrderStatus",
+    "UserRole",
 ]

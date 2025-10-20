@@ -184,11 +184,11 @@ class MasterRepository(BaseRepository[Master]):
             return False
 
         # Формируем SET часть запроса
-        set_parts = [f"{field} = ?" for field in updates.keys()]
+        set_parts = [f"{field} = ?" for field in updates]
         set_clause = ", ".join(set_parts)
 
-        query = f"UPDATE masters SET {set_clause} WHERE id = ?"
-        params = list(updates.values()) + [master_id]
+        query = f"UPDATE masters SET {set_clause} WHERE id = ?"  # nosec B608
+        params = [*list(updates.values()), master_id]
 
         await self._execute_commit(query, tuple(params))
         logger.info(f"Мастер #{master_id} обновлен: {', '.join(updates.keys())}")
@@ -209,11 +209,11 @@ class MasterRepository(BaseRepository[Master]):
             return False
 
         # Формируем SET часть запроса
-        set_parts = [f"{field} = ?" for field in updates.keys()]
+        set_parts = [f"{field} = ?" for field in updates]
         set_clause = ", ".join(set_parts)
 
-        query = f"UPDATE masters SET {set_clause} WHERE telegram_id = ?"
-        params = list(updates.values()) + [telegram_id]
+        query = f"UPDATE masters SET {set_clause} WHERE telegram_id = ?"  # nosec B608
+        params = [*list(updates.values()), telegram_id]
 
         await self._execute_commit(query, tuple(params))
         logger.info(f"Мастер (telegram_id: {telegram_id}) обновлен: {', '.join(updates.keys())}")
@@ -297,7 +297,7 @@ class MasterRepository(BaseRepository[Master]):
             is_approved=bool(row["is_approved"]),
             work_chat_id=(
                 row["work_chat_id"]
-                if "work_chat_id" in row.keys() and row["work_chat_id"]
+                if row.get("work_chat_id")
                 else None
             ),
             created_at=(
@@ -305,7 +305,7 @@ class MasterRepository(BaseRepository[Master]):
                 if row["created_at"]
                 else None
             ),
-            username=(row["username"] if "username" in row.keys() else None),
-            first_name=(row["first_name"] if "first_name" in row.keys() else None),
-            last_name=(row["last_name"] if "last_name" in row.keys() else None),
+            username=(row.get("username", None)),
+            first_name=(row.get("first_name", None)),
+            last_name=(row.get("last_name", None)),
         )

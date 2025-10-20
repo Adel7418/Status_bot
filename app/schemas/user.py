@@ -1,5 +1,4 @@
 """Pydantic схемы для валидации пользователей"""
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -10,13 +9,13 @@ class UserCreateSchema(BaseModel):
     """Схема для создания пользователя"""
 
     telegram_id: int = Field(..., gt=0, description="Telegram ID пользователя")
-    username: Optional[str] = Field(
+    username: str | None = Field(
         None, min_length=5, max_length=32, description="Telegram username без @"
     )
-    first_name: Optional[str] = Field(
+    first_name: str | None = Field(
         None, min_length=1, max_length=100, description="Имя пользователя"
     )
-    last_name: Optional[str] = Field(None, max_length=100, description="Фамилия пользователя")
+    last_name: str | None = Field(None, max_length=100, description="Фамилия пользователя")
     role: str = Field(default=UserRole.UNKNOWN, description="Роль пользователя")
 
     @field_validator("telegram_id")
@@ -33,7 +32,7 @@ class UserCreateSchema(BaseModel):
 
     @field_validator("username")
     @classmethod
-    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+    def validate_username(cls, v: str | None) -> str | None:
         """Валидация username"""
         if v is None:
             return None

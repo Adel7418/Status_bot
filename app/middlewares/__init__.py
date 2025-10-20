@@ -7,9 +7,9 @@ from app.middlewares.validation_handler import ValidationHandlerMiddleware
 
 
 __all__ = [
-    "RoleCheckMiddleware",
     "LoggingMiddleware",
     "RateLimitMiddleware",
+    "RoleCheckMiddleware",
     "ValidationHandlerMiddleware",
     "global_error_handler",
 ]

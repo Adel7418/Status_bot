@@ -4,7 +4,6 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -30,7 +29,7 @@ class ExcelExportService:
             self._order_repo_extended = OrderRepositoryExtended(self.db.connection)
         return self._order_repo_extended
 
-    async def export_report_to_excel(self, report_id: int) -> Optional[str]:
+    async def export_report_to_excel(self, report_id: int) -> str | None:
         """
         Экспорт финансового отчета в Excel
 
@@ -63,8 +62,8 @@ class ExcelExportService:
             subheader_fill = PatternFill(
                 start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
             )
-            total_font = Font(bold=True, size=11)
-            total_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+            Font(bold=True, size=11)
+            PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
             center_alignment = Alignment(horizontal="center", vertical="center")
             left_alignment = Alignment(horizontal="left", vertical="center")
@@ -310,7 +309,7 @@ class ExcelExportService:
         row += 1
 
         # Получаем расширенный репозиторий
-        order_repo = await self._get_extended_repo()
+        await self._get_extended_repo()
 
         # Для каждого мастера
         for master_report in master_reports:
@@ -484,7 +483,7 @@ class ExcelExportService:
         for col, width in widths.items():
             ws.column_dimensions[col].width = width
 
-    async def export_closed_orders_to_excel(self, period_days: int = 30) -> Optional[str]:
+    async def export_closed_orders_to_excel(self, period_days: int = 30) -> str | None:
         """
         Экспорт закрытых заказов в Excel (обновляет существующий файл)
 
@@ -688,7 +687,7 @@ class ExcelExportService:
         finally:
             await self.db.disconnect()
 
-    async def export_masters_statistics_to_excel(self) -> Optional[str]:
+    async def export_masters_statistics_to_excel(self) -> str | None:
         """
         Экспорт статистики по мастерам в Excel (обновляет существующий файл)
 
@@ -962,7 +961,7 @@ class ExcelExportService:
         finally:
             await self.db.disconnect()
 
-    async def export_master_orders_to_excel(self, master_id: int) -> Optional[str]:
+    async def export_master_orders_to_excel(self, master_id: int) -> str | None:
         """
         Экспорт всех заявок одного мастера в Excel
 

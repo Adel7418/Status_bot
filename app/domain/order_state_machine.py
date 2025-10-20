@@ -389,3 +389,34 @@ class OrderStateMachine:
         }
 
         return rules.get(state, {})  # type: ignore[return-value]
+
+    @classmethod
+    def transition(
+        cls,
+        from_state: str,
+        to_state: str,
+        user_role: str | None = None,
+        user_roles: list[str] | None = None,
+    ) -> OrderStateTransitionResult:
+        """
+        Алиас для validate_transition для обратной совместимости
+
+        Args:
+            from_state: Текущий статус заявки
+            to_state: Целевой статус
+            user_role: Основная роль пользователя
+            user_roles: Список ролей пользователя
+
+        Returns:
+            OrderStateTransitionResult с результатом валидации
+
+        Raises:
+            InvalidStateTransitionError: Если переход недопустим
+        """
+        return cls.validate_transition(
+            from_state=from_state,
+            to_state=to_state,
+            user_role=user_role,
+            user_roles=user_roles,
+            raise_exception=True,
+        )

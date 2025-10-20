@@ -33,12 +33,12 @@ class User(Base):
     # Основные поля
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
-    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(100), nullable=False, default="UNKNOWN")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     # Связи
@@ -132,9 +132,9 @@ class Master(Base):
     specialization: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    work_chat_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    work_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     # Связи
@@ -178,38 +178,38 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="NEW")
 
     # Связи с пользователями
-    assigned_master_id: Mapped[Optional[int]] = mapped_column(
+    assigned_master_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("masters.id"), nullable=True
     )
-    dispatcher_id: Mapped[Optional[int]] = mapped_column(
+    dispatcher_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.telegram_id"), nullable=True
     )
 
     # Дополнительные поля
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    scheduled_time: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_time: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Финансовые поля
-    total_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    materials_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    master_profit: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    company_profit: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    has_review: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    out_of_city: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    estimated_completion_date: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    prepayment_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    materials_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    master_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    company_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    has_review: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    out_of_city: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    estimated_completion_date: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prepayment_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Поля для переноса
     rescheduled_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_rescheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    reschedule_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    last_rescheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reschedule_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Системные поля
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     # Связи
@@ -222,14 +222,14 @@ class Order(Base):
     status_history: Mapped[list["OrderStatusHistory"]] = relationship(
         "OrderStatusHistory", back_populates="order"
     )
-    
+
     @property
     def master_name(self) -> str | None:
         """Получение имени мастера (для совместимости с legacy кодом)"""
         if not self.assigned_master:
             return None
         return self.assigned_master.get_display_name()
-    
+
     @property
     def dispatcher_name(self) -> str | None:
         """Получение имени диспетчера (для совместимости с legacy кодом)"""
@@ -276,13 +276,13 @@ class OrderStatusHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"), nullable=False)
-    old_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    old_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     new_status: Mapped[str] = mapped_column(String(50), nullable=False)
-    changed_by: Mapped[Optional[int]] = mapped_column(
+    changed_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.telegram_id"), nullable=True
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Связи
     order: Mapped["Order"] = relationship("Order", back_populates="status_history")
@@ -304,13 +304,13 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[Optional[int]] = mapped_column(
+    user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.telegram_id"), nullable=True
     )
     action: Mapped[str] = mapped_column(String(255), nullable=False)
-    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Связи
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
@@ -330,8 +330,8 @@ class FinancialReport(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     report_type: Mapped[str] = mapped_column(String(50), nullable=False)  # DAILY, WEEKLY, MONTHLY
-    period_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    period_end: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     total_orders: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     total_materials_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -356,7 +356,7 @@ class MasterFinancialReport(Base):
     report_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("financial_reports.id"), nullable=False
     )
-    master_id: Mapped[Optional[int]] = mapped_column(
+    master_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("masters.id"), nullable=True
     )
     master_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -386,9 +386,9 @@ class EntityHistory(Base):
     table_name: Mapped[str] = mapped_column(String(50), nullable=False)
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
     field_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    old_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    new_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    changed_by: Mapped[Optional[int]] = mapped_column(
+    old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changed_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.telegram_id"), nullable=True
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

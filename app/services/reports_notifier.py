@@ -169,7 +169,7 @@ class ReportsNotifier:
             await self.db.disconnect()
 
     async def send_custom_report(
-        self, start_date: str, end_date: str, recipients: list[int] = None
+        self, start_date: str, end_date: str, recipients: list[int] | None = None
     ):
         """Отправляет кастомный отчет за указанный период"""
         try:

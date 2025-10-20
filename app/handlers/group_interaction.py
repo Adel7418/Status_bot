@@ -209,7 +209,7 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
             return
 
         # Возвращаем статус в NEW и убираем мастера (ORM compatible)
-        if hasattr(db, 'unassign_master_from_order'):
+        if hasattr(db, "unassign_master_from_order"):
             await db.unassign_master_from_order(order_id)
         else:
             # Legacy: прямой SQL

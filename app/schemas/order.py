@@ -1,6 +1,5 @@
 """Pydantic схемы для валидации заявок (Orders)"""
 import re
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -17,10 +16,10 @@ class OrderCreateSchema(BaseModel):
     client_name: str = Field(..., min_length=5, max_length=200, description="ФИО клиента")
     client_address: str = Field(..., min_length=10, max_length=500, description="Адрес клиента")
     client_phone: str = Field(..., min_length=10, max_length=20, description="Телефон клиента")
-    notes: Optional[str] = Field(
+    notes: str | None = Field(
         None, max_length=MAX_NOTES_LENGTH, description="Дополнительные заметки"
     )
-    scheduled_time: Optional[str] = Field(
+    scheduled_time: str | None = Field(
         None, max_length=100, description="Время прибытия к клиенту"
     )
     dispatcher_id: int = Field(..., gt=0, description="ID диспетчера создавшего заявку")
@@ -114,7 +113,7 @@ class OrderCreateSchema(BaseModel):
 
     @field_validator("scheduled_time")
     @classmethod
-    def validate_scheduled_time(cls, v: Optional[str]) -> Optional[str]:
+    def validate_scheduled_time(cls, v: str | None) -> str | None:
         """Валидация времени прибытия (гибкий формат)"""
         if v is None:
             return None
@@ -152,7 +151,7 @@ class OrderCreateSchema(BaseModel):
 
     @field_validator("notes")
     @classmethod
-    def validate_notes(cls, v: Optional[str]) -> Optional[str]:
+    def validate_notes(cls, v: str | None) -> str | None:
         """Валидация заметок"""
         if v is None:
             return None
@@ -197,16 +196,16 @@ class OrderCreateSchema(BaseModel):
 class OrderUpdateSchema(BaseModel):
     """Схема для обновления заявки (все поля опциональны)"""
 
-    equipment_type: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
-    client_name: Optional[str] = Field(None, min_length=5, max_length=200)
-    client_address: Optional[str] = Field(None, min_length=10, max_length=500)
-    client_phone: Optional[str] = Field(None, min_length=10, max_length=20)
-    notes: Optional[str] = Field(None, max_length=MAX_NOTES_LENGTH)
+    equipment_type: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = Field(None, min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
+    client_name: str | None = Field(None, min_length=5, max_length=200)
+    client_address: str | None = Field(None, min_length=10, max_length=500)
+    client_phone: str | None = Field(None, min_length=10, max_length=20)
+    notes: str | None = Field(None, max_length=MAX_NOTES_LENGTH)
 
     @field_validator("equipment_type")
     @classmethod
-    def validate_equipment_type(cls, v: Optional[str]) -> Optional[str]:
+    def validate_equipment_type(cls, v: str | None) -> str | None:
         if v is None:
             return None
         valid_types = EquipmentType.all_types()
@@ -216,7 +215,7 @@ class OrderUpdateSchema(BaseModel):
 
     @field_validator("client_phone")
     @classmethod
-    def validate_client_phone(cls, v: Optional[str]) -> Optional[str]:
+    def validate_client_phone(cls, v: str | None) -> str | None:
         if v is None:
             return None
 

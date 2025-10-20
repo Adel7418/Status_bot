@@ -4,7 +4,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from app.database import Database
 from app.database.models import Master, Order, User
@@ -20,7 +19,7 @@ class OrderReportsService:
         self.db = Database()
 
     async def create_order_report(
-        self, order: Order, master: Optional[Master] = None, dispatcher: Optional[User] = None
+        self, order: Order, master: Master | None = None, dispatcher: User | None = None
     ) -> bool:
         """
         Создает запись в отчете для закрытого заказа
@@ -70,7 +69,7 @@ class OrderReportsService:
                     logger.warning(f"Не удалось вычислить время выполнения заказа {order.id}: {e}")
 
             # Создаем запись в таблице order_reports
-            cursor = await self.db.connection.execute(
+            await self.db.connection.execute(
                 """
                 INSERT INTO order_reports (
                     order_id, equipment_type, client_name, client_address,
@@ -114,9 +113,9 @@ class OrderReportsService:
 
     async def get_order_reports(
         self,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        master_id: Optional[int] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        master_id: int | None = None,
     ) -> list:
         """
         Получает отчеты по заказам за период
@@ -187,7 +186,7 @@ class OrderReportsService:
             await self.db.disconnect()
 
     async def get_order_reports_summary(
-        self, start_date: Optional[str] = None, end_date: Optional[str] = None
+        self, start_date: str | None = None, end_date: str | None = None
     ) -> dict:
         """
         Получает сводную статистику по отчетам заказов

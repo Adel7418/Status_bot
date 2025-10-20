@@ -5,7 +5,6 @@
 import base64
 import logging
 import os
-from typing import Optional
 
 from cryptography.fernet import Fernet
 
@@ -37,7 +36,7 @@ class DataEncryptor:
             logger.error(f"❌ Ошибка инициализации шифрования: {e}")
             raise
 
-    def encrypt(self, data: Optional[str]) -> Optional[str]:
+    def encrypt(self, data: str | None) -> str | None:
         """
         Шифрование строки
 
@@ -57,7 +56,7 @@ class DataEncryptor:
             logger.error(f"❌ Ошибка шифрования: {e}")
             return data  # Возвращаем исходные данные в случае ошибки
 
-    def decrypt(self, encrypted_data: Optional[str]) -> Optional[str]:
+    def decrypt(self, encrypted_data: str | None) -> str | None:
         """
         Дешифрование строки
 
@@ -104,7 +103,7 @@ class DataEncryptor:
 
 
 # Глобальный экземпляр
-_encryptor: Optional[DataEncryptor] = None
+_encryptor: DataEncryptor | None = None
 
 
 def get_encryptor() -> DataEncryptor:
@@ -121,12 +120,12 @@ def get_encryptor() -> DataEncryptor:
 
 
 # Удобные функции для прямого использования
-def encrypt(data: Optional[str]) -> Optional[str]:
+def encrypt(data: str | None) -> str | None:
     """Шифрование данных"""
     return get_encryptor().encrypt(data)
 
 
-def decrypt(data: Optional[str]) -> Optional[str]:
+def decrypt(data: str | None) -> str | None:
     """Дешифрование данных"""
     return get_encryptor().decrypt(data)
 

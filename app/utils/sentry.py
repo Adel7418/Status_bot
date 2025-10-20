@@ -4,13 +4,12 @@
 
 import logging
 import os
-from typing import Optional
 
 
 logger = logging.getLogger(__name__)
 
 
-def init_sentry() -> Optional[str]:
+def init_sentry() -> str | None:
     """
     Инициализация Sentry для error tracking (опционально)
 
