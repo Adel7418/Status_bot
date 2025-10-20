@@ -557,12 +557,17 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text(
             f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
-            f"<b>Примеры:</b>\n"
-            f"• <code>20.10.2025</code>\n"
-            f"• <code>20.10.2025 предоплата 2000</code>\n"
+            f"<b>🤖 Автоопределение даты (на русском):</b>\n"
+            f"• <code>завтра в 15:00</code>\n"
             f"• <code>через 3 дня</code>\n"
-            f"• <code>завтра, предоплата 1500</code>\n"
-            f"• <code>неделя</code>\n\n"
+            f"• <code>через неделю, предоплата 2000</code>\n"
+            f"• <code>послезавтра предоплата 1500</code>\n\n"
+            f"<b>Точная дата:</b>\n"
+            f"• <code>20.10.2025</code>\n"
+            f"• <code>25/10/2025 14:00 предоплата 3000</code>\n\n"
+            f"<b>Примерный срок (текст):</b>\n"
+            f"• <code>неделя</code>\n"
+            f"• <code>10-14 дней</code>\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
             parse_mode="HTML",
         )
@@ -632,6 +637,35 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
                 break
             except ValueError as e:
                 logger.warning(f"[DR] Failed to parse prepayment amount '{prepayment_str}': {e}")
+
+    # 🆕 АВТООПРЕДЕЛЕНИЕ ДАТЫ из естественного языка
+    from app.utils import (
+        format_datetime_for_storage,
+        format_datetime_user_friendly,
+        parse_natural_datetime,
+        should_parse_as_date,
+    )
+
+    if should_parse_as_date(completion_date):
+        parsed_dt, _ = parse_natural_datetime(completion_date)
+
+        if parsed_dt:
+            # Успешно распознали дату - форматируем для хранения
+            formatted_date = format_datetime_for_storage(parsed_dt, completion_date)
+            user_friendly = format_datetime_user_friendly(parsed_dt, completion_date)
+
+            logger.info(
+                f"Автоопределение даты завершения DR: '{completion_date}' -> '{formatted_date}'"
+            )
+
+            # Обновляем completion_date с распознанной датой
+            completion_date = formatted_date
+
+            # Показываем пользователю что распознали
+            await message.answer(
+                f"✅ <b>Дата завершения распознана:</b>\n\n{user_friendly}",
+                parse_mode="HTML",
+            )
 
     db = Database()
     await db.connect()

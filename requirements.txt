@@ -29,6 +29,7 @@ pydantic==2.10.3  # Updated from 2.9.2, fixed compatibility
 
 # Date/Time Utilities
 python-dateutil==2.9.0.post0
+dateparser==1.2.0  # Парсинг дат из естественного языка (русский)
 
 # Encryption
 cryptography==43.0.3  # Для шифрования персональных данных

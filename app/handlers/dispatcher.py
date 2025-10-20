@@ -26,9 +26,13 @@ from app.states import AdminCloseOrderStates, CreateOrderStates
 from app.utils import (
     escape_html,
     format_datetime,
+    format_datetime_for_storage,
+    format_datetime_user_friendly,
     get_now,
     log_action,
+    parse_natural_datetime,
     safe_send_message,
+    should_parse_as_date,
 )
 
 
@@ -369,11 +373,15 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
     await message.answer(
         "⏰ <b>Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
-        "<b>Примеры времени:</b>\n"
-        "• 14:30\n"
-        "• завтра 10:00\n"
-        "• 15.10.2025 16:00\n\n"
-        "<b>Примеры инструкций:</b>\n"
+        "<b>🤖 Автоопределение даты (на русском):</b>\n"
+        "• завтра в 10:00\n"
+        "• послезавтра 14:30\n"
+        "• через 2 дня 15:00\n"
+        "• через неделю 12:00\n\n"
+        "<b>Точная дата:</b>\n"
+        "• 15.10.2025 16:00\n"
+        "• 20/10/2025 09:30\n\n"
+        "<b>Инструкции (текст):</b>\n"
         "• Набрать клиенту\n"
         "• После 14:00\n"
         "• Уточнить у клиента\n"
@@ -414,11 +422,15 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     await message.answer(
         "⏰ <b>Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
-        "<b>Примеры времени:</b>\n"
-        "• 14:30\n"
-        "• завтра 10:00\n"
-        "• 15.10.2025 16:00\n\n"
-        "<b>Примеры инструкций:</b>\n"
+        "<b>🤖 Автоопределение даты (на русском):</b>\n"
+        "• завтра в 10:00\n"
+        "• послезавтра 14:30\n"
+        "• через 2 дня 15:00\n"
+        "• через неделю 12:00\n\n"
+        "<b>Точная дата:</b>\n"
+        "• 15.10.2025 16:00\n"
+        "• 20/10/2025 09:30\n\n"
+        "<b>Инструкции (текст):</b>\n"
         "• Набрать клиенту\n"
         "• После 14:00\n"
         "• Уточнить у клиента\n"
@@ -433,7 +445,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
 @handle_errors
 async def process_scheduled_time(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка времени прибытия к клиенту
+    Обработка времени прибытия к клиенту с автоопределением даты
 
     Args:
         message: Сообщение
@@ -456,9 +468,9 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
             )
             return
 
-        if len(scheduled_time) > 100:
+        if len(scheduled_time) > 150:  # Увеличили лимит для хранения распарсенной даты
             await message.answer(
-                "❌ Время/инструкция слишком длинные (максимум 100 символов)\n\n"
+                "❌ Время/инструкция слишком длинные (максимум 150 символов)\n\n"
                 "Попробуйте еще раз:",
                 reply_markup=get_skip_cancel_keyboard(),
             )
@@ -481,6 +493,28 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                     reply_markup=get_skip_cancel_keyboard(),
                 )
                 return
+
+        # 🆕 АВТООПРЕДЕЛЕНИЕ ДАТЫ из естественного языка
+        if should_parse_as_date(scheduled_time):
+            parsed_dt, _ = parse_natural_datetime(scheduled_time)
+
+            if parsed_dt:
+                # Успешно распознали дату - форматируем для хранения
+                formatted_time = format_datetime_for_storage(parsed_dt, scheduled_time)
+                user_friendly = format_datetime_user_friendly(parsed_dt, scheduled_time)
+
+                # Подтверждаем распознавание пользователю
+                await message.answer(
+                    f"✅ <b>Дата распознана:</b>\n\n{user_friendly}\n\n"
+                    "Если дата правильная, нажмите '✅ Подтвердить'.\n"
+                    "Для изменения введите время заново.",
+                    parse_mode="HTML",
+                    reply_markup=get_confirm_keyboard(),
+                )
+
+                # Сохраняем отформатированное время
+                scheduled_time = formatted_time
+                logger.info(f"Автоопределение даты: '{message.text}' -> '{formatted_time}'")
 
     await state.update_data(scheduled_time=scheduled_time)
     await show_order_confirmation(message, state)
@@ -1263,7 +1297,9 @@ async def callback_select_new_master_for_order(
             notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
         # Упоминаем мастера в группе (ORM: через master.user)
-        new_master_username = new_master.user.username if hasattr(new_master, "user") and new_master.user else None
+        new_master_username = (
+            new_master.user.username if hasattr(new_master, "user") and new_master.user else None
+        )
         if new_master_username:
             notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master_username}\n\n"
         else:
@@ -1536,7 +1572,11 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
         # Также дублируем в рабочую группу если она есть
         if master.work_chat_id:
             # ORM: через master.user
-            master_mention = f"@{master.user.username}" if (hasattr(master, "user") and master.user and master.user.username) else master.get_display_name()
+            master_mention = (
+                f"@{master.user.username}"
+                if (hasattr(master, "user") and master.user and master.user.username)
+                else master.get_display_name()
+            )
             group_notification = (
                 f"📞 <b>ВАЖНО: Клиент ждет!</b>\n\n"
                 f"📋 Заявка #{order.id}\n"
