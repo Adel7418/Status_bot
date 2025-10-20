@@ -11,12 +11,12 @@ services:
     container_name: telegram_repair_bot_prod
     restart: always
     env_file:
-      - ../.env
+      - ../env.production
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
-      - LOG_LEVEL=INFO
-      - DEV_MODE=false
+      # LOG_LEVEL и DEV_MODE берутся из env.production
+      # Не перезаписываем их здесь
     volumes:
       - bot_data:/app/data
       - bot_logs:/app/logs
