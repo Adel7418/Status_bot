@@ -48,8 +48,13 @@ clean:  ## Очистить временные файлы
 run:  ## Запустить бота
 	python bot.py
 
-migrate:  ## Применить миграции БД
+migrate:  ## Применить миграции БД (локально, БЕЗ Docker)
+	@echo "⚠️  ВНИМАНИЕ: Остановите бота перед миграцией!"
+	@echo "⚠️  Нажмите Ctrl+C для отмены, Enter для продолжения..."
+	@read dummy
 	alembic upgrade head
+	@echo "✅ Миграции применены"
+	@echo "ℹ️  Теперь можете запустить бота: make run"
 
 migrate-create:  ## Создать новую миграцию (использование: make migrate-create MSG="описание")
 	alembic revision --autogenerate -m "$(MSG)"
@@ -84,14 +89,22 @@ docker-up-dev:  ## Запустить в dev режиме
 docker-down:  ## Остановить Docker контейнеры (dev)
 	cd docker && docker compose -f docker-compose.yml down
 
+docker-down-dev:  ## Остановить Docker контейнеры (dev режим)
+	cd docker && docker compose -f docker-compose.dev.yml down
+
 docker-logs:  ## Показать логи Docker (dev)
 	cd docker && docker compose -f docker-compose.yml logs -f bot
 
 docker-restart:  ## Перезапустить Docker контейнеры (dev)
 	cd docker && docker compose -f docker-compose.yml restart
 
-docker-migrate:  ## Применить миграции через Docker
+docker-migrate:  ## Применить миграции через Docker [останавливает контейнеры]
+	@echo "⚠️  Останавливаем контейнеры перед миграцией..."
+	-cd docker && docker compose -f docker-compose.yml down
+	@echo "🔄 Применение миграций..."
 	cd docker && docker compose -f docker-compose.migrate.yml run --rm migrate
+	@echo "✅ Миграции применены"
+	@echo "⚠️  Не забудьте перезапустить: make docker-up"
 
 docker-clean:  ## Очистить Docker (удалить контейнеры и volumes)
 	cd docker && docker compose -f docker-compose.yml down -v
@@ -126,10 +139,18 @@ prod-update:  ## Обновить код из git (на сервере)
 	git pull origin main
 	@echo "✅ Код обновлен"
 
-prod-migrate:  ## Применить миграции БД в production (Docker)
+prod-stop:  ## Остановить production контейнеры
+	@echo "🛑 Остановка production контейнеров..."
+	cd docker && docker compose -f docker-compose.prod.yml down
+	@echo "✅ Production контейнеры остановлены"
+
+prod-migrate:  ## Применить миграции БД в production (Docker) [останавливает контейнеры]
+	@echo "⚠️  ВАЖНО: Останавливаем контейнеры перед миграцией..."
+	-cd docker && docker compose -f docker-compose.prod.yml down
 	@echo "🔄 Применение миграций БД..."
 	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
 	@echo "✅ Миграции применены"
+	@echo "⚠️  Не забудьте перезапустить: make prod-restart или make prod-deploy"
 
 prod-migrate-stamp:  ## Пометить БД как готовую (для существующей БД без миграций)
 	@echo "📌 Установка версии миграции для существующей БД..."

@@ -226,3 +226,22 @@ class MasterFinancialReport:
     average_check: float = 0.0
     reviews_count: int = 0
     out_of_city_count: int = 0
+
+
+@dataclass
+class MasterReportArchive:
+    """Модель архивного отчета мастера"""
+
+    id: int | None = None
+    master_id: int = 0
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    file_path: str = ""
+    file_name: str = ""
+    file_size: int | None = None
+    total_orders: int = 0
+    active_orders: int = 0
+    completed_orders: int = 0
+    total_revenue: float = 0.0
+    created_at: datetime | None = None
+    notes: str | None = None

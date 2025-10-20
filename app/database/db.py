@@ -1784,3 +1784,128 @@ class Database:
             reports.append(report)
 
         return reports
+
+    # ==================== АРХИВНЫЕ ОТЧЕТЫ МАСТЕРОВ ====================
+
+    async def save_master_report_archive(self, report: "MasterReportArchive") -> int:
+        """
+        Сохранение архивного отчета мастера
+        
+        Args:
+            report: Данные отчета
+        
+        Returns:
+            ID созданной записи
+        """
+        from app.database.models import MasterReportArchive
+        
+        cursor = await self.connection.execute(
+            """
+            INSERT INTO master_reports_archive (
+                master_id, period_start, period_end, file_path, file_name,
+                file_size, total_orders, active_orders, completed_orders,
+                total_revenue, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                report.master_id,
+                report.period_start.isoformat() if report.period_start else None,
+                report.period_end.isoformat() if report.period_end else None,
+                report.file_path,
+                report.file_name,
+                report.file_size,
+                report.total_orders,
+                report.active_orders,
+                report.completed_orders,
+                report.total_revenue,
+                report.notes,
+            ),
+        )
+        await self.connection.commit()
+        return cursor.lastrowid
+
+    async def get_master_archived_reports(
+        self, master_id: int, limit: int = 10
+    ) -> list["MasterReportArchive"]:
+        """
+        Получение списка архивных отчетов мастера
+        
+        Args:
+            master_id: ID мастера
+            limit: Лимит записей
+        
+        Returns:
+            Список архивных отчетов
+        """
+        from app.database.models import MasterReportArchive
+        
+        cursor = await self.connection.execute(
+            """
+            SELECT * FROM master_reports_archive
+            WHERE master_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (master_id, limit),
+        )
+        rows = await cursor.fetchall()
+        
+        reports = []
+        for row in rows:
+            report = MasterReportArchive(
+                id=row["id"],
+                master_id=row["master_id"],
+                period_start=datetime.fromisoformat(row["period_start"])
+                if row["period_start"]
+                else None,
+                period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
+                file_path=row["file_path"],
+                file_name=row["file_name"],
+                file_size=row["file_size"],
+                total_orders=row["total_orders"],
+                active_orders=row["active_orders"],
+                completed_orders=row["completed_orders"],
+                total_revenue=row["total_revenue"],
+                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+                notes=row["notes"],
+            )
+            reports.append(report)
+        
+        return reports
+
+    async def get_master_report_archive_by_id(self, report_id: int) -> "MasterReportArchive | None":
+        """
+        Получение архивного отчета по ID
+        
+        Args:
+            report_id: ID отчета
+        
+        Returns:
+            Архивный отчет или None
+        """
+        from app.database.models import MasterReportArchive
+        
+        cursor = await self.connection.execute(
+            "SELECT * FROM master_reports_archive WHERE id = ?",
+            (report_id,),
+        )
+        row = await cursor.fetchone()
+        
+        if not row:
+            return None
+        
+        return MasterReportArchive(
+            id=row["id"],
+            master_id=row["master_id"],
+            period_start=datetime.fromisoformat(row["period_start"]) if row["period_start"] else None,
+            period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
+            file_path=row["file_path"],
+            file_name=row["file_name"],
+            file_size=row["file_size"],
+            total_orders=row["total_orders"],
+            active_orders=row["active_orders"],
+            completed_orders=row["completed_orders"],
+            total_revenue=row["total_revenue"],
+            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+            notes=row["notes"],
+        )
