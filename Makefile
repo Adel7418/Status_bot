@@ -72,8 +72,8 @@ check-db:  ## Проверить базу данных
 sync-roles:  ## Синхронизировать роли из .env
 	python sync_roles_from_env.py
 
-docker-build:  ## Собрать Docker образ
-	docker build -f docker/Dockerfile -t telegram-repair-bot:latest .
+docker-build:  ## Собрать Docker образ для production
+	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
 
 docker-up:  ## Запустить через Docker Compose (dev)
 	cd docker && docker compose -f docker-compose.yml up -d
@@ -128,38 +128,38 @@ prod-update:  ## Обновить код из git (на сервере)
 
 prod-migrate:  ## Применить миграции БД в production (Docker)
 	@echo "🔄 Применение миграций БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
+	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
 	@echo "✅ Миграции применены"
 
 prod-migrate-stamp:  ## Пометить БД как готовую (для существующей БД без миграций)
 	@echo "📌 Установка версии миграции для существующей БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic stamp head
+	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic stamp head
 	@echo "✅ БД помечена как готовая"
 	@echo "ℹ️  Теперь можете использовать: make prod-migrate"
 
 prod-migrate-check:  ## Проверить текущую версию миграции БД
 	@echo "🔍 Текущая версия миграции:"
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot alembic current
+	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic current
 
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД..."
-	cd docker && docker-compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py
+	cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py
 	@echo "✅ Backup создан"
 
 prod-restart:  ## Перезапуск production бота (Docker)
 	@echo "🔄 Перезапуск бота..."
-	cd docker && docker-compose -f docker-compose.prod.yml restart bot
+	cd docker && docker compose -f docker-compose.prod.yml restart bot
 	@echo "✅ Бот перезапущен"
 
 prod-logs:  ## Показать логи production (Docker)
-	cd docker && docker-compose -f docker-compose.prod.yml logs -f bot
+	cd docker && docker compose -f docker-compose.prod.yml logs -f bot
 
 prod-status:  ## Статус production контейнеров (Docker)
-	cd docker && docker-compose -f docker-compose.prod.yml ps
+	cd docker && docker compose -f docker-compose.prod.yml ps
 
 prod-rebuild:  ## Пересобрать Docker образ с новым кодом
 	@echo "🔨 Пересборка Docker образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache bot
+	cd docker && docker compose -f docker-compose.prod.yml build --no-cache bot
 	@echo "✅ Образ пересобран"
 
 prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВНАЯ КОМАНДА ДЛЯ DOCKER!)
@@ -169,9 +169,9 @@ prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВН
 	@echo "🔨 2. Очистка build cache..."
 	docker builder prune -f
 	@echo "🔨 3. Пересборка Docker образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache --pull bot
+	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
 	@echo "🔄 4. Перезапуск всех сервисов (bot + redis)..."
-	cd docker && docker-compose -f docker-compose.prod.yml up -d
+	cd docker && docker compose -f docker-compose.prod.yml up -d
 	@echo "✅ Деплой завершен! Проверьте логи: make prod-logs"
 
 prod-deploy-version:  ## Деплой конкретной версии (использование: make prod-deploy-version VERSION=v1.2.3)
@@ -188,9 +188,9 @@ prod-deploy-version:  ## Деплой конкретной версии (исп�
 	@echo "🔨 2. Очистка build cache..."
 	docker builder prune -f
 	@echo "🔨 3. Пересборка Docker образа..."
-	cd docker && docker-compose -f docker-compose.prod.yml build --no-cache --pull bot
+	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
 	@echo "🔄 4. Перезапуск контейнера..."
-	cd docker && docker-compose -f docker-compose.prod.yml up -d bot
+	cd docker && docker compose -f docker-compose.prod.yml up -d bot
 	@echo "✅ Версия $(VERSION) задеплоена! Проверьте логи: make prod-logs"
 	@echo "⚠️  Для возврата на main: git checkout main"
 

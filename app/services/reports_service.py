@@ -33,7 +33,7 @@ class ReportsService:
             masters_stats = await self._get_masters_stats(yesterday, today)
             closed_orders = await self._get_closed_orders_list(yesterday, today)
 
-            report = {
+            return {
                 "type": "daily",
                 "period": f"{yesterday.strftime('%d.%m.%Y')}",
                 "date_generated": get_now().isoformat(),
@@ -42,8 +42,6 @@ class ReportsService:
                 "summary": await self._get_summary_stats(yesterday, today),
                 "closed_orders": closed_orders,
             }
-
-            return report
 
         finally:
             await self.db.disconnect()
@@ -54,26 +52,33 @@ class ReportsService:
 
         try:
             today = get_now().date()
-            week_start = today - timedelta(days=today.weekday())
-            week_end = week_start + timedelta(days=6)
+            current_week_start = today - timedelta(
+                days=today.weekday()
+            )  # понедельник текущей недели
+            prev_week_end = current_week_start - timedelta(days=1)  # воскресенье прошлой недели
+            prev_week_start = prev_week_end - timedelta(days=6)  # понедельник прошлой недели
 
-            orders_stats = await self._get_orders_stats(week_start, week_end + timedelta(days=1))
-            masters_stats = await self._get_masters_stats(week_start, week_end + timedelta(days=1))
+            orders_stats = await self._get_orders_stats(
+                prev_week_start, prev_week_end + timedelta(days=1)
+            )
+            masters_stats = await self._get_masters_stats(
+                prev_week_start, prev_week_end + timedelta(days=1)
+            )
             closed_orders = await self._get_closed_orders_list(
-                week_start, week_end + timedelta(days=1)
+                prev_week_start, prev_week_end + timedelta(days=1)
             )
 
-            report = {
+            return {
                 "type": "weekly",
-                "period": f"{week_start.strftime('%d.%m.%Y')} - {week_end.strftime('%d.%m.%Y')}",
+                "period": f"{prev_week_start.strftime('%d.%m.%Y')} - {prev_week_end.strftime('%d.%m.%Y')}",
                 "date_generated": get_now().isoformat(),
                 "orders": orders_stats,
                 "masters": masters_stats,
-                "summary": await self._get_summary_stats(week_start, week_end + timedelta(days=1)),
+                "summary": await self._get_summary_stats(
+                    prev_week_start, prev_week_end + timedelta(days=1)
+                ),
                 "closed_orders": closed_orders,
             }
-
-            return report
 
         finally:
             await self.db.disconnect()
@@ -98,7 +103,7 @@ class ReportsService:
                 month_start, month_end + timedelta(days=1)
             )
 
-            report = {
+            return {
                 "type": "monthly",
                 "period": f"{month_start.strftime('%d.%m.%Y')} - {month_end.strftime('%d.%m.%Y')}",
                 "date_generated": get_now().isoformat(),
@@ -109,8 +114,6 @@ class ReportsService:
                 ),
                 "closed_orders": closed_orders,
             }
-
-            return report
 
         finally:
             await self.db.disconnect()
@@ -232,12 +235,14 @@ class ReportsService:
                 o.id,
                 o.equipment_type,
                 o.client_name,
+                o.client_address,
                 o.total_amount,
                 o.materials_cost,
                 o.master_profit,
                 o.company_profit,
                 o.out_of_city,
                 o.has_review,
+                o.created_at,
                 o.updated_at,
                 u.first_name || ' ' || COALESCE(u.last_name, '') as master_name
             FROM orders o
@@ -260,6 +265,7 @@ class ReportsService:
                     "id": row["id"],
                     "equipment_type": row["equipment_type"],
                     "client_name": row["client_name"],
+                    "client_address": row["client_address"],
                     "master_name": row["master_name"] or "Не назначен",
                     "total_amount": float(row["total_amount"] or 0),
                     "materials_cost": float(row["materials_cost"] or 0),
@@ -267,6 +273,7 @@ class ReportsService:
                     "company_profit": float(row["company_profit"] or 0),
                     "out_of_city": bool(row["out_of_city"]),
                     "has_review": bool(row["has_review"]),
+                    "created_at": row["created_at"],
                     "closed_at": row["updated_at"],
                 }
             )
@@ -337,7 +344,9 @@ class ReportsService:
 
         return text
 
-    async def save_report_to_file(self, report: dict[str, Any], filename: str = None) -> str:
+    async def save_report_to_file(
+        self, report: dict[str, Any], filename: str | None = None
+    ) -> str:
         """Сохраняет отчет в текстовый файл"""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -354,7 +363,9 @@ class ReportsService:
         logger.info(f"Отчет сохранен в файл: {file_path}")
         return str(file_path)
 
-    async def save_report_to_excel(self, report: dict[str, Any], filename: str = None) -> str:
+    async def save_report_to_excel(
+        self, report: dict[str, Any], filename: str | None = None
+    ) -> str:
         """Сохраняет отчет в Excel файл с детализацией"""
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -482,7 +493,7 @@ class ReportsService:
             ws2 = wb.create_sheet(title="Заказы")
 
             row = 1
-            ws2.merge_cells(f"A{row}:I{row}")
+            ws2.merge_cells(f"A{row}:K{row}")
             cell = ws2[f"A{row}"]
             cell.value = "ДЕТАЛИЗАЦИЯ ПО ЗАКАЗАМ"
             cell.font = header_font
@@ -496,6 +507,8 @@ class ReportsService:
                 "Техника",
                 "Клиент",
                 "Мастер",
+                "Создано",
+                "Закрыто",
                 "Сумма",
                 "Материалы",
                 "Прибыль мастера",
@@ -524,6 +537,8 @@ class ReportsService:
                     order["equipment_type"],
                     order["client_name"],
                     order["master_name"],
+                    order.get("created_at"),
+                    order.get("closed_at"),
                     order["total_amount"],
                     order["materials_cost"],
                     order["master_profit"],
@@ -536,11 +551,11 @@ class ReportsService:
                     cell.border = thin_border
                     if col_idx == 1:
                         cell.alignment = center_alignment
-                    elif col_idx in [2, 3, 4, 9]:
+                    elif col_idx in [2, 3, 4, 5, 6, 11]:
                         cell.alignment = left_alignment
                     else:
                         cell.alignment = right_alignment
-                        if col_idx >= 5 and col_idx <= 8:
+                        if col_idx >= 7 and col_idx <= 10:
                             cell.number_format = "#,##0.00 ₽"
                 row += 1
 
@@ -548,29 +563,31 @@ class ReportsService:
             row += 1
             ws2[f"A{row}"] = "ИТОГО:"
             ws2[f"A{row}"].font = Font(bold=True)
-            ws2[f"E{row}"] = sum(o["total_amount"] for o in closed_orders)
-            ws2[f"E{row}"].font = Font(bold=True)
-            ws2[f"E{row}"].number_format = "#,##0.00 ₽"
-            ws2[f"F{row}"] = sum(o["materials_cost"] for o in closed_orders)
-            ws2[f"F{row}"].font = Font(bold=True)
-            ws2[f"F{row}"].number_format = "#,##0.00 ₽"
-            ws2[f"G{row}"] = sum(o["master_profit"] for o in closed_orders)
+            ws2[f"G{row}"] = sum(o["total_amount"] for o in closed_orders)
             ws2[f"G{row}"].font = Font(bold=True)
             ws2[f"G{row}"].number_format = "#,##0.00 ₽"
-            ws2[f"H{row}"] = sum(o["company_profit"] for o in closed_orders)
+            ws2[f"H{row}"] = sum(o["materials_cost"] for o in closed_orders)
             ws2[f"H{row}"].font = Font(bold=True)
             ws2[f"H{row}"].number_format = "#,##0.00 ₽"
+            ws2[f"I{row}"] = sum(o["master_profit"] for o in closed_orders)
+            ws2[f"I{row}"].font = Font(bold=True)
+            ws2[f"I{row}"].number_format = "#,##0.00 ₽"
+            ws2[f"J{row}"] = sum(o["company_profit"] for o in closed_orders)
+            ws2[f"J{row}"].font = Font(bold=True)
+            ws2[f"J{row}"].number_format = "#,##0.00 ₽"
 
             # Ширина столбцов
             ws2.column_dimensions["A"].width = 8
             ws2.column_dimensions["B"].width = 25
             ws2.column_dimensions["C"].width = 20
             ws2.column_dimensions["D"].width = 20
-            ws2.column_dimensions["E"].width = 15
-            ws2.column_dimensions["F"].width = 15
-            ws2.column_dimensions["G"].width = 18
-            ws2.column_dimensions["H"].width = 18
-            ws2.column_dimensions["I"].width = 20
+            ws2.column_dimensions["E"].width = 18
+            ws2.column_dimensions["F"].width = 18
+            ws2.column_dimensions["G"].width = 15
+            ws2.column_dimensions["H"].width = 15
+            ws2.column_dimensions["I"].width = 18
+            ws2.column_dimensions["J"].width = 18
+            ws2.column_dimensions["K"].width = 22
 
         # Сохраняем файл
         wb.save(file_path)
