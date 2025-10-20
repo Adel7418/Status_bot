@@ -599,6 +599,29 @@ class ORMDatabase:
 
             logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
             return True
+    
+    async def unassign_master_from_order(self, order_id: int) -> bool:
+        """Снятие мастера с заявки"""
+        async with self.get_session() as session:
+            # Получаем заявку
+            stmt = select(Order).where(Order.id == order_id)
+            result = await session.execute(stmt)
+            order = result.scalar_one_or_none()
+
+            if not order:
+                logger.error(f"Заявка #{order_id} не найдена")
+                return False
+
+            # Снимаем мастера и возвращаем в NEW
+            order.assigned_master_id = None
+            order.status = OrderStatus.NEW
+            order.updated_at = get_now()
+            order.version += 1
+
+            await session.commit()
+
+            logger.info(f"Мастер снят с заявки #{order_id}")
+            return True
 
     async def get_order_status_history(self, order_id: int) -> list[OrderStatusHistory]:
         """Получение истории изменений статусов заявки"""
@@ -657,20 +680,9 @@ class ORMDatabase:
             return True
 
     async def get_orders_by_master(
-        self, master_id: int, status: str | None = None, limit: int | None = None, exclude_closed: bool = True
+        self, master_id: int, status: str | None = None, limit: int | None = None
     ) -> list[Order]:
-        """
-        Получение заявок по мастеру
-        
-        Args:
-            master_id: ID мастера
-            status: Фильтр по статусу (опционально)
-            limit: Лимит количества записей
-            exclude_closed: Исключить закрытые и отказанные заявки (по умолчанию True)
-        
-        Returns:
-            Список заявок
-        """
+        """Получение заявок по мастеру"""
         async with self.get_session() as session:
             stmt = (
                 select(Order)
@@ -678,26 +690,11 @@ class ORMDatabase:
                     joinedload(Order.assigned_master).joinedload(Master.user),
                     joinedload(Order.dispatcher),
                 )
-                .where(
-                    and_(
-                        Order.assigned_master_id == master_id,
-                        Order.deleted_at.is_(None)
-                    )
-                )
+                .where(Order.assigned_master_id == master_id)
             )
 
             if status:
                 stmt = stmt.where(Order.status == status)
-            
-            # Исключаем закрытые и отказанные, если нужно
-            if exclude_closed:
-                from app.config import OrderStatus
-                stmt = stmt.where(
-                    and_(
-                        Order.status != OrderStatus.CLOSED,
-                        Order.status != OrderStatus.REFUSED
-                    )
-                )
 
             stmt = stmt.order_by(Order.created_at.desc())
 

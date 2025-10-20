@@ -1337,12 +1337,17 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
         master = await db.get_master_by_id(order.assigned_master_id)
 
-        # Снимаем мастера и возвращаем статус в NEW
-        await db.connection.execute(
-            "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id),
-        )
-        await db.connection.commit()
+        # Снимаем мастера и возвращаем статус в NEW (ORM compatible)
+        if hasattr(db, 'unassign_master_from_order'):
+            # ORM: используем специальный метод
+            await db.unassign_master_from_order(order_id)
+        else:
+            # Legacy: прямой SQL
+            await db.connection.execute(
+                "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
+                (OrderStatus.NEW, order_id),
+            )
+            await db.connection.commit()
 
         # Добавляем в лог
         await db.add_audit_log(
