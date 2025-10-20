@@ -1056,9 +1056,10 @@ async def callback_select_master_for_order(
         if order.scheduled_time:
             notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
-        # Упоминаем мастера в группе
-        if master.username:
-            notification_text += f"👨‍🔧 <b>Мастер:</b> @{master.username}\n\n"
+        # Упоминаем мастера в группе (ORM: через master.user)
+        master_username = master.user.username if hasattr(master, 'user') and master.user else None
+        if master_username:
+            notification_text += f"👨‍🔧 <b>Мастер:</b> @{master_username}\n\n"
         else:
             notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
 
@@ -1261,9 +1262,10 @@ async def callback_select_new_master_for_order(
         if order.scheduled_time:
             notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
-        # Упоминаем мастера в группе
-        if new_master.username:
-            notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master.username}\n\n"
+        # Упоминаем мастера в группе (ORM: через master.user)
+        new_master_username = new_master.user.username if hasattr(new_master, 'user') and new_master.user else None
+        if new_master_username:
+            notification_text += f"👨‍🔧 <b>Мастер:</b> @{new_master_username}\n\n"
         else:
             notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
 
@@ -1528,10 +1530,12 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
 
         # Также дублируем в рабочую группу если она есть
         if master.work_chat_id:
+            # ORM: через master.user
+            master_mention = f"@{master.user.username}" if (hasattr(master, 'user') and master.user and master.user.username) else master.get_display_name()
             group_notification = (
                 f"📞 <b>ВАЖНО: Клиент ждет!</b>\n\n"
                 f"📋 Заявка #{order.id}\n"
-                f"👨‍🔧 Мастер: @{master.username if master.username else master.get_display_name()}\n\n"
+                f"👨‍🔧 Мастер: {master_mention}\n\n"
                 f"⚠️ Клиент звонил и спрашивает где мастер.\n"
                 f"Пожалуйста, свяжитесь с клиентом."
             )
