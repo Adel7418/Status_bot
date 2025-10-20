@@ -165,8 +165,15 @@ prod-migrate-check:  ## Проверить текущую версию мигр�
 
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД в Docker..."
-	cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
-	cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py
+	@if [ -d docker ]; then \
+		cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
+		cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py; \
+	else \
+		docker compose -f docker/docker-compose.prod.yml exec bot python scripts/backup_db.py || \
+		docker compose -f docker/docker-compose.prod.yml run --rm bot python scripts/backup_db.py || \
+		docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
+		docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py; \
+	fi
 	@echo "✅ Backup создан в volume bot_backups"
 	@echo "ℹ️  Для копирования на хост: docker cp telegram_repair_bot_prod:/app/backups ./backups"
 
