@@ -165,12 +165,13 @@ prod-migrate-check:  ## Проверить текущую версию мигр�
 
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД в Docker..."
-	@docker compose -f docker/docker-compose.prod.yml exec bot python scripts/backup_db.py || \
-	 docker compose -f docker/docker-compose.prod.yml run --rm bot python scripts/backup_db.py || \
-	 (cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py) || \
-	 (cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py)
-	@echo "✅ Backup создан в volume bot_backups"
-	@echo "ℹ️  Для копирования на хост: docker cp telegram_repair_bot_prod:/app/backups ./backups"
+	@docker exec telegram_repair_bot_prod python scripts/backup_db.py
+	@echo "✅ Backup создан в контейнере"
+	@echo "📦 Копирование backup на хост..."
+	@mkdir -p backups
+	@docker cp telegram_repair_bot_prod:/app/backups/. ./backups/
+	@echo "✅ Backup скопирован в ./backups/"
+	@ls -lh backups/ | tail -5
 
 backup-local:  ## Создать backup БД локально (без Docker)
 	@echo "💾 Создание локального backup..."
