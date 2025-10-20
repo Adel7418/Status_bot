@@ -1,7 +1,7 @@
 """add_soft_delete
 
 Revision ID: 008_add_soft_delete
-Revises: 007_add_constraints_and_validation
+Revises: 006_add_performance_indexes
 Create Date: 2025-01-17 17:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '008_add_soft_delete'
-down_revision: Union[str, None] = '007_add_constraints_and_validation'
+down_revision: Union[str, None] = '006_add_performance_indexes'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -32,14 +32,6 @@ def upgrade() -> None:
     op.create_index('idx_masters_deleted_at', 'masters', ['deleted_at'], unique=False)
     op.create_index('idx_orders_deleted_at', 'orders', ['deleted_at'], unique=False)
     op.create_index('idx_audit_log_deleted_at', 'audit_log', ['deleted_at'], unique=False)
-    
-    # Создаем составные индексы для активных записей
-    op.create_index('idx_users_active', 'users', ['deleted_at'], unique=False, 
-                   postgresql_where=sa.text('deleted_at IS NULL'))
-    op.create_index('idx_masters_active', 'masters', ['deleted_at'], unique=False,
-                   postgresql_where=sa.text('deleted_at IS NULL'))
-    op.create_index('idx_orders_active', 'orders', ['deleted_at'], unique=False,
-                   postgresql_where=sa.text('deleted_at IS NULL'))
     
     # Добавляем поля для версионирования
     op.add_column('users', sa.Column('version', sa.Integer(), nullable=False, server_default='1'))
@@ -82,9 +74,6 @@ def downgrade() -> None:
     op.drop_column('users', 'version')
     
     # Удаляем индексы soft delete
-    op.drop_index('idx_orders_active', table_name='orders')
-    op.drop_index('idx_masters_active', table_name='masters')
-    op.drop_index('idx_users_active', table_name='users')
     op.drop_index('idx_audit_log_deleted_at', table_name='audit_log')
     op.drop_index('idx_orders_deleted_at', table_name='orders')
     op.drop_index('idx_masters_deleted_at', table_name='masters')

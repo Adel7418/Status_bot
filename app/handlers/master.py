@@ -3,6 +3,7 @@
 """
 
 import logging
+from datetime import UTC, datetime
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -341,7 +342,7 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             return
 
         # Возвращаем статус в NEW и убираем мастера (ORM compatible)
-        if hasattr(db, 'unassign_master_from_order'):
+        if hasattr(db, "unassign_master_from_order"):
             await db.unassign_master_from_order(order_id)
         else:
             # Legacy: прямой SQL
@@ -807,6 +808,7 @@ async def btn_my_stats(message: Message):
 
         # Добавляем кнопки для просмотра заявок
         from app.keyboards.inline import get_master_stats_keyboard
+
         keyboard = get_master_stats_keyboard(master.id)
 
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
@@ -1069,7 +1071,7 @@ async def process_out_of_city_confirmation_callback(
         # ✨ УВЕДОМЛЕНИЕ ДИСПЕТЧЕРА О ЗАКРЫТИИ ЗАЯВКИ
         if order.dispatcher_id:
             from app.utils import safe_send_message
-            
+
             notification_text = (
                 f"✅ <b>Заявка завершена!</b>\n\n"
                 f"📋 <b>Заявка #{order_id}</b>\n"
@@ -1082,23 +1084,27 @@ async def process_out_of_city_confirmation_callback(
                 f"└ Мастер: {master_profit:.2f} ₽\n"
                 f"└ Компания: {company_profit:.2f} ₽\n"
             )
-            
+
             if has_review:
-                notification_text += f"\n⭐ <b>Отзыв:</b> Да"
+                notification_text += "\n⭐ <b>Отзыв:</b> Да"
             if out_of_city:
-                notification_text += f"\n🚗 <b>Выезд:</b> Да"
-            
+                notification_text += "\n🚗 <b>Выезд:</b> Да"
+
             result = await safe_send_message(
                 callback_query.bot,
                 order.dispatcher_id,
                 notification_text,
                 parse_mode="HTML",
             )
-            
+
             if not result:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} about order #{order_id} completion")
+                logger.error(
+                    f"Failed to notify dispatcher {order.dispatcher_id} about order #{order_id} completion"
+                )
             else:
-                logger.info(f"Dispatcher {order.dispatcher_id} notified about order #{order_id} completion")
+                logger.info(
+                    f"Dispatcher {order.dispatcher_id} notified about order #{order_id} completion"
+                )
 
         # Формируем текст подтверждения
         out_of_city_text = "🚗 Да" if out_of_city else "❌ Нет"
@@ -1423,39 +1429,39 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
 async def callback_master_report_excel(callback: CallbackQuery):
     """
     Генерация и отправка Excel отчета мастеру
-    
+
     Args:
         callback: Callback query
     """
     master_id = int(callback.data.split(":")[1])
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         # Проверяем, что мастер запрашивает свой отчет
         master = await db.get_master_by_telegram_id(callback.from_user.id)
-        
+
         if not master or master.id != master_id:
             await callback.answer("❌ Вы можете просматривать только свои отчеты", show_alert=True)
             return
-        
+
         await callback.answer("📊 Генерирую отчет...")
-        
+
         await callback.message.edit_text(
-            "⏳ <b>Генерация Excel отчета...</b>\n\nПожалуйста, подождите.",
-            parse_mode="HTML"
+            "⏳ <b>Генерация Excel отчета...</b>\n\nПожалуйста, подождите.", parse_mode="HTML"
         )
-        
+
         # Генерируем отчет
         from app.services.master_reports import MasterReportsService
+
         reports_service = MasterReportsService(db)
-        
+
         excel_file = await reports_service.generate_master_report_excel(
             master_id=master_id,
-            save_to_archive=False  # Не сохраняем в архив, это текущий отчет
+            save_to_archive=False,  # Не сохраняем в архив, это текущий отчет
         )
-        
+
         # Отправляем файл
         await callback.message.answer_document(
             document=excel_file,
@@ -1467,20 +1473,20 @@ async def callback_master_report_excel(callback: CallbackQuery):
                 f"• 📋 Активные заявки\n"
                 f"• ✅ Завершенные заявки"
             ),
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         # Удаляем сообщение о генерации
         await callback.message.delete()
-        
+
         logger.info(f"Excel отчет отправлен мастеру {master_id}")
-        
+
     except Exception as e:
         logger.exception(f"Ошибка при генерации отчета для мастера {master_id}: {e}")
         await callback.message.edit_text(
             "❌ <b>Ошибка при генерации отчета</b>\n\n"
             "Попробуйте еще раз позже или обратитесь к администратору.",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
     finally:
         await db.disconnect()
@@ -1490,51 +1496,53 @@ async def callback_master_report_excel(callback: CallbackQuery):
 async def callback_master_reports_archive(callback: CallbackQuery):
     """
     Просмотр архивных отчетов мастера
-    
+
     Args:
         callback: Callback query
     """
     master_id = int(callback.data.split(":")[1])
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         # Проверяем, что мастер запрашивает свои отчеты
         master = await db.get_master_by_telegram_id(callback.from_user.id)
-        
+
         if not master or master.id != master_id:
             await callback.answer("❌ Вы можете просматривать только свои отчеты", show_alert=True)
             return
-        
+
         # Получаем архивные отчеты
         from app.services.master_reports import MasterReportsService
+
         reports_service = MasterReportsService(db)
-        
+
         archived_reports = await reports_service.get_master_archived_reports(master_id, limit=10)
-        
+
         if not archived_reports:
             await callback.answer(
                 "📭 У вас пока нет архивных отчетов.\n\n"
                 "Архивные отчеты создаются автоматически каждые 30 дней.",
-                show_alert=True
+                show_alert=True,
             )
             return
-        
+
         # Формируем сообщение
-        text = f"📚 <b>Архив отчетов</b>\n\n"
+        text = "📚 <b>Архив отчетов</b>\n\n"
         text += f"Всего отчетов: {len(archived_reports)}\n\n"
         text += "Нажмите на отчет, чтобы скачать его:"
-        
+
         # Клавиатура с отчетами
         from app.keyboards.inline import get_master_archived_reports_keyboard
+
         keyboard = get_master_archived_reports_keyboard(archived_reports, master_id)
-        
+
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-        
+
     finally:
         await db.disconnect()
-    
+
     await callback.answer()
 
 
@@ -1542,40 +1550,41 @@ async def callback_master_reports_archive(callback: CallbackQuery):
 async def callback_download_archive_report(callback: CallbackQuery):
     """
     Скачивание архивного отчета
-    
+
     Args:
         callback: Callback query
     """
     # Парсим данные: report_id_master_id
     data = callback.data.split(":")[1]
     report_id, master_id = map(int, data.split("_"))
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         # Проверяем права
         master = await db.get_master_by_telegram_id(callback.from_user.id)
-        
+
         if not master or master.id != master_id:
             await callback.answer("❌ Нет доступа к этому отчету", show_alert=True)
             return
-        
+
         await callback.answer("📥 Загружаю отчет...")
-        
+
         # Получаем файл отчета
         from app.services.master_reports import MasterReportsService
+
         reports_service = MasterReportsService(db)
-        
+
         excel_file = await reports_service.get_archived_report_file(report_id, master_id)
-        
+
         if not excel_file:
             await callback.answer("❌ Файл отчета не найден", show_alert=True)
             return
-        
+
         # Получаем информацию об отчете
         report = await db.get_master_report_archive_by_id(report_id)
-        
+
         caption = (
             f"📚 <b>Архивный отчет</b>\n\n"
             f"📅 Период: {report.period_start.strftime('%d.%m.%Y')} - {report.period_end.strftime('%d.%m.%Y')}\n"
@@ -1583,20 +1592,18 @@ async def callback_download_archive_report(callback: CallbackQuery):
             f"✅ Завершено: {report.completed_orders}\n"
             f"💰 Выручка: {report.total_revenue:.2f} ₽"
         )
-        
+
         # Отправляем файл
         await callback.message.answer_document(
-            document=excel_file,
-            caption=caption,
-            parse_mode="HTML"
+            document=excel_file, caption=caption, parse_mode="HTML"
         )
-        
+
         logger.info(f"Архивный отчет {report_id} отправлен мастеру {master_id}")
-        
+
     except Exception as e:
         logger.exception(f"Ошибка при загрузке архивного отчета {report_id}: {e}")
         await callback.answer("❌ Ошибка при загрузке отчета", show_alert=True)
     finally:
         await db.disconnect()
-    
+
     await callback.answer()

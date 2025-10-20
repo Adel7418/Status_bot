@@ -2,7 +2,7 @@
 Создание таблицы для архивных отчетов мастеров
 
 Revision ID: 010
-Revises: 009
+Revises: 008
 Create Date: 2025-10-20
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '010_create_master_reports_archive'
-down_revision: Union[str, None] = '009_postgresql_optimization'
+down_revision: Union[str, None] = '008_add_soft_delete'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
