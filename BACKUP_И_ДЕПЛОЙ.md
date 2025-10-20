@@ -2,9 +2,16 @@
 
 ## ⚡ Быстрые команды для сервера
 
-### Backup БД (если бот работает):
+### Backup БД:
+```bash
+cd ~/telegram_repair_bot
+make prod-backup
+```
+
+Или вручную:
 ```bash
 docker exec telegram_repair_bot_prod python scripts/backup_db.py
+docker exec telegram_repair_bot_prod ls -lh /app/backups/
 docker cp telegram_repair_bot_prod:/app/backups/. ~/telegram_repair_bot/backups/
 ```
 
@@ -12,8 +19,8 @@ docker cp telegram_repair_bot_prod:/app/backups/. ~/telegram_repair_bot/backups/
 ```bash
 cd ~/telegram_repair_bot
 
-# 1. Backup
-docker exec telegram_repair_bot_prod python scripts/backup_db.py
+# 1. Backup (ОБЯЗАТЕЛЬНО!)
+make prod-backup
 
 # 2. Обновить код
 git pull origin main
