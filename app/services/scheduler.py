@@ -100,6 +100,15 @@ class TaskScheduler:
             replace_existing=True,
         )
 
+        # Архивирование отчетов мастеров (каждые 30 дней, 1 числа каждого месяца в 02:00)
+        self.scheduler.add_job(
+            self.archive_master_reports,
+            trigger=CronTrigger(day=1, hour=2, minute=0),
+            id="archive_master_reports",
+            name="Архивирование отчетов мастеров",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         logger.info("Планировщик задач запущен")
 
@@ -437,9 +446,10 @@ class TaskScheduler:
                                 f"⏱ Назначена {minutes} мин. назад\n\n"
                             )
 
-                            # Упоминаем мастера в группе
-                            if master.username:
-                                reminder_text += f"👨‍🔧 Мастер: @{master.username}\n\n"
+                            # Упоминаем мастера в группе (ORM: через master.user)
+                            master_username = master.user.username if hasattr(master, 'user') and master.user else None
+                            if master_username:
+                                reminder_text += f"👨‍🔧 Мастер: @{master_username}\n\n"
                             else:
                                 reminder_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
 
@@ -595,3 +605,103 @@ class TaskScheduler:
 
         except Exception as e:
             logger.error(f"Ошибка отправки ежемесячного отчета: {e}")
+
+    async def archive_master_reports(self):
+        """Создание архивных отчетов для всех мастеров (раз в 30 дней)"""
+        try:
+            from datetime import timedelta
+            from app.services.master_reports import MasterReportsService
+            
+            logger.info("Начало архивирования отчетов мастеров...")
+            
+            # Получаем всех активных мастеров
+            masters = await self.db.get_all_masters(only_approved=True)
+            
+            if not masters:
+                logger.info("Нет мастеров для архивирования отчетов")
+                return
+            
+            reports_service = MasterReportsService(self.db)
+            
+            # Период: последние 30 дней
+            now = get_now()
+            period_end = now
+            period_start = now - timedelta(days=30)
+            
+            archived_count = 0
+            failed_count = 0
+            
+            for master in masters:
+                try:
+                    # Генерируем и сохраняем отчет в архив
+                    await reports_service.generate_master_report_excel(
+                        master_id=master.id,
+                        save_to_archive=True,
+                        period_start=period_start,
+                        period_end=period_end
+                    )
+                    
+                    archived_count += 1
+                    logger.info(f"Отчет для мастера {master.id} ({master.get_display_name()}) архивирован")
+                    
+                    # Отправляем уведомление мастеру
+                    notification = (
+                        f"📚 <b>Ежемесячный отчет готов!</b>\n\n"
+                        f"Создан архивный отчет за период:\n"
+                        f"📅 {period_start.strftime('%d.%m.%Y')} - {period_end.strftime('%d.%m.%Y')}\n\n"
+                        f"Вы можете скачать его через:\n"
+                        f"📊 Моя статистика → 📚 Архив отчетов"
+                    )
+                    
+                    # Пробуем отправить уведомление (если у мастера есть telegram_id)
+                    if hasattr(master, 'telegram_id') and master.telegram_id:
+                        try:
+                            await safe_send_message(
+                                self.bot,
+                                master.telegram_id,
+                                notification,
+                                parse_mode="HTML",
+                                max_attempts=2
+                            )
+                        except Exception as notify_error:
+                            logger.warning(
+                                f"Не удалось отправить уведомление мастеру {master.id}: {notify_error}"
+                            )
+                    
+                except Exception as master_error:
+                    failed_count += 1
+                    logger.error(f"Ошибка архивирования отчета для мастера {master.id}: {master_error}")
+            
+            logger.info(
+                f"Архивирование отчетов завершено. "
+                f"Успешно: {archived_count}, Ошибок: {failed_count}"
+            )
+            
+            # Отправляем уведомление админам о результате
+            try:
+                admins = await self.db.get_users_by_role("ADMIN")
+                
+                admin_notification = (
+                    f"📊 <b>Архивирование отчетов мастеров</b>\n\n"
+                    f"✅ Успешно: {archived_count}\n"
+                    f"❌ Ошибок: {failed_count}\n\n"
+                    f"📅 Период: {period_start.strftime('%d.%m.%Y')} - {period_end.strftime('%d.%m.%Y')}"
+                )
+                
+                for admin in admins:
+                    try:
+                        await safe_send_message(
+                            self.bot,
+                            admin.telegram_id,
+                            admin_notification,
+                            parse_mode="HTML",
+                            max_attempts=2
+                        )
+                    except Exception:
+                        pass
+                        
+            except Exception as admin_notify_error:
+                logger.warning(f"Не удалось отправить уведомление админам: {admin_notify_error}")
+            
+        except Exception as e:
+            logger.error(f"Критическая ошибка при архивировании отчетов мастеров: {e}")
