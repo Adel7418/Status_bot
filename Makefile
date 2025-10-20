@@ -68,8 +68,9 @@ migrate-current:  ## Показать текущую версию БД
 migrate-downgrade:  ## Откатить одну миграцию
 	alembic downgrade -1
 
-backup:  ## Создать backup базы данных
-	python backup_db.py
+backup:  ## Создать backup базы данных (локально)
+	python scripts/backup_db.py
+	@echo "✅ Backup создан локально в папке backups/"
 
 check-db:  ## Проверить базу данных
 	python check_database.py
@@ -164,8 +165,15 @@ prod-migrate-check:  ## Проверить текущую версию мигр�
 
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД..."
+	@echo "⚠️  Проверка наличия Docker..."
+	@docker --version > /dev/null 2>&1 || (echo "❌ Docker не установлен! Используйте: make backup" && exit 1)
 	cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py
 	@echo "✅ Backup создан"
+
+backup-local:  ## Создать backup БД локально (без Docker)
+	@echo "💾 Создание локального backup..."
+	python scripts/backup_db.py
+	@echo "✅ Backup создан в папке backups/"
 
 prod-restart:  ## Перезапуск production бота (Docker)
 	@echo "🔄 Перезапуск бота..."
