@@ -40,11 +40,17 @@ def backup_database(keep_days=30):
 
     # Проверка существования БД
     if not os.path.exists(db_file):
+        print(f"❌ ОШИБКА: База данных не найдена: {db_file}")
         return False
+    
+    print(f"✅ База данных найдена: {db_file}")
 
     # Создание директории для backup
     if not os.path.exists(backup_dir):
         os.makedirs(backup_dir)
+        print(f"✅ Создана директория: {backup_dir}")
+    else:
+        print(f"✅ Директория существует: {backup_dir}")
 
     # Получение размера БД
     os.path.getsize(db_file)
@@ -56,7 +62,11 @@ def backup_database(keep_days=30):
     # Создание резервной копии
     try:
         shutil.copy2(db_file, backup_file)
-    except Exception:
+        db_size = os.path.getsize(backup_file)
+        print(f"✅ Backup создан: {backup_file}")
+        print(f"📊 Размер: {format_size(db_size)}")
+    except Exception as e:
+        print(f"❌ ОШИБКА при создании backup: {e}")
         return False
 
     # Подсчет всех резервных копий
@@ -81,17 +91,18 @@ def backup_database(keep_days=30):
                 pass
 
     if deleted_count > 0:
-        pass
-    else:
-        pass
+        print(f"🗑️  Удалено старых backups: {deleted_count}")
 
     # Список последних резервных копий
-
+    print(f"\n📦 Всего backups: {len(backup_files)}")
     recent_backups = backup_files[:5]
-    for backup_filename in recent_backups:
-        backup_path = os.path.join(backup_dir, backup_filename)
-        os.path.getsize(backup_path)
-        datetime.fromtimestamp(os.path.getmtime(backup_path))
+    if recent_backups:
+        print("📋 Последние 5 backups:")
+        for backup_filename in recent_backups:
+            backup_path = os.path.join(backup_dir, backup_filename)
+            size = os.path.getsize(backup_path)
+            mtime = datetime.fromtimestamp(os.path.getmtime(backup_path))
+            print(f"  - {backup_filename} ({format_size(size)}) - {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
 
     return True
 
