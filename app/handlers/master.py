@@ -699,11 +699,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         # Уведомляем диспетчера
         if order.dispatcher_id:
             # Определяем кто перевел заявку в DR
-            if master:
-                initiator_name = master.get_display_name()
-            else:
-                # Администратор
-                initiator_name = message.from_user.full_name
+            initiator_name = master.get_display_name() if master else message.from_user.full_name
 
             notification = (
                 f"⏳ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
@@ -981,12 +977,8 @@ async def process_out_of_city_confirmation_callback(
         # Если админ действует от имени мастера
         if acting_as_master_id:
             master = await db.get_master_by_telegram_id(acting_as_master_id)
-            is_admin_acting = True
-            admin_id = callback_query.from_user.id
         else:
             master = await db.get_master_by_telegram_id(callback_query.from_user.id)
-            is_admin_acting = False
-            admin_id = None
 
         if not master or not order or order.assigned_master_id != master.id:
             await callback_query.message.edit_text(
@@ -995,7 +987,7 @@ async def process_out_of_city_confirmation_callback(
             return
 
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
-        from app.handlers.master import calculate_profit_split
+        from app.utils.helpers import calculate_profit_split
 
         master_profit, company_profit = calculate_profit_split(
             total_amount, materials_cost, has_review, out_of_city

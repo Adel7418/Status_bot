@@ -81,14 +81,12 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
                 )
                 return
 
-            is_admin_acting = True
             logger.info(
                 f"Admin {callback.from_user.id} acting as master {master.telegram_id} in group {callback.message.chat.id}"
             )
         else:
             # Обычная проверка для мастера
             master = await db.get_master_by_telegram_id(callback.from_user.id)
-            is_admin_acting = False
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
@@ -195,13 +193,11 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
                 )
                 return
 
-            is_admin_acting = True
             logger.info(
                 f"Admin {callback.from_user.id} refusing order as master {master.telegram_id}"
             )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
-            is_admin_acting = False
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
@@ -294,13 +290,11 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
                 )
                 return
 
-            is_admin_acting = True
             logger.info(
                 f"Admin {callback.from_user.id} marking onsite as master {master.telegram_id}"
             )
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
-            is_admin_acting = False
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
@@ -414,18 +408,46 @@ async def callback_group_complete_order(
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Сохраняем ID заказа, ID сообщения в группе и ID мастера (если админ действует от имени мастера)
-        await state.update_data(
-            order_id=order_id,
-            group_chat_id=callback.message.chat.id,
-            group_message_id=callback.message.message_id,
-            acting_as_master_id=master.telegram_id if is_admin_acting else None,
-        )
+        # Если админ действует от имени мастера, нужно установить состояние для МАСТЕРА, а не админа
+        # Для этого создаем FSM контекст для мастера
+        if is_admin_acting:
+            from aiogram.fsm.context import FSMContext
+            from aiogram.fsm.storage.base import StorageKey
 
-        # Переходим в состояние запроса общей суммы
-        from app.states import CompleteOrderStates
+            # Создаем ключ для состояния мастера в этом чате
+            master_storage_key = StorageKey(
+                bot_id=callback.bot.id, chat_id=callback.message.chat.id, user_id=master.telegram_id
+            )
 
-        await state.set_state(CompleteOrderStates.enter_total_amount)
+            # Получаем FSM контекст для мастера
+            master_state = FSMContext(storage=state.storage, key=master_storage_key)
+
+            # Устанавливаем состояние и данные для мастера
+            await master_state.update_data(
+                order_id=order_id,
+                group_chat_id=callback.message.chat.id,
+                group_message_id=callback.message.message_id,
+                acting_as_master_id=None,  # Мастер действует от своего имени
+            )
+
+            from app.states import CompleteOrderStates
+
+            await master_state.set_state(CompleteOrderStates.enter_total_amount)
+
+            # Также очищаем состояние админа, если оно было
+            await state.clear()
+        else:
+            # Обычный мастер - сохраняем для него
+            await state.update_data(
+                order_id=order_id,
+                group_chat_id=callback.message.chat.id,
+                group_message_id=callback.message.message_id,
+                acting_as_master_id=None,
+            )
+
+            from app.states import CompleteOrderStates
+
+            await state.set_state(CompleteOrderStates.enter_total_amount)
 
         # Запрашиваем сумму прямо в группе
         await callback.message.reply(
@@ -474,11 +496,9 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
                 )
                 return
 
-            is_admin_acting = True
             logger.info(f"Admin {callback.from_user.id} starting DR as master {master.telegram_id}")
         else:
             master = await db.get_master_by_telegram_id(callback.from_user.id)
-            is_admin_acting = False
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
@@ -490,9 +510,11 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
             return
 
         # Сохраняем order_id и мастера в state для длительного ремонта
+        # Определяем, является ли инициатор админом
+        is_admin = UserRole.ADMIN in user_roles
         await state.update_data(
             order_id=order_id,
-            acting_as_master_id=master.telegram_id if is_admin_acting else None,
+            acting_as_master_id=master.telegram_id if is_admin else None,
         )
 
         # Переходим к вводу срока окончания и предоплаты
