@@ -801,7 +801,11 @@ async def btn_my_stats(message: Message):
             completion_rate = (completed / total) * 100
             text += f"📊 <b>Процент завершения:</b> {completion_rate:.1f}%\n"
 
-        await message.answer(text, parse_mode="HTML")
+        # Добавляем кнопки для просмотра заявок
+        from app.keyboards.inline import get_master_stats_keyboard
+        keyboard = get_master_stats_keyboard(master.id)
+
+        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -1057,6 +1061,40 @@ async def process_out_of_city_confirmation_callback(
             action="COMPLETE_ORDER",
             details=f"Completed order #{order_id}, total: {total_amount}, materials: {materials_cost}",
         )
+
+        # ✨ УВЕДОМЛЕНИЕ ДИСПЕТЧЕРА О ЗАКРЫТИИ ЗАЯВКИ
+        if order.dispatcher_id:
+            from app.utils import safe_send_message
+            
+            notification_text = (
+                f"✅ <b>Заявка завершена!</b>\n\n"
+                f"📋 <b>Заявка #{order_id}</b>\n"
+                f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
+                f"💰 <b>Финансы:</b>\n"
+                f"└ Общая сумма: {total_amount:.2f} ₽\n"
+                f"└ Материалы: {materials_cost:.2f} ₽\n"
+                f"└ Прибыль: {net_profit:.2f} ₽\n\n"
+                f"📊 <b>Распределение:</b>\n"
+                f"└ Мастер: {master_profit:.2f} ₽\n"
+                f"└ Компания: {company_profit:.2f} ₽\n"
+            )
+            
+            if has_review:
+                notification_text += f"\n⭐ <b>Отзыв:</b> Да"
+            if out_of_city:
+                notification_text += f"\n🚗 <b>Выезд:</b> Да"
+            
+            result = await safe_send_message(
+                callback_query.bot,
+                order.dispatcher_id,
+                notification_text,
+                parse_mode="HTML",
+            )
+            
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} about order #{order_id} completion")
+            else:
+                logger.info(f"Dispatcher {order.dispatcher_id} notified about order #{order_id} completion")
 
         # Формируем текст подтверждения
         out_of_city_text = "🚗 Да" if out_of_city else "❌ Нет"
@@ -1372,3 +1410,205 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
     finally:
         await db.disconnect()
         await state.clear()
+
+
+# ==================== ПРОСМОТР ЗАЯВОК МАСТЕРА ====================
+
+
+@router.callback_query(F.data.startswith("master_orders_active:"))
+async def callback_master_orders_active(callback: CallbackQuery):
+    """
+    Просмотр активных заявок мастера
+    
+    Args:
+        callback: Callback query
+    """
+    master_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Проверяем, что мастер запрашивает свои заявки
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+        
+        if not master or master.id != master_id:
+            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
+            return
+        
+        # Получаем активные заявки (exclude_closed=True)
+        orders = await db.get_orders_by_master(master_id, exclude_closed=True)
+        
+        if not orders:
+            await callback.answer("📭 У вас нет активных заявок", show_alert=True)
+            return
+        
+        # Группируем по статусам
+        by_status = {}
+        for order in orders:
+            if order.status not in by_status:
+                by_status[order.status] = []
+            by_status[order.status].append(order)
+        
+        text = f"📋 <b>Активные заявки ({len(orders)}):</b>\n\n"
+        
+        # Порядок отображения статусов
+        status_order = [
+            OrderStatus.ASSIGNED,
+            OrderStatus.ACCEPTED,
+            OrderStatus.ONSITE,
+            OrderStatus.DR,
+        ]
+        
+        for status in status_order:
+            if status in by_status:
+                status_emoji = OrderStatus.get_status_emoji(status)
+                status_name = OrderStatus.get_status_name(status)
+                
+                text += f"<b>{status_emoji} {status_name} ({len(by_status[status])}):</b>\n"
+                
+                for order in by_status[status]:
+                    text += f"  • Заявка #{order.id} - {order.equipment_type}\n"
+                    if order.client_name:
+                        text += f"    👤 {order.client_name}\n"
+                    if order.scheduled_time:
+                        text += f"    ⏰ {order.scheduled_time}\n"
+                
+                text += "\n"
+        
+        # Добавляем клавиатуру со списком заявок для детального просмотра
+        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
+        
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("master_orders_closed:"))
+async def callback_master_orders_closed(callback: CallbackQuery):
+    """
+    Просмотр завершенных заявок мастера
+    
+    Args:
+        callback: Callback query
+    """
+    master_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Проверяем, что мастер запрашивает свои заявки
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+        
+        if not master or master.id != master_id:
+            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
+            return
+        
+        # Получаем завершенные заявки
+        all_orders = await db.get_orders_by_master(master_id, exclude_closed=False)
+        orders = [o for o in all_orders if o.status == OrderStatus.CLOSED]
+        
+        if not orders:
+            await callback.answer("📭 У вас пока нет завершенных заявок", show_alert=True)
+            return
+        
+        text = f"✅ <b>Завершенные заявки ({len(orders)}):</b>\n\n"
+        
+        # Показываем последние 15 завершенных заявок
+        for order in orders[:15]:
+            text += f"• Заявка #{order.id}\n"
+            text += f"  🔧 {order.equipment_type}\n"
+            if order.client_name:
+                text += f"  👤 {order.client_name}\n"
+            if order.total_amount:
+                text += f"  💰 {order.total_amount:.2f} ₽\n"
+            if order.updated_at:
+                from app.utils import format_datetime
+                text += f"  📅 {format_datetime(order.updated_at)}\n"
+            text += "\n"
+        
+        if len(orders) > 15:
+            text += f"\n<i>Показано 15 из {len(orders)} завершенных заявок</i>"
+        
+        # Добавляем клавиатуру для детального просмотра
+        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
+        
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("master_orders_all:"))
+async def callback_master_orders_all(callback: CallbackQuery):
+    """
+    Просмотр всех заявок мастера
+    
+    Args:
+        callback: Callback query
+    """
+    master_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Проверяем, что мастер запрашивает свои заявки
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+        
+        if not master or master.id != master_id:
+            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
+            return
+        
+        # Получаем все заявки
+        orders = await db.get_orders_by_master(master_id, exclude_closed=False)
+        
+        if not orders:
+            await callback.answer("📭 У вас пока нет заявок", show_alert=True)
+            return
+        
+        # Группируем по статусам
+        by_status = {}
+        for order in orders:
+            if order.status not in by_status:
+                by_status[order.status] = []
+            by_status[order.status].append(order)
+        
+        text = f"📊 <b>Все заявки ({len(orders)}):</b>\n\n"
+        
+        # Статистика по статусам
+        text += "<b>По статусам:</b>\n"
+        for status, count in sorted(by_status.items(), key=lambda x: -len(x[1])):
+            status_emoji = OrderStatus.get_status_emoji(status)
+            status_name = OrderStatus.get_status_name(status)
+            text += f"  {status_emoji} {status_name}: {len(count)}\n"
+        
+        text += "\n<b>Последние 15 заявок:</b>\n\n"
+        
+        # Показываем последние 15 заявок
+        for order in orders[:15]:
+            status_emoji = OrderStatus.get_status_emoji(order.status)
+            text += f"{status_emoji} Заявка #{order.id}\n"
+            text += f"  🔧 {order.equipment_type}\n"
+            if order.client_name:
+                text += f"  👤 {order.client_name}\n"
+            text += "\n"
+        
+        if len(orders) > 15:
+            text += f"\n<i>Показано 15 из {len(orders)} заявок</i>"
+        
+        # Добавляем клавиатуру для детального просмотра
+        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
+        
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer()
