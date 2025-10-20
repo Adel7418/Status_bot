@@ -142,14 +142,14 @@ prod-update:  ## Обновить код из git (на сервере)
 
 prod-stop:  ## Остановить production контейнеры
 	@echo "🛑 Остановка production контейнеров..."
-	cd docker && docker compose -f docker-compose.prod.yml down
+	@docker compose -f docker/docker-compose.prod.yml down || (cd docker && docker compose -f docker-compose.prod.yml down)
 	@echo "✅ Production контейнеры остановлены"
 
 prod-migrate:  ## Применить миграции БД в production (Docker) [останавливает контейнеры]
 	@echo "⚠️  ВАЖНО: Останавливаем контейнеры перед миграцией..."
-	-cd docker && docker compose -f docker-compose.prod.yml down
+	-@docker compose -f docker/docker-compose.prod.yml down || (cd docker && docker compose -f docker-compose.prod.yml down)
 	@echo "🔄 Применение миграций БД..."
-	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
+	@docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head || (cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic upgrade head)
 	@echo "✅ Миграции применены"
 	@echo "⚠️  Не забудьте перезапустить: make prod-restart или make prod-deploy"
 
@@ -165,15 +165,10 @@ prod-migrate-check:  ## Проверить текущую версию мигр�
 
 prod-backup:  ## Создать backup БД в production (Docker)
 	@echo "💾 Создание backup БД в Docker..."
-	@if [ -d docker ]; then \
-		cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
-		cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py; \
-	else \
-		docker compose -f docker/docker-compose.prod.yml exec bot python scripts/backup_db.py || \
-		docker compose -f docker/docker-compose.prod.yml run --rm bot python scripts/backup_db.py || \
-		docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
-		docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py; \
-	fi
+	@docker compose -f docker/docker-compose.prod.yml exec bot python scripts/backup_db.py || \
+	 docker compose -f docker/docker-compose.prod.yml run --rm bot python scripts/backup_db.py || \
+	 (cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py) || \
+	 (cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py)
 	@echo "✅ Backup создан в volume bot_backups"
 	@echo "ℹ️  Для копирования на хост: docker cp telegram_repair_bot_prod:/app/backups ./backups"
 
