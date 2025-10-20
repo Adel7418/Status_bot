@@ -108,9 +108,31 @@ def require_role(roles: str | list[str]):
         async def wrapper(*args, user_role: str = UserRole.UNKNOWN, **kwargs):
             # Проверяем роль
             if user_role not in roles:
-                logger.debug(
+                logger.warning(
                     f"Access denied for {func.__name__}: user_role={user_role}, required={roles}"
                 )
+                
+                # Отправляем уведомление пользователю
+                message_or_callback = None
+                for arg in args:
+                    if isinstance(arg, Message | CallbackQuery):
+                        message_or_callback = arg
+                        break
+                
+                if message_or_callback:
+                    access_denied_text = (
+                        "❌ <b>Нет доступа</b>\n\n"
+                        f"Эта функция доступна только для: {', '.join(roles)}\n"
+                        f"Ваша роль: {user_role}"
+                    )
+                    try:
+                        if isinstance(message_or_callback, Message):
+                            await message_or_callback.answer(access_denied_text, parse_mode="HTML")
+                        elif isinstance(message_or_callback, CallbackQuery):
+                            await message_or_callback.answer("❌ Нет доступа", show_alert=True)
+                    except Exception as e:
+                        logger.error(f"Failed to send access denied message: {e}")
+                
                 return None
 
             # Передаем user_role дальше в kwargs
