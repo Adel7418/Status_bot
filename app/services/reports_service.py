@@ -472,8 +472,8 @@ class ReportsService:
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"report_{report['type']}_{timestamp}.xlsx"
+            # Фиксированное имя файла (обновляется каждый раз)
+            filename = f"report_{report['type']}.xlsx"
 
         reports_dir = Path("reports")
         reports_dir.mkdir(exist_ok=True)
@@ -866,6 +866,246 @@ class ReportsService:
             ws3.column_dimensions["L"].width = 15
             ws3.column_dimensions["M"].width = 10
             ws3.column_dimensions["N"].width = 10
+
+        # ✨ НОВЫЙ ЛИСТ 4: Все заявки по мастерам (активные и закрытые)
+        if masters:
+            ws4 = wb.create_sheet(title="Заявки по мастерам")
+
+            # Заголовок
+            row = 1
+            ws4.merge_cells(f"A{row}:N{row}")
+            cell = ws4[f"A{row}"]
+            cell.value = "ДЕТАЛИЗАЦИЯ ЗАЯВОК ПО МАСТЕРАМ"
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_alignment
+            ws4.row_dimensions[row].height = 25
+
+            row += 1
+
+            # Заголовки колонок
+            order_headers = [
+                "Мастер",
+                "ID",
+                "Статус",
+                "Тип техники",
+                "Клиент",
+                "Адрес",
+                "Телефон",
+                "Создана",
+                "Обновлена",
+                "Сумма",
+                "Материалы",
+                "Прибыль мастера",
+                "Сдача в кассу",
+                "Примечания",
+            ]
+
+            for col_idx, header in enumerate(order_headers, start=1):
+                cell = ws4.cell(row=row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = subheader_fill
+                cell.alignment = center_alignment
+                cell.border = thin_border
+
+            row += 1
+
+            # Получаем все заявки для каждого мастера
+            for master in masters:
+                master_id = master["id"]
+                master_name = master["name"]
+
+                # Получаем ВСЕ заявки мастера (активные и закрытые)
+                cursor = await self.db.connection.execute(
+                    """
+                    SELECT
+                        o.id,
+                        o.status,
+                        o.equipment_type,
+                        o.client_name,
+                        o.client_address,
+                        o.client_phone,
+                        o.created_at,
+                        o.updated_at,
+                        o.total_amount,
+                        o.materials_cost,
+                        o.master_profit,
+                        o.company_profit,
+                        o.notes,
+                        o.scheduled_time,
+                        o.out_of_city,
+                        o.has_review
+                    FROM orders o
+                    WHERE o.assigned_master_id = ?
+                        AND o.status IN ('ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'REFUSED')
+                        AND o.deleted_at IS NULL
+                    ORDER BY
+                        CASE o.status
+                            WHEN 'IN_PROGRESS' THEN 1
+                            WHEN 'ACCEPTED' THEN 2
+                            WHEN 'ASSIGNED' THEN 3
+                            WHEN 'COMPLETED' THEN 4
+                            WHEN 'CLOSED' THEN 5
+                            WHEN 'REFUSED' THEN 6
+                            ELSE 7
+                        END,
+                        o.created_at DESC
+                    """,
+                    (master_id,),
+                )
+
+                orders_rows = await cursor.fetchall()
+
+                if not orders_rows:
+                    continue
+
+                # Добавляем заголовок мастера
+                cell_master = ws4[f"A{row}"]
+                cell_master.value = f"👨‍🔧 {master_name}"
+                cell_master.font = Font(bold=True, size=11, color="FFFFFF")
+                cell_master.fill = PatternFill(
+                    start_color="70AD47", end_color="70AD47", fill_type="solid"
+                )
+                cell_master.alignment = left_alignment
+                ws4.merge_cells(f"A{row}:N{row}")
+                ws4.row_dimensions[row].height = 20
+                row += 1
+
+                # Заявки мастера
+                for order_row in orders_rows:
+                    # Эмодзи для статуса
+                    status_emoji = {
+                        "ASSIGNED": "🆕",
+                        "ACCEPTED": "✅",
+                        "IN_PROGRESS": "⚙️",
+                        "COMPLETED": "✔️",
+                        "CLOSED": "🔒",
+                        "REFUSED": "❌",
+                    }.get(order_row["status"], "❓")
+
+                    # Форматируем примечания
+                    notes = []
+                    if order_row["out_of_city"]:
+                        notes.append("Выезд за город")
+                    if order_row["has_review"]:
+                        notes.append("Есть отзыв")
+                    if order_row["scheduled_time"]:
+                        notes.append(f"Время: {order_row['scheduled_time']}")
+                    if order_row["notes"]:
+                        notes.append(order_row["notes"][:50])
+
+                    order_data = [
+                        "",  # Пустая колонка для мастера (он в заголовке)
+                        order_row["id"],
+                        f"{status_emoji} {order_row['status']}",
+                        order_row["equipment_type"],
+                        order_row["client_name"],
+                        order_row["client_address"][:30] + "..."
+                        if len(order_row["client_address"]) > 30
+                        else order_row["client_address"],
+                        order_row["client_phone"],
+                        order_row["created_at"][:16] if order_row["created_at"] else "",
+                        order_row["updated_at"][:16] if order_row["updated_at"] else "",
+                        float(order_row["total_amount"] or 0),
+                        float(order_row["materials_cost"] or 0),
+                        float(order_row["master_profit"] or 0),
+                        float(order_row["company_profit"] or 0),  # Сдача в кассу
+                        "; ".join(notes) if notes else "-",
+                    ]
+
+                    for col_idx, value in enumerate(order_data, start=1):
+                        cell = ws4.cell(row=row, column=col_idx, value=value)
+                        cell.border = thin_border
+
+                        # Форматирование
+                        if col_idx == 2:  # ID
+                            cell.alignment = center_alignment
+                            cell.font = Font(bold=True)
+                        elif col_idx == 3:  # Статус
+                            cell.alignment = center_alignment
+                            # Цвет фона в зависимости от статуса
+                            status = order_row["status"]
+                            if status == "IN_PROGRESS":
+                                cell.fill = PatternFill(
+                                    start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
+                                )
+                            elif status == "CLOSED":
+                                cell.fill = PatternFill(
+                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                                )
+                            elif status == "REFUSED":
+                                cell.fill = PatternFill(
+                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
+                                )
+                        elif col_idx in [4, 5, 6, 7, 8, 14]:  # Текст
+                            cell.alignment = left_alignment
+                        else:  # Числа и деньги
+                            cell.alignment = right_alignment
+                            if col_idx >= 10 and col_idx <= 13:
+                                cell.number_format = "#,##0.00 ₽"
+
+                    row += 1
+
+                # Итоги по мастеру
+                cursor = await self.db.connection.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as sum_total,
+                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as sum_materials,
+                        SUM(CASE WHEN status = 'CLOSED' THEN master_profit ELSE 0 END) as sum_master,
+                        SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as sum_company
+                    FROM orders
+                    WHERE assigned_master_id = ?
+                        AND deleted_at IS NULL
+                    """,
+                    (master_id,),
+                )
+
+                totals = await cursor.fetchone()
+
+                cell_total = ws4[f"A{row}"]
+                cell_total.value = f"Итого по {master_name}:"
+                cell_total.font = Font(bold=True, italic=True)
+                ws4.merge_cells(f"A{row}:I{row}")
+
+                cell_j = ws4[f"J{row}"]
+                cell_j.value = float(totals["sum_total"] or 0)
+                cell_j.font = Font(bold=True)
+                cell_j.number_format = "#,##0.00 ₽"
+
+                cell_k = ws4[f"K{row}"]
+                cell_k.value = float(totals["sum_materials"] or 0)
+                cell_k.font = Font(bold=True)
+                cell_k.number_format = "#,##0.00 ₽"
+
+                cell_l = ws4[f"L{row}"]
+                cell_l.value = float(totals["sum_master"] or 0)
+                cell_l.font = Font(bold=True)
+                cell_l.number_format = "#,##0.00 ₽"
+
+                cell_m = ws4[f"M{row}"]
+                cell_m.value = float(totals["sum_company"] or 0)
+                cell_m.font = Font(bold=True)
+                cell_m.number_format = "#,##0.00 ₽"
+
+                row += 2  # Пустая строка между мастерами
+
+            # Ширина столбцов
+            ws4.column_dimensions["A"].width = 25
+            ws4.column_dimensions["B"].width = 6
+            ws4.column_dimensions["C"].width = 15
+            ws4.column_dimensions["D"].width = 20
+            ws4.column_dimensions["E"].width = 20
+            ws4.column_dimensions["F"].width = 30
+            ws4.column_dimensions["G"].width = 15
+            ws4.column_dimensions["H"].width = 18
+            ws4.column_dimensions["I"].width = 18
+            ws4.column_dimensions["J"].width = 15
+            ws4.column_dimensions["K"].width = 15
+            ws4.column_dimensions["L"].width = 18
+            ws4.column_dimensions["M"].width = 18
+            ws4.column_dimensions["N"].width = 35
 
         # Сохраняем файл
         wb.save(file_path)

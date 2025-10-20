@@ -21,11 +21,21 @@ router = Router()
 
 
 def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура главного меню отчетов (старое меню)"""
+    """Клавиатура главного меню отчетов"""
     keyboard = [
         [
             InlineKeyboardButton(
                 text="📋 Активные заявки (Excel)", callback_data="report_active_orders_excel"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="✅ Закрытые заказы (Excel)", callback_data="report_closed_orders_excel"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="👨‍🔧 Статистика мастеров (Excel)", callback_data="report_masters_stats_excel"
             ),
         ],
         [
@@ -530,6 +540,174 @@ async def callback_report_custom(callback: CallbackQuery, user_role: str):
 async def callback_back_to_main_menu(callback: CallbackQuery):
     """Возврат в главное меню"""
     await callback.message.delete()
+    await callback.answer()
+
+
+@router.callback_query(F.data == "report_closed_orders_excel")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
+    """Генерация Excel с закрытыми заказами"""
+    await callback.message.edit_text("⏳ Генерирую отчет по закрытым заказам...")
+
+    from app.services.excel_export import ExcelExportService
+
+    excel_service = ExcelExportService()
+    filepath = await excel_service.export_closed_orders_to_excel(period_days=30)
+
+    if not filepath:
+        await callback.message.edit_text(
+            "❌ Не удалось создать отчет.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
+        return
+
+    # Отправляем файл
+    from pathlib import Path
+
+    from aiogram.types import FSInputFile
+
+    file = FSInputFile(filepath, filename=Path(filepath).name)
+
+    await callback.message.answer_document(
+        document=file,
+        caption="✅ Закрытые заказы за 30 дней",
+    )
+
+    await callback.message.edit_text(
+        "✅ Отчет создан!",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
+        ),
+    )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data == "report_masters_stats_excel")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str):
+    """Показать список мастеров для выбора"""
+    from app.database.db import Database
+
+    db = Database()
+    await db.connect()
+
+    try:
+        # Получаем всех утвержденных мастеров
+        cursor = await db.connection.execute(
+            """
+            SELECT
+                m.id,
+                u.first_name || ' ' || COALESCE(u.last_name, '') as full_name
+            FROM masters m
+            LEFT JOIN users u ON m.telegram_id = u.telegram_id
+            WHERE m.is_approved = 1 AND m.deleted_at IS NULL
+            ORDER BY u.first_name
+            """
+        )
+        masters = await cursor.fetchall()
+
+        if not masters:
+            await callback.message.edit_text(
+                "❌ Нет утвержденных мастеров.",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                    ]
+                ),
+            )
+            return
+
+        # Создаем клавиатуру с мастерами (по 2 в ряд)
+        keyboard = []
+        for i in range(0, len(masters), 2):
+            row = []
+            for j in range(2):
+                if i + j < len(masters):
+                    master = masters[i + j]
+                    row.append(
+                        InlineKeyboardButton(
+                            text=f"👨‍🔧 {master['full_name']}",
+                            callback_data=f"master_stat:{master['id']}",
+                        )
+                    )
+            keyboard.append(row)
+
+        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
+
+        await callback.message.edit_text(
+            "👨‍🔧 <b>Выберите мастера:</b>\n\n"
+            "Будет создан отчет со всеми заявками выбранного мастера.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("master_stat:"))
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_master_stat(callback: CallbackQuery, user_role: str):
+    """Генерация отчета по выбранному мастеру"""
+    master_id = int(callback.data.split(":")[1])
+
+    await callback.message.edit_text("⏳ Генерирую отчет по мастеру...")
+
+    from app.services.excel_export import ExcelExportService
+
+    excel_service = ExcelExportService()
+    filepath = await excel_service.export_master_orders_to_excel(master_id)
+
+    if not filepath:
+        await callback.message.edit_text(
+            "❌ Не удалось создать отчет.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад", callback_data="report_masters_stats_excel"
+                        )
+                    ]
+                ]
+            ),
+        )
+        return
+
+    # Отправляем файл
+    from pathlib import Path
+
+    from aiogram.types import FSInputFile
+
+    file = FSInputFile(filepath, filename=Path(filepath).name)
+
+    await callback.message.answer_document(
+        document=file,
+        caption="✅ Отчет по мастеру готов!",
+    )
+
+    await callback.message.edit_text(
+        "✅ Отчет создан!",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 К списку мастеров", callback_data="report_masters_stats_excel"
+                    )
+                ]
+            ]
+        ),
+    )
+
     await callback.answer()
 
 
