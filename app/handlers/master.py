@@ -568,7 +568,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
         await db.disconnect()
 
 
-@router.message(LongRepairStates.enter_completion_date_and_prepayment)
+@router.message(LongRepairStates.enter_completion_date_and_prepayment, F.text)
 async def process_dr_info(message: Message, state: FSMContext, user_roles: list):
     """
     Обработка ввода срока окончания и предоплаты для DR
@@ -587,6 +587,13 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
     order_id = data.get("order_id")
 
     logger.debug(f"[DR] Order ID from state: {order_id}, FSM data: {data}")
+
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "⚠️ Пожалуйста, отправьте текстовое сообщение с информацией о сроках и предоплате."
+        )
+        return
 
     # Парсим введенный текст
     text = message.text.strip()
