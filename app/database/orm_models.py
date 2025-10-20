@@ -222,6 +222,20 @@ class Order(Base):
     status_history: Mapped[list["OrderStatusHistory"]] = relationship(
         "OrderStatusHistory", back_populates="order"
     )
+    
+    @property
+    def master_name(self) -> str | None:
+        """Получение имени мастера (для совместимости с legacy кодом)"""
+        if not self.assigned_master:
+            return None
+        return self.assigned_master.get_display_name()
+    
+    @property
+    def dispatcher_name(self) -> str | None:
+        """Получение имени диспетчера (для совместимости с legacy кодом)"""
+        if not self.dispatcher:
+            return None
+        return self.dispatcher.get_display_name()
 
     # Индексы и ограничения
     __table_args__ = (
