@@ -690,6 +690,183 @@ class ReportsService:
             ws2.column_dimensions["J"].width = 18
             ws2.column_dimensions["K"].width = 22
 
+        # ✨ НОВЫЙ ЛИСТ 3: Детализация по мастерам
+        masters = report.get("masters", [])
+        if masters:
+            ws3 = wb.create_sheet(title="Мастера")
+
+            # Заголовок
+            row = 1
+            ws3.merge_cells(f"A{row}:K{row}")
+            cell = ws3[f"A{row}"]
+            cell.value = "ДЕТАЛИЗАЦИЯ ПО МАСТЕРАМ"
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_alignment
+            ws3.row_dimensions[row].height = 25
+
+            # Заголовки колонок
+            row += 1
+            master_headers = [
+                "ID",
+                "Мастер",
+                "Заявок всего",
+                "Завершено",
+                "В работе",
+                "Отказано",
+                "Общая сумма",
+                "Материалы",
+                "Чистая прибыль",
+                "Прибыль компании",
+                "Сдача в кассу",
+                "Средний чек",
+                "Выездов",
+                "Отзывов",
+            ]
+
+            for col_idx, header in enumerate(master_headers, start=1):
+                cell = ws3.cell(row=row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = subheader_fill
+                cell.alignment = center_alignment
+                cell.border = thin_border
+
+            row += 1
+
+            # Получаем детальную информацию по каждому мастеру
+            for master in masters:
+                master_id = master["id"]
+
+                # Получаем детальную статистику мастера
+                cursor = await self.db.connection.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total_orders,
+                        SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
+                        SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
+                        SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
+                        SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN master_profit ELSE 0 END) as master_profit_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
+                        SUM(CASE WHEN status = 'CLOSED' AND out_of_city = 1 THEN 1 ELSE 0 END) as out_of_city,
+                        SUM(CASE WHEN status = 'CLOSED' AND has_review = 1 THEN 1 ELSE 0 END) as reviews,
+                        AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
+                    FROM orders
+                    WHERE assigned_master_id = ?
+                    """,
+                    (master_id,),
+                )
+
+                stats_row = await cursor.fetchone()
+
+                if not stats_row:
+                    continue
+
+                # Вычисляем чистую прибыль (общая сумма - материалы)
+                total_sum = float(stats_row["total_sum"] or 0)
+                materials = float(stats_row["materials_sum"] or 0)
+                net_profit = total_sum - materials
+
+                # Сдача в кассу = прибыль компании
+                cash_to_company = float(stats_row["company_profit_sum"] or 0)
+
+                # Данные по мастеру
+                master_data = [
+                    master_id,
+                    master["name"],
+                    stats_row["total_orders"] or 0,
+                    stats_row["closed"] or 0,
+                    stats_row["in_work"] or 0,
+                    stats_row["refused"] or 0,
+                    total_sum,
+                    materials,
+                    net_profit,
+                    cash_to_company,
+                    cash_to_company,  # Сдача в кассу = прибыль компании
+                    float(stats_row["avg_check"] or 0),
+                    stats_row["out_of_city"] or 0,
+                    stats_row["reviews"] or 0,
+                ]
+
+                for col_idx, value in enumerate(master_data, start=1):
+                    cell = ws3.cell(row=row, column=col_idx, value=value)
+                    cell.border = thin_border
+
+                    # Форматирование
+                    if col_idx == 1:  # ID
+                        cell.alignment = center_alignment
+                    elif col_idx in [2]:  # Имя
+                        cell.alignment = left_alignment
+                    elif col_idx in [3, 4, 5, 6, 13, 14]:  # Счетчики
+                        cell.alignment = center_alignment
+                    else:  # Деньги
+                        cell.alignment = right_alignment
+                        if col_idx >= 7 and col_idx <= 12:
+                            cell.number_format = "#,##0.00 ₽"
+
+                row += 1
+
+            # ИТОГО по всем мастерам
+            row += 1
+            ws3[f"A{row}"] = "ИТОГО:"
+            ws3[f"A{row}"].font = Font(bold=True, size=12)
+            ws3.merge_cells(f"A{row}:B{row}")
+
+            # Считаем итоги
+            total_orders = sum(m["orders_count"] for m in masters)
+            total_closed = sum(m["closed_orders"] for m in masters)
+
+            # Итоги по финансам из закрытых заявок
+            total_sum_all = sum(o["total_amount"] for o in closed_orders)
+            total_materials_all = sum(o["materials_cost"] for o in closed_orders)
+            total_net_profit = total_sum_all - total_materials_all
+            total_company = sum(o["company_profit"] for o in closed_orders)
+
+            ws3[f"C{row}"] = total_orders
+            ws3[f"C{row}"].font = Font(bold=True)
+            ws3[f"C{row}"].alignment = center_alignment
+
+            ws3[f"D{row}"] = total_closed
+            ws3[f"D{row}"].font = Font(bold=True)
+            ws3[f"D{row}"].alignment = center_alignment
+
+            ws3[f"G{row}"] = total_sum_all
+            ws3[f"G{row}"].font = Font(bold=True)
+            ws3[f"G{row}"].number_format = "#,##0.00 ₽"
+
+            ws3[f"H{row}"] = total_materials_all
+            ws3[f"H{row}"].font = Font(bold=True)
+            ws3[f"H{row}"].number_format = "#,##0.00 ₽"
+
+            ws3[f"I{row}"] = total_net_profit
+            ws3[f"I{row}"].font = Font(bold=True)
+            ws3[f"I{row}"].number_format = "#,##0.00 ₽"
+
+            ws3[f"J{row}"] = total_company
+            ws3[f"J{row}"].font = Font(bold=True)
+            ws3[f"J{row}"].number_format = "#,##0.00 ₽"
+
+            ws3[f"K{row}"] = total_company
+            ws3[f"K{row}"].font = Font(bold=True)
+            ws3[f"K{row}"].number_format = "#,##0.00 ₽"
+
+            # Ширина столбцов
+            ws3.column_dimensions["A"].width = 6
+            ws3.column_dimensions["B"].width = 25
+            ws3.column_dimensions["C"].width = 12
+            ws3.column_dimensions["D"].width = 12
+            ws3.column_dimensions["E"].width = 12
+            ws3.column_dimensions["F"].width = 12
+            ws3.column_dimensions["G"].width = 15
+            ws3.column_dimensions["H"].width = 15
+            ws3.column_dimensions["I"].width = 15
+            ws3.column_dimensions["J"].width = 18
+            ws3.column_dimensions["K"].width = 15
+            ws3.column_dimensions["L"].width = 15
+            ws3.column_dimensions["M"].width = 10
+            ws3.column_dimensions["N"].width = 10
+
         # Сохраняем файл
         wb.save(file_path)
         logger.info(f"Excel отчет сохранен: {file_path}")

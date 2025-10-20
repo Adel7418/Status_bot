@@ -1530,8 +1530,12 @@ class Database:
         """
         query = """
             SELECT o.*,
-                   mu.first_name || ' ' || COALESCE(mu.last_name, '') as master_name,
-                   d.first_name || ' ' || COALESCE(d.last_name, '') as dispatcher_name
+                   mu.first_name as master_first_name,
+                   mu.last_name as master_last_name,
+                   mu.username as master_username,
+                   d.first_name as dispatcher_first_name,
+                   d.last_name as dispatcher_last_name,
+                   d.username as dispatcher_username
             FROM orders o
             LEFT JOIN masters m ON o.assigned_master_id = m.id
             LEFT JOIN users mu ON m.telegram_id = mu.telegram_id

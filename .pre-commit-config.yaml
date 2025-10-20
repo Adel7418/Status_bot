@@ -35,8 +35,10 @@ repos:
       - id: ruff
         name: Ruff linter
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(tests/|migrations/|scripts/)
       - id: ruff-format
         name: Ruff formatter
+        exclude: ^(tests/|migrations/|scripts/)
 
   # MyPy - проверка типов (опционально, можно отключить если медленно)
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -46,7 +48,7 @@ repos:
         name: MyPy type checking
         additional_dependencies: [types-python-dateutil]
         args: [--ignore-missing-imports, --no-strict-optional, --python-version=3.13]
-        exclude: ^(tests/|migrations/)
+        exclude: ^(tests/|migrations/|scripts/)
         # Для ускорения можно добавить: stages: [push]
 
   # Bandit - проверка безопасности
@@ -56,7 +58,7 @@ repos:
       - id: bandit
         name: Bandit security check
         args: [-r, app/, -f, screen]
-        exclude: ^tests/
+        exclude: ^(tests/|scripts/)
         pass_filenames: false
 
   # Проверка requirements.txt
