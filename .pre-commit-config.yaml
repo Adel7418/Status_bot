@@ -57,6 +57,7 @@ repos:
         name: Bandit security check
         args: [-r, app/, -f, screen]
         exclude: ^tests/
+        pass_filenames: false
 
   # Проверка requirements.txt
   - repo: https://github.com/Lucas-C/pre-commit-hooks

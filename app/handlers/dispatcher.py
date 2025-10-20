@@ -2414,7 +2414,6 @@ async def admin_process_out_of_city_confirmation_callback(
                 from aiogram import Bot
 
                 from app.config import Config
-                from app.utils.helpers import safe_send_message
 
                 bot = Bot(token=Config.BOT_TOKEN)
                 await safe_send_message(bot, master.work_chat_id, master_message, parse_mode="HTML")
