@@ -311,6 +311,40 @@ def get_masters_list_keyboard(
     return builder.as_markup()
 
 
+def get_master_stats_keyboard(master_id: int) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для статистики мастера с кнопками просмотра заявок
+    
+    Args:
+        master_id: ID мастера
+    
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="📋 Активные заявки",
+            callback_data=create_callback_data("master_orders_active", str(master_id))
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Завершенные заявки",
+            callback_data=create_callback_data("master_orders_closed", str(master_id))
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📊 Все мои заявки",
+            callback_data=create_callback_data("master_orders_all", str(master_id))
+        )
+    )
+    
+    return builder.as_markup()
+
+
 def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMarkup:
     """
     Клавиатура фильтрации заявок с счетчиками
@@ -350,6 +384,12 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
     )
     # Длительные ремонты - всегда показываем счётчик для видимости
     dr_text = f"⏳ Длительные ремонты ({counts.get(OrderStatus.DR, 0)})"
+    # Завершенные заказы
+    closed_text = (
+        f"✅ Завершенные ({counts.get(OrderStatus.CLOSED, 0)})"
+        if counts.get(OrderStatus.CLOSED, 0) > 0
+        else "✅ Завершенные"
+    )
 
     builder.row(
         InlineKeyboardButton(
@@ -375,6 +415,13 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
         InlineKeyboardButton(
             text=dr_text,
             callback_data=create_callback_data("filter_orders", OrderStatus.DR),
+        ),
+    )
+    # Завершенные заказы
+    builder.row(
+        InlineKeyboardButton(
+            text=closed_text,
+            callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
         ),
     )
 

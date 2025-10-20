@@ -657,9 +657,20 @@ class ORMDatabase:
             return True
 
     async def get_orders_by_master(
-        self, master_id: int, status: str | None = None, limit: int | None = None
+        self, master_id: int, status: str | None = None, limit: int | None = None, exclude_closed: bool = True
     ) -> list[Order]:
-        """Получение заявок по мастеру"""
+        """
+        Получение заявок по мастеру
+        
+        Args:
+            master_id: ID мастера
+            status: Фильтр по статусу (опционально)
+            limit: Лимит количества записей
+            exclude_closed: Исключить закрытые и отказанные заявки (по умолчанию True)
+        
+        Returns:
+            Список заявок
+        """
         async with self.get_session() as session:
             stmt = (
                 select(Order)
@@ -667,11 +678,26 @@ class ORMDatabase:
                     joinedload(Order.assigned_master).joinedload(Master.user),
                     joinedload(Order.dispatcher),
                 )
-                .where(Order.assigned_master_id == master_id)
+                .where(
+                    and_(
+                        Order.assigned_master_id == master_id,
+                        Order.deleted_at.is_(None)
+                    )
+                )
             )
 
             if status:
                 stmt = stmt.where(Order.status == status)
+            
+            # Исключаем закрытые и отказанные, если нужно
+            if exclude_closed:
+                from app.config import OrderStatus
+                stmt = stmt.where(
+                    and_(
+                        Order.status != OrderStatus.CLOSED,
+                        Order.status != OrderStatus.REFUSED
+                    )
+                )
 
             stmt = stmt.order_by(Order.created_at.desc())
 

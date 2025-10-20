@@ -739,7 +739,7 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
 
     await state.clear()
 
-    # Получаем счетчики заявок по статусам (без завершённых)
+    # Получаем счетчики заявок по статусам (включая завершенные)
     db = Database()
     await db.connect()
     try:
@@ -750,6 +750,7 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
             OrderStatus.ACCEPTED,
             OrderStatus.ONSITE,
             OrderStatus.DR,
+            OrderStatus.CLOSED,
         ]:
             orders = await db.get_all_orders(status=status)
             counts[status] = len(orders)
