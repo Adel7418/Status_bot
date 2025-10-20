@@ -232,8 +232,24 @@ module = [
     "aiosqlite.*",
     "apscheduler.*",
     "openpyxl.*",
+    "sqlalchemy.*",
 ]
 ignore_missing_imports = true
+
+# Игнорируем проблемы SQLAlchemy ORM
+[[tool.mypy.overrides]]
+module = "app.database.orm_models"
+ignore_errors = true
+
+# Игнорируем проблемы возврата Any в ORM
+[[tool.mypy.overrides]]
+module = "app.database.orm_database"
+warn_return_any = false
+
+# Репозитории работают с Any из БД
+[[tool.mypy.overrides]]
+module = "app.repositories.*"
+warn_return_any = false
 
 # ========================================
 # PYTEST

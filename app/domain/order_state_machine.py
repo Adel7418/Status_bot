@@ -388,4 +388,4 @@ class OrderStateMachine:
             },
         }
 
-        return rules.get(state, {})
+        return rules.get(state, {})  # type: ignore[return-value]

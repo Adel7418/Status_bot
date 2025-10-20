@@ -21,23 +21,27 @@ router = Router()
 
 
 def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура главного меню отчетов"""
+    """Клавиатура главного меню отчетов (старое меню)"""
     keyboard = [
         [
             InlineKeyboardButton(
-                text="📋 Активные заявки", callback_data="report_active_orders_excel"
+                text="📋 Активные заявки (Excel)", callback_data="report_active_orders_excel"
             ),
         ],
         [
-            InlineKeyboardButton(text="📅 Ежедневный", callback_data="report_daily"),
-            InlineKeyboardButton(text="📊 Еженедельный", callback_data="report_weekly"),
+            InlineKeyboardButton(text="📅 Ежедневный отчет", callback_data="report_daily"),
         ],
         [
-            InlineKeyboardButton(text="📈 Месячный", callback_data="report_monthly"),
-            InlineKeyboardButton(text="📋 Последние отчеты", callback_data="reports_list"),
+            InlineKeyboardButton(text="📆 Еженедельный отчет", callback_data="report_weekly"),
         ],
         [
-            InlineKeyboardButton(text="❌ Закрыть", callback_data="close_menu"),
+            InlineKeyboardButton(text="🗓️ Ежемесячный отчет", callback_data="report_monthly"),
+        ],
+        [
+            InlineKeyboardButton(text="📋 Кастомный отчет", callback_data="report_custom"),
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main_menu"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -149,7 +153,7 @@ async def cmd_reports(message: Message, user_role: str):
         user_role: Роль пользователя
     """
     await message.answer(
-        "📊 <b>Финансовые отчеты</b>\n\n" "Выберите тип отчета:",
+        "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
         parse_mode="HTML",
         reply_markup=get_reports_menu_keyboard(),
     )
@@ -166,8 +170,9 @@ async def btn_reports_direct(message: Message, user_role: str):
         message: Сообщение
         user_role: Роль пользователя
     """
+    logger.info(f"DEBUG: btn_reports_direct called, user_role={user_role}")
     await message.answer(
-        "📊 <b>Финансовые отчеты</b>\n\n" "Выберите тип отчета:",
+        "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
         parse_mode="HTML",
         reply_markup=get_reports_menu_keyboard(),
     )
@@ -179,7 +184,7 @@ async def btn_reports_direct(message: Message, user_role: str):
 async def callback_reports_menu(callback: CallbackQuery, user_role: str):
     """Возврат в главное меню отчетов"""
     await callback.message.edit_text(
-        "📊 <b>Финансовые отчеты</b>\n\n" "Выберите тип отчета:",
+        "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
         parse_mode="HTML",
         reply_markup=get_reports_menu_keyboard(),
     )
@@ -501,6 +506,31 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
     except Exception as e:
         logger.error(f"Error generating active orders report: {e}")
         await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
+
+
+@router.callback_query(F.data == "report_custom")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_report_custom(callback: CallbackQuery, user_role: str):
+    """Кастомный отчет"""
+    await callback.message.edit_text(
+        "📋 <b>Кастомный отчет</b>\n\n"
+        "Для создания кастомного отчета введите период в формате:\n"
+        "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
+        "Например: <code>2025-10-01 2025-10-15</code>\n\n"
+        "Или введите <code>отмена</code> для возврата к меню.",
+        parse_mode="HTML",
+        reply_markup=get_reports_menu_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_to_main_menu")
+@handle_errors
+async def callback_back_to_main_menu(callback: CallbackQuery):
+    """Возврат в главное меню"""
+    await callback.message.delete()
+    await callback.answer()
 
 
 @router.callback_query(F.data == "close_menu")

@@ -184,7 +184,9 @@ async def main():
 
         # ВАЖНО: Инициализируем БД ДО подключения middleware
         logger.info("Инициализация базы данных...")
-        await db.init_db()
+        # ORM не требует init_db - таблицы уже созданы через миграции
+        if hasattr(db, "init_db"):
+            await db.init_db()
         logger.info("База данных инициализирована")
 
         # Инициализация планировщика (передаем shared DB instance)

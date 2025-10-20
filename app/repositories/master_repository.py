@@ -4,6 +4,7 @@
 
 import logging
 from datetime import datetime
+from typing import Any
 
 import aiosqlite
 
@@ -153,7 +154,7 @@ class MasterRepository(BaseRepository[Master]):
             LEFT JOIN users u ON m.telegram_id = u.telegram_id
             WHERE 1=1
         """
-        params = []
+        params: list[Any] = []
 
         if is_active is not None:
             query += " AND m.is_active = ?"
@@ -165,7 +166,7 @@ class MasterRepository(BaseRepository[Master]):
 
         query += " ORDER BY m.created_at DESC"
 
-        rows = await self._fetch_all(query, params)
+        rows = await self._fetch_all(query, tuple(params) if params else None)
         return [self._row_to_master(row) for row in rows]
 
     async def update(self, master_id: int, updates: dict) -> bool:
@@ -189,7 +190,7 @@ class MasterRepository(BaseRepository[Master]):
         query = f"UPDATE masters SET {set_clause} WHERE id = ?"
         params = list(updates.values()) + [master_id]
 
-        await self._execute_commit(query, params)
+        await self._execute_commit(query, tuple(params))
         logger.info(f"Мастер #{master_id} обновлен: {', '.join(updates.keys())}")
         return True
 
@@ -214,7 +215,7 @@ class MasterRepository(BaseRepository[Master]):
         query = f"UPDATE masters SET {set_clause} WHERE telegram_id = ?"
         params = list(updates.values()) + [telegram_id]
 
-        await self._execute_commit(query, params)
+        await self._execute_commit(query, tuple(params))
         logger.info(f"Мастер (telegram_id: {telegram_id}) обновлен: {', '.join(updates.keys())}")
         return True
 
@@ -294,13 +295,17 @@ class MasterRepository(BaseRepository[Master]):
             specialization=row["specialization"],
             is_active=bool(row["is_active"]),
             is_approved=bool(row["is_approved"]),
-            work_chat_id=row["work_chat_id"] if row.get("work_chat_id") else None,
+            work_chat_id=(
+                row["work_chat_id"]
+                if "work_chat_id" in row.keys() and row["work_chat_id"]
+                else None
+            ),
             created_at=(
                 datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
                 if row["created_at"]
                 else None
             ),
-            username=row.get("username"),
-            first_name=row.get("first_name"),
-            last_name=row.get("last_name"),
+            username=(row["username"] if "username" in row.keys() else None),
+            first_name=(row["first_name"] if "first_name" in row.keys() else None),
+            last_name=(row["last_name"] if "last_name" in row.keys() else None),
         )

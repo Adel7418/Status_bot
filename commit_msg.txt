@@ -1,0 +1,11 @@
+Fix dispatcher reports access and restore old reports menu
+
+- Fix AttributeError when master sends voice instead of text for DR details
+- Fix dispatcher access to reports by removing conflicting admin handler  
+- Fix logging middleware to properly handle UTF-8 characters
+- Add access denied messages to @require_role decorator
+- Add debug logging for troubleshooting dispatcher reports access
+- Fix pre-commit Bandit configuration
+- Restore old reports menu with 'Генерация отчетов' title and column layout
+- Add handlers for custom reports and back button
+- Update financial_reports.py to use old menu design

@@ -27,8 +27,9 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# Для SQLite без ORM используем None
-target_metadata = None
+# Импортируем ORM модели для автогенерации миграций
+from app.database.orm_models import Base
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

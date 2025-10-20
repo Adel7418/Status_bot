@@ -95,7 +95,8 @@ class BaseRepository(Generic[T]):
             Список строк результата
         """
         cursor = await self._execute(query, params)
-        return await cursor.fetchall()
+        rows = await cursor.fetchall()
+        return list(rows)
 
     async def _execute_commit(self, query: str, params: tuple | dict | None = None) -> int:
         """

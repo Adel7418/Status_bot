@@ -234,7 +234,7 @@ class UserRepository(BaseRepository[User]):
         query = f"UPDATE users SET {set_clause} WHERE telegram_id = ?"
         params = list(updates.values()) + [telegram_id]
 
-        await self._execute_commit(query, params)
+        await self._execute_commit(query, tuple(params))
         logger.info(f"Пользователь {telegram_id} обновлен: {', '.join(updates.keys())}")
         return True
 

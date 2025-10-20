@@ -1700,13 +1700,17 @@ async def btn_reports(message: Message, user_role: str, user_roles: list):
         user_role: Роль пользователя
         user_roles: Список ролей пользователя
     """
+    logger.info(f"DEBUG dispatcher.btn_reports: user_role='{user_role}', user_roles={user_roles}")
+
     # Проверка роли (проверяем весь список ролей)
     if not any(role in user_roles for role in [UserRole.ADMIN, UserRole.DISPATCHER]):
+        logger.warning(f"Access denied in dispatcher.btn_reports: user_roles={user_roles}")
         return
 
-    # Вызываем команду /reports из новой системы
+    # Вызываем команду /reports из системы отчетов
     from app.handlers.financial_reports import cmd_reports
 
+    logger.info(f"DEBUG calling cmd_reports with user_role='{user_role}'")
     await cmd_reports(message, user_role)
 
 

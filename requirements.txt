@@ -8,6 +8,10 @@ aiogram==3.16.0  # Updated from 3.14.0
 # Async SQLite
 aiosqlite==0.20.0
 
+# SQLAlchemy ORM
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0  # PostgreSQL async driver
+
 # Task Scheduler
 APScheduler==3.11.0  # Stable version (4.x имеет breaking changes)
 
@@ -22,6 +26,9 @@ pydantic==2.10.3  # Updated from 2.9.2, fixed compatibility
 
 # Date/Time Utilities
 python-dateutil==2.9.0.post0
+
+# Encryption
+cryptography==43.0.3  # Для шифрования персональных данных
 
 alembic==1.13.1
 

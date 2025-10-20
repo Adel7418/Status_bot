@@ -1,0 +1,9 @@
+@echo off
+echo Stopping bot...
+docker-compose down
+
+echo Starting bot with updated code...
+docker-compose up -d
+
+echo Showing logs...
+docker-compose logs -f --tail=50

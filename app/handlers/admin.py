@@ -27,50 +27,8 @@ router = Router(name="admin")
 # Проверка роли теперь в каждом обработчике через декоратор
 
 
-@router.message(F.text == "📊 Отчеты")
-@handle_errors
-async def btn_reports(message: Message, state: FSMContext, user_role: str):
-    """
-    Показать меню отчетов (только для ADMIN)
-    Для DISPATCHER используется обработчик в financial_reports.py
-
-    Args:
-        message: Сообщение
-        state: FSM контекст
-        user_role: Роль пользователя
-    """
-    # Только для админов, для остальных ролей пропускаем в следующий обработчик
-    if user_role != UserRole.ADMIN:
-        return
-
-    from aiogram.types import InlineKeyboardButton
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text="📋 Активные заявки (Excel)", callback_data="export_active_orders_admin"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(text="📅 Ежедневный отчет", callback_data="generate_daily_report")
-    )
-    builder.row(
-        InlineKeyboardButton(text="📆 Еженедельный отчет", callback_data="generate_weekly_report")
-    )
-    builder.row(
-        InlineKeyboardButton(text="🗓️ Ежемесячный отчет", callback_data="generate_monthly_report")
-    )
-    builder.row(
-        InlineKeyboardButton(text="📋 Кастомный отчет", callback_data="generate_custom_report")
-    )
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_admin_menu"))
-
-    await message.answer(
-        "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
-        parse_mode="HTML",
-        reply_markup=builder.as_markup(),
-    )
+# УДАЛЕНО: обработчик "📊 Отчеты" перенесен в dispatcher.py
+# для универсальной обработки админов и диспетчеров
 
 
 @router.callback_query(F.data == "generate_daily_report")

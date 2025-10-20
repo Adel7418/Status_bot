@@ -42,6 +42,10 @@ class Config:
     # Уровень логирования
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # Фича-флаг: использовать ли ORM (SQLAlchemy) вместо прямых SQL
+    # По умолчанию выключено, чтобы не ломать прод при установке зависимостей
+    USE_ORM: bool = os.getenv("USE_ORM", "false").lower() in ("true", "1", "yes")
+
     # Интервал проверки SLA заявок (в минутах)
     SLA_CHECK_INTERVAL: int = int(os.getenv("SLA_CHECK_INTERVAL", "30"))
 

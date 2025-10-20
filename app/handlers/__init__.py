@@ -3,6 +3,7 @@ Handlers package
 """
 
 from app.handlers.admin import router as admin_router
+from app.handlers.admin_history import router as admin_history_router
 from app.handlers.common import router as common_router
 from app.handlers.developer import router as developer_router
 from app.handlers.dispatcher import router as dispatcher_router
@@ -15,9 +16,11 @@ from app.handlers.master import router as master_router
 # ВАЖНО: common_router должен быть последним, чтобы не перехватывать сообщения других роутеров
 # developer_router первым для команд разработчика (только для админов)
 # financial_reports_router ПЕРЕД dispatcher_router, чтобы перехватывать кнопку "📊 Отчеты"
+# admin_history_router для работы с историей заявок
 routers = [
     developer_router,
     admin_router,
+    admin_history_router,
     financial_reports_router,
     dispatcher_router,
     master_router,

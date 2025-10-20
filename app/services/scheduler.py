@@ -12,6 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import Config, OrderStatus
 from app.database import Database
 from app.utils import get_now, safe_send_message
+from app.utils.helpers import MOSCOW_TZ
 
 
 logger = logging.getLogger(__name__)
@@ -389,7 +390,12 @@ class TaskScheduler:
                 if not order.updated_at:
                     continue
 
-                time_assigned = now - order.updated_at
+                # Конвертируем naive datetime в aware для корректного сравнения
+                order_updated_at = order.updated_at
+                if order_updated_at.tzinfo is None:
+                    order_updated_at = order_updated_at.replace(tzinfo=MOSCOW_TZ)
+
+                time_assigned = now - order_updated_at
 
                 # Для заявок с указанным временем прибытия - используем умные напоминания
                 if order.scheduled_time:
@@ -495,7 +501,12 @@ class TaskScheduler:
                 if not order.created_at:
                     continue
 
-                time_unassigned = now - order.created_at
+                # Конвертируем naive datetime в aware для корректного сравнения
+                order_created_at = order.created_at
+                if order_created_at.tzinfo is None:
+                    order_created_at = order_created_at.replace(tzinfo=MOSCOW_TZ)
+
+                time_unassigned = now - order_created_at
 
                 if time_unassigned > remind_threshold:
                     unassigned_alerts.append({"order": order, "time": time_unassigned})

@@ -4,6 +4,7 @@
 
 import logging
 from datetime import datetime
+from typing import Any
 
 import aiosqlite
 
@@ -138,7 +139,7 @@ class OrderRepository(BaseRepository[Order]):
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE 1=1
         """
-        params = []
+        params: list[Any] = []
 
         if status:
             query += " AND o.status = ?"
@@ -154,7 +155,7 @@ class OrderRepository(BaseRepository[Order]):
             query += " LIMIT ?"
             params.append(limit)
 
-        rows = await self._fetch_all(query, params)
+        rows = await self._fetch_all(query, tuple(params))
         return [self._row_to_order(row) for row in rows]
 
     async def update_status(
@@ -269,7 +270,7 @@ class OrderRepository(BaseRepository[Order]):
         query = f"UPDATE orders SET {set_clause} WHERE id = ?"
         params = list(updates.values()) + [order_id]
 
-        await self._execute_commit(query, params)
+        await self._execute_commit(query, tuple(params))
         logger.info(f"Заявка #{order_id} обновлена: {', '.join(updates.keys())}")
         return True
 
@@ -294,7 +295,7 @@ class OrderRepository(BaseRepository[Order]):
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE o.assigned_master_id = ?
         """
-        params = [master_id]
+        params: list[Any] = [master_id]
 
         if status:
             query += " AND o.status = ?"
@@ -302,7 +303,7 @@ class OrderRepository(BaseRepository[Order]):
 
         query += " ORDER BY o.created_at DESC"
 
-        rows = await self._fetch_all(query, params)
+        rows = await self._fetch_all(query, tuple(params))
         return [self._row_to_order(row) for row in rows]
 
     async def get_by_period(
@@ -329,7 +330,7 @@ class OrderRepository(BaseRepository[Order]):
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
             WHERE o.created_at >= ? AND o.created_at <= ?
         """
-        params = [start_date.isoformat(), end_date.isoformat()]
+        params: list[Any] = [start_date.isoformat(), end_date.isoformat()]
 
         if status:
             query += " AND o.status = ?"
@@ -337,7 +338,7 @@ class OrderRepository(BaseRepository[Order]):
 
         query += " ORDER BY o.created_at DESC"
 
-        rows = await self._fetch_all(query, params)
+        rows = await self._fetch_all(query, tuple(params))
         return [self._row_to_order(row) for row in rows]
 
     async def get_status_history(self, order_id: int) -> list[dict]:
@@ -441,13 +442,17 @@ class OrderRepository(BaseRepository[Order]):
                 if "prepayment_amount" in row.keys() and row["prepayment_amount"] is not None
                 else None
             ),
-            rescheduled_count=row.get("rescheduled_count", 0),
+            rescheduled_count=(
+                row["rescheduled_count"] if "rescheduled_count" in row.keys() else 0
+            ),
             last_rescheduled_at=(
                 datetime.fromisoformat(row["last_rescheduled_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row.get("last_rescheduled_at")
+                if "last_rescheduled_at" in row.keys() and row["last_rescheduled_at"]
                 else None
             ),
-            reschedule_reason=row.get("reschedule_reason"),
+            reschedule_reason=(
+                row["reschedule_reason"] if "reschedule_reason" in row.keys() else None
+            ),
             created_at=(
                 datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
                 if row["created_at"]
@@ -458,6 +463,6 @@ class OrderRepository(BaseRepository[Order]):
                 if row["updated_at"]
                 else None
             ),
-            dispatcher_name=row.get("dispatcher_name"),
-            master_name=row.get("master_name"),
+            dispatcher_name=(row["dispatcher_name"] if "dispatcher_name" in row.keys() else None),
+            master_name=(row["master_name"] if "master_name" in row.keys() else None),
         )

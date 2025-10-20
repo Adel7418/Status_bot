@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.database import Database
+from app.repositories.order_repository_extended import OrderRepositoryExtended
 from app.utils.helpers import get_now
 
 
@@ -19,6 +20,13 @@ class ReportsService:
 
     def __init__(self):
         self.db = Database()
+        self._order_repo_extended = None
+
+    async def _get_extended_repo(self) -> OrderRepositoryExtended:
+        """Получить расширенный репозиторий"""
+        if self._order_repo_extended is None:
+            self._order_repo_extended = OrderRepositoryExtended(self.db.connection)
+        return self._order_repo_extended
 
     async def generate_daily_report(self) -> dict[str, Any]:
         """Генерирует ежедневный отчет"""
@@ -228,7 +236,7 @@ class ReportsService:
         }
 
     async def _get_closed_orders_list(self, start_date, end_date) -> list[dict[str, Any]]:
-        """Получает список закрытых заказов за период"""
+        """Получает список закрытых заказов за период с историей"""
         cursor = await self.db.connection.execute(
             """
             SELECT
@@ -258,11 +266,46 @@ class ReportsService:
 
         rows = await cursor.fetchall()
 
+        # Получаем расширенный репозиторий
+        order_repo = await self._get_extended_repo()
+
         orders_list = []
         for row in rows:
+            order_id = row["id"]
+
+            # Получаем историю статусов для каждой заявки
+            status_history = await order_repo.get_status_history(order_id)
+
+            # Считаем статистику по истории
+            history_stats = {
+                "total_changes": len(status_history),
+                "days_to_complete": 0,
+                "status_changes": [],
+            }
+
+            if status_history:
+                # Берем первые 3 изменения для отчета
+                history_stats["status_changes"] = [
+                    {
+                        "from": h["old_status"],
+                        "to": h["new_status"],
+                        "date": h["changed_at"],
+                        "changed_by": h.get("username", "Система"),
+                    }
+                    for h in status_history[:3]
+                ]
+
+                # Считаем дни от создания до закрытия
+                from datetime import datetime
+
+                if row["created_at"] and row["updated_at"]:
+                    created = datetime.fromisoformat(row["created_at"])
+                    updated = datetime.fromisoformat(row["updated_at"])
+                    history_stats["days_to_complete"] = (updated - created).days
+
             orders_list.append(
                 {
-                    "id": row["id"],
+                    "id": order_id,
                     "equipment_type": row["equipment_type"],
                     "client_name": row["client_name"],
                     "client_address": row["client_address"],
@@ -275,10 +318,43 @@ class ReportsService:
                     "has_review": bool(row["has_review"]),
                     "created_at": row["created_at"],
                     "closed_at": row["updated_at"],
+                    "history": history_stats,  # ✨ НОВОЕ: История изменений
                 }
             )
 
         return orders_list
+
+    async def _get_order_history_summary(self, order_id: int) -> str:
+        """
+        Получает краткую историю заявки для включения в отчет
+
+        Args:
+            order_id: ID заявки
+
+        Returns:
+            Текстовое описание истории
+        """
+        order_repo = await self._get_extended_repo()
+
+        try:
+            status_history = await order_repo.get_status_history(order_id)
+
+            if not status_history:
+                return "История изменений отсутствует"
+
+            # Формируем краткую историю
+            summary = f"Изменений: {len(status_history)}\n"
+
+            for i, h in enumerate(status_history[:3], 1):  # Первые 3 изменения
+                summary += f"  {i}. {h['changed_at'][:16]}: {h['old_status']} → {h['new_status']}\n"
+
+            if len(status_history) > 3:
+                summary += f"  ... и еще {len(status_history) - 3} изменений\n"
+
+            return summary
+        except Exception as e:
+            logger.error(f"Ошибка получения истории для заявки #{order_id}: {e}")
+            return "Ошибка получения истории"
 
     def format_report_to_text(self, report: dict[str, Any]) -> str:
         """Форматирует отчет в текстовый вид"""
@@ -340,13 +416,38 @@ class ReportsService:
         # Информация о детализации
         closed_orders = report.get("closed_orders", [])
         if closed_orders:
-            text += f"📋 Детальная информация по {len(closed_orders)} закрытым заказам доступна в Excel файле.\n"
+            text += f"📋 Детальная информация по {len(closed_orders)} закрытым заказам доступна в Excel файле.\n\n"
+
+            # ✨ НОВОЕ: Добавляем статистику по истории изменений
+            total_changes = sum(
+                order.get("history", {}).get("total_changes", 0) for order in closed_orders
+            )
+            avg_days = (
+                sum(order.get("history", {}).get("days_to_complete", 0) for order in closed_orders)
+                / len(closed_orders)
+                if closed_orders
+                else 0
+            )
+
+            text += "📊 ИСТОРИЯ ИЗМЕНЕНИЙ:\n"
+            text += f"• Всего изменений статусов: {total_changes}\n"
+            text += f"• Среднее время выполнения: {avg_days:.1f} дней\n\n"
+
+            # Показываем примеры быстрых и медленных заявок
+            orders_with_days = [
+                (o["id"], o.get("history", {}).get("days_to_complete", 0)) for o in closed_orders
+            ]
+            orders_with_days.sort(key=lambda x: x[1])
+
+            if orders_with_days:
+                fastest = orders_with_days[0]
+                slowest = orders_with_days[-1]
+                text += f"• Самая быстрая: #{fastest[0]} ({fastest[1]} дн.)\n"
+                text += f"• Самая долгая: #{slowest[0]} ({slowest[1]} дн.)\n"
 
         return text
 
-    async def save_report_to_file(
-        self, report: dict[str, Any], filename: str | None = None
-    ) -> str:
+    async def save_report_to_file(self, report: dict[str, Any], filename: str | None = None) -> str:
         """Сохраняет отчет в текстовый файл"""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

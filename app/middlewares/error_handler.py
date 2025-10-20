@@ -1,5 +1,6 @@
 """Global error handler"""
 import logging
+from typing import Any
 
 from aiogram.types import ErrorEvent
 
@@ -11,19 +12,19 @@ async def global_error_handler(event: ErrorEvent) -> bool:
     """Глобальная обработка всех необработанных исключений"""
 
     # Получаем детали об ошибке
-    error_details = {
+    error_details: dict[str, Any] = {
         "update_id": event.update.update_id if event.update else "unknown",
         "exception_type": type(event.exception).__name__,
         "exception_message": str(event.exception),
     }
 
     # Добавляем информацию о пользователе
-    if event.update.message:
+    if event.update.message and event.update.message.from_user:
         error_details["user_id"] = event.update.message.from_user.id
         error_details["username"] = event.update.message.from_user.username
         error_details["message_text"] = event.update.message.text
         error_details["chat_type"] = event.update.message.chat.type
-    elif event.update.callback_query:
+    elif event.update.callback_query and event.update.callback_query.from_user:
         error_details["user_id"] = event.update.callback_query.from_user.id
         error_details["username"] = event.update.callback_query.from_user.username
         error_details["callback_data"] = event.update.callback_query.data
