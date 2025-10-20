@@ -27,8 +27,16 @@ def backup_database(keep_days=30):
         keep_days: Количество дней для хранения копий (по умолчанию 30)
     """
 
-    db_file = "bot_database.db"
-    backup_dir = "backups"
+    # Поддержка Docker: используем переменную окружения или относительный путь
+    db_file = os.environ.get("DATABASE_PATH", "bot_database.db")
+    
+    # Если указан полный путь в DATABASE_PATH, используем его директорию для backups
+    if os.path.isabs(db_file):
+        # В Docker: /app/data/bot_database.db -> backups в /app/backups
+        backup_dir = "/app/backups"
+    else:
+        # Локально: bot_database.db -> backups в ./backups
+        backup_dir = "backups"
 
     # Проверка существования БД
     if not os.path.exists(db_file):

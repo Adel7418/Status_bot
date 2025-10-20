@@ -164,11 +164,11 @@ prod-migrate-check:  ## Проверить текущую версию мигр�
 	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic current
 
 prod-backup:  ## Создать backup БД в production (Docker)
-	@echo "💾 Создание backup БД..."
-	@echo "⚠️  Проверка наличия Docker..."
-	@docker --version > /dev/null 2>&1 || (echo "❌ Docker не установлен! Используйте: make backup" && exit 1)
+	@echo "💾 Создание backup БД в Docker..."
+	cd docker && docker compose -f docker-compose.prod.yml exec bot python scripts/backup_db.py || \
 	cd docker && docker compose -f docker-compose.prod.yml run --rm bot python scripts/backup_db.py
-	@echo "✅ Backup создан"
+	@echo "✅ Backup создан в volume bot_backups"
+	@echo "ℹ️  Для копирования на хост: docker cp telegram_repair_bot_prod:/app/backups ./backups"
 
 backup-local:  ## Создать backup БД локально (без Docker)
 	@echo "💾 Создание локального backup..."
