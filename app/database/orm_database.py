@@ -711,8 +711,10 @@ class ORMDatabase:
         materials_cost: float | None = None,
         master_profit: float | None = None,
         company_profit: float | None = None,
+        has_review: bool | None = None,
+        out_of_city: bool | None = None,
     ) -> bool:
-        """Обновление финансовых сумм заявки"""
+        """Обновление финансовых сумм и бонусов заявки"""
         async with self.get_session() as session:
             stmt = select(Order).where(Order.id == order_id)
             result = await session.execute(stmt)
@@ -731,6 +733,12 @@ class ORMDatabase:
                 order.master_profit = master_profit
             if company_profit is not None:
                 order.company_profit = company_profit
+            
+            # Обновляем бонусы
+            if has_review is not None:
+                order.has_review = has_review
+            if out_of_city is not None:
+                order.out_of_city = out_of_city
 
             order.updated_at = get_now()
             order.version += 1
