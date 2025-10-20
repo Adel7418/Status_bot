@@ -340,12 +340,16 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Возвращаем статус в NEW и убираем мастера
-        await db.connection.execute(
-            "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id),
-        )
-        await db.connection.commit()
+        # Возвращаем статус в NEW и убираем мастера (ORM compatible)
+        if hasattr(db, 'unassign_master_from_order'):
+            await db.unassign_master_from_order(order_id)
+        else:
+            # Legacy: прямой SQL
+            await db.connection.execute(
+                "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
+                (OrderStatus.NEW, order_id),
+            )
+            await db.connection.commit()
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -1412,13 +1416,13 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
         await state.clear()
 
 
-# ==================== ПРОСМОТР ЗАЯВОК МАСТЕРА ====================
+# ==================== EXCEL ОТЧЕТЫ ДЛЯ МАСТЕРОВ ====================
 
 
-@router.callback_query(F.data.startswith("master_orders_active:"))
-async def callback_master_orders_active(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("master_report_excel:"))
+async def callback_master_report_excel(callback: CallbackQuery):
     """
-    Просмотр активных заявок мастера
+    Генерация и отправка Excel отчета мастеру
     
     Args:
         callback: Callback query
@@ -1429,55 +1433,102 @@ async def callback_master_orders_active(callback: CallbackQuery):
     await db.connect()
     
     try:
-        # Проверяем, что мастер запрашивает свои заявки
+        # Проверяем, что мастер запрашивает свой отчет
         master = await db.get_master_by_telegram_id(callback.from_user.id)
         
         if not master or master.id != master_id:
-            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
+            await callback.answer("❌ Вы можете просматривать только свои отчеты", show_alert=True)
             return
         
-        # Получаем активные заявки (exclude_closed=True)
-        orders = await db.get_orders_by_master(master_id, exclude_closed=True)
+        await callback.answer("📊 Генерирую отчет...")
         
-        if not orders:
-            await callback.answer("📭 У вас нет активных заявок", show_alert=True)
+        await callback.message.edit_text(
+            "⏳ <b>Генерация Excel отчета...</b>\n\nПожалуйста, подождите.",
+            parse_mode="HTML"
+        )
+        
+        # Генерируем отчет
+        from app.services.master_reports import MasterReportsService
+        reports_service = MasterReportsService(db)
+        
+        excel_file = await reports_service.generate_master_report_excel(
+            master_id=master_id,
+            save_to_archive=False  # Не сохраняем в архив, это текущий отчет
+        )
+        
+        # Отправляем файл
+        await callback.message.answer_document(
+            document=excel_file,
+            caption=(
+                f"📊 <b>Ваш личный отчет</b>\n\n"
+                f"👤 Мастер: {master.get_display_name()}\n"
+                f"📅 Дата: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}\n\n"
+                f"В отчете 2 листа:\n"
+                f"• 📋 Активные заявки\n"
+                f"• ✅ Завершенные заявки"
+            ),
+            parse_mode="HTML"
+        )
+        
+        # Удаляем сообщение о генерации
+        await callback.message.delete()
+        
+        logger.info(f"Excel отчет отправлен мастеру {master_id}")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при генерации отчета для мастера {master_id}: {e}")
+        await callback.message.edit_text(
+            "❌ <b>Ошибка при генерации отчета</b>\n\n"
+            "Попробуйте еще раз позже или обратитесь к администратору.",
+            parse_mode="HTML"
+        )
+    finally:
+        await db.disconnect()
+
+
+@router.callback_query(F.data.startswith("master_reports_archive:"))
+async def callback_master_reports_archive(callback: CallbackQuery):
+    """
+    Просмотр архивных отчетов мастера
+    
+    Args:
+        callback: Callback query
+    """
+    master_id = int(callback.data.split(":")[1])
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Проверяем, что мастер запрашивает свои отчеты
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+        
+        if not master or master.id != master_id:
+            await callback.answer("❌ Вы можете просматривать только свои отчеты", show_alert=True)
             return
         
-        # Группируем по статусам
-        by_status = {}
-        for order in orders:
-            if order.status not in by_status:
-                by_status[order.status] = []
-            by_status[order.status].append(order)
+        # Получаем архивные отчеты
+        from app.services.master_reports import MasterReportsService
+        reports_service = MasterReportsService(db)
         
-        text = f"📋 <b>Активные заявки ({len(orders)}):</b>\n\n"
+        archived_reports = await reports_service.get_master_archived_reports(master_id, limit=10)
         
-        # Порядок отображения статусов
-        status_order = [
-            OrderStatus.ASSIGNED,
-            OrderStatus.ACCEPTED,
-            OrderStatus.ONSITE,
-            OrderStatus.DR,
-        ]
+        if not archived_reports:
+            await callback.answer(
+                "📭 У вас пока нет архивных отчетов.\n\n"
+                "Архивные отчеты создаются автоматически каждые 30 дней.",
+                show_alert=True
+            )
+            return
         
-        for status in status_order:
-            if status in by_status:
-                status_emoji = OrderStatus.get_status_emoji(status)
-                status_name = OrderStatus.get_status_name(status)
-                
-                text += f"<b>{status_emoji} {status_name} ({len(by_status[status])}):</b>\n"
-                
-                for order in by_status[status]:
-                    text += f"  • Заявка #{order.id} - {order.equipment_type}\n"
-                    if order.client_name:
-                        text += f"    👤 {order.client_name}\n"
-                    if order.scheduled_time:
-                        text += f"    ⏰ {order.scheduled_time}\n"
-                
-                text += "\n"
+        # Формируем сообщение
+        text = f"📚 <b>Архив отчетов</b>\n\n"
+        text += f"Всего отчетов: {len(archived_reports)}\n\n"
+        text += "Нажмите на отчет, чтобы скачать его:"
         
-        # Добавляем клавиатуру со списком заявок для детального просмотра
-        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
+        # Клавиатура с отчетами
+        from app.keyboards.inline import get_master_archived_reports_keyboard
+        keyboard = get_master_archived_reports_keyboard(archived_reports, master_id)
         
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
         
@@ -1487,127 +1538,64 @@ async def callback_master_orders_active(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("master_orders_closed:"))
-async def callback_master_orders_closed(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("download_archive_report:"))
+async def callback_download_archive_report(callback: CallbackQuery):
     """
-    Просмотр завершенных заявок мастера
+    Скачивание архивного отчета
     
     Args:
         callback: Callback query
     """
-    master_id = int(callback.data.split(":")[1])
+    # Парсим данные: report_id_master_id
+    data = callback.data.split(":")[1]
+    report_id, master_id = map(int, data.split("_"))
     
     db = Database()
     await db.connect()
     
     try:
-        # Проверяем, что мастер запрашивает свои заявки
+        # Проверяем права
         master = await db.get_master_by_telegram_id(callback.from_user.id)
         
         if not master or master.id != master_id:
-            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
+            await callback.answer("❌ Нет доступа к этому отчету", show_alert=True)
             return
         
-        # Получаем завершенные заявки
-        all_orders = await db.get_orders_by_master(master_id, exclude_closed=False)
-        orders = [o for o in all_orders if o.status == OrderStatus.CLOSED]
+        await callback.answer("📥 Загружаю отчет...")
         
-        if not orders:
-            await callback.answer("📭 У вас пока нет завершенных заявок", show_alert=True)
+        # Получаем файл отчета
+        from app.services.master_reports import MasterReportsService
+        reports_service = MasterReportsService(db)
+        
+        excel_file = await reports_service.get_archived_report_file(report_id, master_id)
+        
+        if not excel_file:
+            await callback.answer("❌ Файл отчета не найден", show_alert=True)
             return
         
-        text = f"✅ <b>Завершенные заявки ({len(orders)}):</b>\n\n"
+        # Получаем информацию об отчете
+        report = await db.get_master_report_archive_by_id(report_id)
         
-        # Показываем последние 15 завершенных заявок
-        for order in orders[:15]:
-            text += f"• Заявка #{order.id}\n"
-            text += f"  🔧 {order.equipment_type}\n"
-            if order.client_name:
-                text += f"  👤 {order.client_name}\n"
-            if order.total_amount:
-                text += f"  💰 {order.total_amount:.2f} ₽\n"
-            if order.updated_at:
-                from app.utils import format_datetime
-                text += f"  📅 {format_datetime(order.updated_at)}\n"
-            text += "\n"
+        caption = (
+            f"📚 <b>Архивный отчет</b>\n\n"
+            f"📅 Период: {report.period_start.strftime('%d.%m.%Y')} - {report.period_end.strftime('%d.%m.%Y')}\n"
+            f"📋 Заявок: {report.total_orders}\n"
+            f"✅ Завершено: {report.completed_orders}\n"
+            f"💰 Выручка: {report.total_revenue:.2f} ₽"
+        )
         
-        if len(orders) > 15:
-            text += f"\n<i>Показано 15 из {len(orders)} завершенных заявок</i>"
+        # Отправляем файл
+        await callback.message.answer_document(
+            document=excel_file,
+            caption=caption,
+            parse_mode="HTML"
+        )
         
-        # Добавляем клавиатуру для детального просмотра
-        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
+        logger.info(f"Архивный отчет {report_id} отправлен мастеру {master_id}")
         
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-        
-    finally:
-        await db.disconnect()
-    
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("master_orders_all:"))
-async def callback_master_orders_all(callback: CallbackQuery):
-    """
-    Просмотр всех заявок мастера
-    
-    Args:
-        callback: Callback query
-    """
-    master_id = int(callback.data.split(":")[1])
-    
-    db = Database()
-    await db.connect()
-    
-    try:
-        # Проверяем, что мастер запрашивает свои заявки
-        master = await db.get_master_by_telegram_id(callback.from_user.id)
-        
-        if not master or master.id != master_id:
-            await callback.answer("❌ Вы можете просматривать только свои заявки", show_alert=True)
-            return
-        
-        # Получаем все заявки
-        orders = await db.get_orders_by_master(master_id, exclude_closed=False)
-        
-        if not orders:
-            await callback.answer("📭 У вас пока нет заявок", show_alert=True)
-            return
-        
-        # Группируем по статусам
-        by_status = {}
-        for order in orders:
-            if order.status not in by_status:
-                by_status[order.status] = []
-            by_status[order.status].append(order)
-        
-        text = f"📊 <b>Все заявки ({len(orders)}):</b>\n\n"
-        
-        # Статистика по статусам
-        text += "<b>По статусам:</b>\n"
-        for status, count in sorted(by_status.items(), key=lambda x: -len(x[1])):
-            status_emoji = OrderStatus.get_status_emoji(status)
-            status_name = OrderStatus.get_status_name(status)
-            text += f"  {status_emoji} {status_name}: {len(count)}\n"
-        
-        text += "\n<b>Последние 15 заявок:</b>\n\n"
-        
-        # Показываем последние 15 заявок
-        for order in orders[:15]:
-            status_emoji = OrderStatus.get_status_emoji(order.status)
-            text += f"{status_emoji} Заявка #{order.id}\n"
-            text += f"  🔧 {order.equipment_type}\n"
-            if order.client_name:
-                text += f"  👤 {order.client_name}\n"
-            text += "\n"
-        
-        if len(orders) > 15:
-            text += f"\n<i>Показано 15 из {len(orders)} заявок</i>"
-        
-        # Добавляем клавиатуру для детального просмотра
-        keyboard = get_order_list_keyboard(orders[:20], for_master=True)
-        
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-        
+    except Exception as e:
+        logger.exception(f"Ошибка при загрузке архивного отчета {report_id}: {e}")
+        await callback.answer("❌ Ошибка при загрузке отчета", show_alert=True)
     finally:
         await db.disconnect()
     

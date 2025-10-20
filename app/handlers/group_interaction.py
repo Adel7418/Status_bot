@@ -208,12 +208,16 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Возвращаем статус в NEW и убираем мастера
-        await db.connection.execute(
-            "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-            (OrderStatus.NEW, order_id),
-        )
-        await db.connection.commit()
+        # Возвращаем статус в NEW и убираем мастера (ORM compatible)
+        if hasattr(db, 'unassign_master_from_order'):
+            await db.unassign_master_from_order(order_id)
+        else:
+            # Legacy: прямой SQL
+            await db.connection.execute(
+                "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
+                (OrderStatus.NEW, order_id),
+            )
+            await db.connection.commit()
 
         # Добавляем в лог
         await db.add_audit_log(
