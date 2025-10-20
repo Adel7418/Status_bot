@@ -458,6 +458,7 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
 
 
 @router.callback_query(F.data == "report_active_orders_excel")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
 @handle_errors
 async def callback_report_active_orders_excel(callback: CallbackQuery, user_role: str):
     """
@@ -467,9 +468,6 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
         callback: Callback query
         user_role: Роль пользователя
     """
-    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
-        await callback.answer("❌ Нет доступа", show_alert=True)
-        return
 
     await callback.answer("📊 Генерирую отчет...", show_alert=False)
 
