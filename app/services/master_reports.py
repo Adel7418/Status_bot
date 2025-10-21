@@ -5,7 +5,6 @@
 import logging
 import os
 from datetime import UTC, datetime
-from io import BytesIO
 from pathlib import Path
 
 import aiofiles
@@ -47,9 +46,11 @@ class MasterReportsService:
         """
         Генерация Excel отчета для мастера с двумя листами
 
+        Файл сохраняется на диск с постоянным именем и обновляется при каждом запросе.
+
         Args:
             master_id: ID мастера
-            save_to_archive: Сохранить в архив
+            save_to_archive: Создать архивную копию с timestamp
             period_start: Начало периода (для архивных отчетов)
             period_end: Конец периода (для архивных отчетов)
 
@@ -88,18 +89,20 @@ class MasterReportsService:
         await self._fill_active_orders_sheet(ws_active, active_orders, master)
         await self._fill_completed_orders_sheet(ws_completed, completed_orders, master)
 
-        # Сохраняем в BytesIO
-        excel_file = BytesIO()
-        wb.save(excel_file)
-        excel_file.seek(0)
+        # Постоянное имя файла (без timestamp) - будет обновляться при каждом запросе
+        filename = f"master_{master_id}_report.xlsx"
+        file_path = self.reports_dir / filename
 
-        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        filename = f"master_{master_id}_report_{timestamp}.xlsx"
+        # Сохраняем/обновляем файл на диске
+        wb.save(file_path)
+        logger.info(f"Отчет для мастера {master_id} обновлен: {filename}")
 
-        # Сохраняем в архив если нужно
+        # Если нужна архивная копия (для ежемесячных отчетов)
         if save_to_archive:
-            file_path = self.reports_dir / filename
-            wb.save(file_path)
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            archive_filename = f"master_{master_id}_report_{timestamp}.xlsx"
+            archive_path = self.reports_dir / archive_filename
+            wb.save(archive_path)
 
             # Подсчитываем статистику
             total_revenue = sum(o.total_amount or 0 for o in completed_orders)
@@ -111,22 +114,28 @@ class MasterReportsService:
                 if all_orders
                 else datetime.now(UTC),
                 period_end=period_end or datetime.now(UTC),
-                file_path=str(file_path),
-                file_name=filename,
-                file_size=os.path.getsize(file_path),
+                file_path=str(archive_path),
+                file_name=archive_filename,
+                file_size=os.path.getsize(archive_path),
                 total_orders=len(all_orders),
                 active_orders=len(active_orders),
                 completed_orders=len(completed_orders),
                 total_revenue=total_revenue,
                 created_at=datetime.now(UTC),
-                notes="Автоматически созданный отчет за период",
+                notes="Автоматически созданный архивный отчет за период",
             )
 
             await self.db.save_master_report_archive(archive_record)
 
-            logger.info(f"Архивный отчет для мастера {master_id} сохранен: {filename}")
+            logger.info(
+                f"Архивная копия отчета для мастера {master_id} сохранена: {archive_filename}"
+            )
 
-        return BufferedInputFile(excel_file.read(), filename=filename)
+        # Читаем файл с диска и возвращаем
+        async with aiofiles.open(file_path, "rb") as f:
+            file_data = await f.read()
+
+        return BufferedInputFile(file_data, filename=filename)
 
     async def _fill_active_orders_sheet(self, ws, orders, master):
         """Заполнение листа активных заявок"""
@@ -148,10 +157,11 @@ class MasterReportsService:
         ws["A1"].font = Font(bold=True, size=14)
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-        # Дата создания отчета
+        # Дата последнего обновления
         ws.merge_cells("A2:H2")
-        ws["A2"] = f"Дата создания: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
+        ws["A2"] = f"📅 Последнее обновление: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')} (UTC)"
         ws["A2"].alignment = Alignment(horizontal="center")
+        ws["A2"].font = Font(italic=True, color="666666")
 
         # Заголовки столбцов
         headers = [
@@ -224,10 +234,11 @@ class MasterReportsService:
         ws["A1"].font = Font(bold=True, size=14, color="28a745")
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-        # Дата создания отчета
+        # Дата последнего обновления
         ws.merge_cells("A2:J2")
-        ws["A2"] = f"Дата создания: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
+        ws["A2"] = f"📅 Последнее обновление: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')} (UTC)"
         ws["A2"].alignment = Alignment(horizontal="center")
+        ws["A2"].font = Font(italic=True, color="666666")
 
         # Заголовки столбцов
         headers = [
