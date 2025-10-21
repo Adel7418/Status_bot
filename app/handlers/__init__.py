@@ -10,6 +10,7 @@ from app.handlers.dispatcher import router as dispatcher_router
 from app.handlers.financial_reports import router as financial_reports_router
 from app.handlers.group_interaction import router as group_router
 from app.handlers.master import router as master_router
+from app.handlers.order_edit import router as order_edit_router
 
 
 # Список всех роутеров
@@ -17,6 +18,7 @@ from app.handlers.master import router as master_router
 # developer_router первым для команд разработчика (только для админов)
 # financial_reports_router ПЕРЕД dispatcher_router, чтобы перехватывать кнопку "📊 Отчеты"
 # admin_history_router для работы с историей заявок
+# order_edit_router для редактирования заявок
 routers = [
     developer_router,
     admin_router,
@@ -24,6 +26,7 @@ routers = [
     financial_reports_router,
     dispatcher_router,
     master_router,
+    order_edit_router,  # Редактирование заявок
     group_router,
     common_router,
 ]

@@ -1148,6 +1148,44 @@ class Database:
 
         return history
 
+    async def update_order_field(self, order_id: int, field: str, value: str | None) -> bool:
+        """
+        Обновление отдельного поля заявки
+
+        Args:
+            order_id: ID заявки
+            field: Название поля
+            value: Новое значение
+
+        Returns:
+            True если успешно обновлено
+
+        Raises:
+            ValueError: Если поле не может быть обновлено
+        """
+        # Список разрешенных для обновления полей
+        allowed_fields = {
+            "equipment_type",
+            "description",
+            "client_name",
+            "client_address",
+            "client_phone",
+            "notes",
+            "scheduled_time",
+        }
+
+        if field not in allowed_fields:
+            raise ValueError(f"Поле {field} не может быть обновлено через этот метод")
+
+        await self.connection.execute(
+            f"UPDATE orders SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608
+            (value, order_id),
+        )
+        await self.connection.commit()
+
+        logger.info("Order #%d: field '%s' updated", order_id, field)
+        return True
+
     async def assign_master_to_order(
         self, order_id: int, master_id: int, user_roles: list[str] | None = None
     ) -> bool:

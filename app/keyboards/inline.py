@@ -188,13 +188,13 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
-            # TODO: Реализовать функционал редактирования заявок
-            # builder.row(
-            #     InlineKeyboardButton(
-            #         text="✏️ Редактировать",
-            #         callback_data=create_callback_data("edit_order", order.id),
-            #     )
-            # )
+            # Кнопка редактирования заявки
+            builder.row(
+                InlineKeyboardButton(
+                    text="✏️ Редактировать",
+                    callback_data=create_callback_data("edit_order", order.id),
+                )
+            )
 
             # Кнопку "Закрыть заявку" убрали - теперь админ завершает через "Завершить (за мастера)"
             # которая запускает правильный процесс с запросом суммы и материалов
@@ -326,13 +326,13 @@ def get_master_stats_keyboard(master_id: int) -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(
             text="📥 Скачать Excel отчет",
-            callback_data=create_callback_data("master_report_excel", str(master_id))
+            callback_data=create_callback_data("master_report_excel", str(master_id)),
         )
     )
     builder.row(
         InlineKeyboardButton(
             text="📚 Архив отчетов (за 30 дней)",
-            callback_data=create_callback_data("master_reports_archive", str(master_id))
+            callback_data=create_callback_data("master_reports_archive", str(master_id)),
         )
     )
 
@@ -361,7 +361,9 @@ def get_master_archived_reports_keyboard(reports: list, master_id: int) -> Inlin
         builder.row(
             InlineKeyboardButton(
                 text=button_text,
-                callback_data=create_callback_data("download_archive_report", f"{report.id}_{master_id}")
+                callback_data=create_callback_data(
+                    "download_archive_report", f"{report.id}_{master_id}"
+                ),
             )
         )
 
