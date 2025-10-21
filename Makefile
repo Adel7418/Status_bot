@@ -2,7 +2,7 @@
 # Makefile для Telegram Repair Bot
 # ========================================
 
-.PHONY: help install test lint clean run
+.PHONY: help install test lint run
 
 # ========================================
 # HELP
@@ -42,13 +42,6 @@ format:  ## Отформатировать код
 
 pre-commit:  ## Запустить pre-commit
 	pre-commit run --all-files
-
-clean:  ## Очистить кэши
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf htmlcov/ dist/ build/
 
 # ========================================
 # DATABASE MIGRATIONS (local)
@@ -117,12 +110,6 @@ prod-deploy:  ## Полный деплой с пересборкой
 	@docker compose -f docker/docker-compose.prod.yml logs --tail=20
 	@echo ""
 	@echo "💡 Для просмотра логов в реальном времени: make prod-logs"
-
-prod-clean:  ## Очистить и перезапустить
-	@echo "🧹 Очистка..."
-	docker compose -f docker/docker-compose.prod.yml down -v
-	docker system prune -f
-	@echo "✅ Очищено"
 
 prod-backup:  ## Создать backup БД
 	@echo "💾 Создание backup..."
