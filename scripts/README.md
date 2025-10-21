@@ -80,24 +80,6 @@ python scripts/check_tables.py
 
 ---
 
-### **Безопасность и шифрование:**
-
-#### `test_encryption.py`
-Проверка работы шифрования данных и генерация ключей.
-```bash
-python scripts/test_encryption.py
-```
-
-#### `check_encryption_in_db.py`
-Проверка зашифрованных данных в базе данных.
-```bash
-python scripts/check_encryption_in_db.py
-```
-
-**См. также:** `КАК_ПРОВЕРИТЬ_ШИФРОВАНИЕ.md` и `docs/ENCRYPTION_GUIDE.md`
-
----
-
 ### **Импорт/Экспорт:**
 
 #### `export_db.py`
@@ -131,8 +113,6 @@ scripts/
 ├── check_tables.py                 # Проверка таблиц
 ├── export_db.py                    # Экспорт данных
 ├── import_db.py                    # Импорт данных
-├── test_encryption.py              # Тестирование шифрования
-├── check_encryption_in_db.py       # Проверка шифрования в БД
 └── README.md                       # Эта документация
 ```
 
@@ -167,12 +147,6 @@ python scripts/check_database.py
 
 # Создать бэкап
 python scripts/backup_db.py
-
-# Проверить шифрование
-python scripts/test_encryption.py
-
-# Проверить зашифрованные данные в БД
-python scripts/check_encryption_in_db.py
 ```
 
 ---
@@ -184,4 +158,4 @@ python scripts/check_encryption_in_db.py
 
 ---
 
-**Всего скриптов: 16** (удалено 24 устаревших, добавлено 2 для шифрования)
+**Всего скриптов: 14** (удалено 24 устаревших)
