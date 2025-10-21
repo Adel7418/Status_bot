@@ -1707,14 +1707,11 @@ async def callback_edit_dr_details(callback: CallbackQuery, state: FSMContext, u
             )
             return
 
-        # Проверяем права (мастер или админ/диспетчер)
+        # Проверяем права - только админы и диспетчеры могут редактировать
         from app.config import UserRole
-
-        master = await db.get_master_by_telegram_id(callback.from_user.id)
-
-        # Мастер может редактировать только свои заявки
-        if UserRole.MASTER in user_roles and (not master or order.assigned_master_id != master.id):
-            await callback.answer("Это не ваша заявка", show_alert=True)
+        
+        if UserRole.ADMIN not in user_roles and UserRole.DISPATCHER not in user_roles:
+            await callback.answer("❌ Только администраторы и диспетчеры могут редактировать детали длительного ремонта", show_alert=True)
             return
 
         # Сохраняем order_id в state
@@ -1784,13 +1781,11 @@ async def process_edit_dr_details(message: Message, state: FSMContext, user_role
     try:
         order = await db.get_order_by_id(order_id)
 
-        # Проверяем права
+        # Проверяем права - только админы и диспетчеры
         from app.config import UserRole
-
-        master = await db.get_master_by_telegram_id(message.from_user.id)
-
-        if UserRole.MASTER in user_roles and (not master or order.assigned_master_id != master.id):
-            await message.reply("❌ Это не ваша заявка")
+        
+        if UserRole.ADMIN not in user_roles and UserRole.DISPATCHER not in user_roles:
+            await message.reply("❌ Только администраторы и диспетчеры могут редактировать детали длительного ремонта")
             await state.clear()
             return
 
@@ -1865,7 +1860,10 @@ async def process_edit_dr_details(message: Message, state: FSMContext, user_role
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
-            initiator_name = master.get_display_name() if master else message.from_user.full_name
+            # Получаем имя мастера для уведомления
+            master = await db.get_master_by_id(order.assigned_master_id) if order.assigned_master_id else None
+            master_name = master.get_display_name() if master else "Неизвестен"
+            initiator_name = message.from_user.full_name or "Администратор"
 
             notification = f"✏️ <b>Обновлены детали длительного ремонта</b>\n\n📋 Заявка #{order_id}\n👨‍🔧 {initiator_name}\n\n"
 

@@ -186,6 +186,12 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_complete_order", order.id),
                     )
                 )
+                builder.row(
+                    InlineKeyboardButton(
+                        text="✏️ Редактировать срок/предоплату",
+                        callback_data=create_callback_data("edit_dr_details", order.id),
+                    )
+                )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
             # Кнопка редактирования заявки
@@ -250,17 +256,11 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 ),
             )
         elif order.status == OrderStatus.DR:
-            # Для заявок в длительном ремонте - можно завершить или редактировать
+            # Для заявок в длительном ремонте - можно только завершить
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Завершить ремонт",
                     callback_data=create_callback_data("complete_order", order.id),
-                )
-            )
-            builder.row(
-                InlineKeyboardButton(
-                    text="✏️ Редактировать срок/предоплату",
-                    callback_data=create_callback_data("edit_dr_details", order.id),
                 )
             )
 
