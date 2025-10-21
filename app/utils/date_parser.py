@@ -36,8 +36,19 @@ def _preprocess_time_text(text: str) -> str:
 
         >>> _preprocess_time_text("через полчаса")
         "через 30 минут"
+
+        >>> _preprocess_time_text("после завтра")
+        "послезавтра"
     """
     text_lower = text.lower()
+
+    # Замена "после завтра" на "послезавтра" для единообразия
+    text_lower = re.sub(r"\bпосле\s+завтра\b", "послезавтра", text_lower)
+    text_lower = re.sub(r"\bна\s+после\s+завтра\b", "послезавтра", text_lower)
+    text_lower = re.sub(r"\bна\s+послезавтра\b", "послезавтра", text_lower)
+
+    # Замена "на завтра" на "завтра"
+    text_lower = re.sub(r"\bна\s+завтра\b", "завтра", text_lower)
 
     # Замена "через час" на "через 1 час"
     text_lower = re.sub(r"\bчерез\s+час\b", "через 1 час", text_lower)
@@ -287,6 +298,10 @@ def should_parse_as_date(text: str) -> bool:
     date_keywords = [
         "завтра",
         "послезавтра",
+        "после завтра",  # Вариант через пробел
+        "на завтра",  # Вариант с предлогом
+        "на послезавтра",
+        "на после завтра",
         "через",
         "сегодня",
         "в",
