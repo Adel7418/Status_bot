@@ -822,6 +822,23 @@ async def btn_my_stats(message: Message):
             await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
             return
 
+        # Проверяем, что у мастера настроена рабочая группа
+        if not master.work_chat_id:
+            await message.answer(
+                "❌ У вас не настроена рабочая группа!\n"
+                "Обратитесь к администратору для настройки.",
+                parse_mode="HTML",
+            )
+            return
+
+        # Проверяем, что мастер работает в своей рабочей группе
+        if message.chat.id != master.work_chat_id:
+            await message.answer(
+                "❌ Вы можете просматривать статистику только в своей рабочей группе!",
+                parse_mode="HTML",
+            )
+            return
+
         # Получаем все заявки мастера
         orders = await db.get_orders_by_master(master.id, exclude_closed=False)
 
