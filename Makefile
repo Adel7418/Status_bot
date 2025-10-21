@@ -162,3 +162,28 @@ check-role:  ## Проверить роль (make check-role ID=123456)
 
 set-role:  ## Установить роль (make set-role ID=123456 ROLE=ADMIN)
 	python scripts/set_user_role.py $(ID) $(ROLE)
+
+# ========================================
+# SECURITY & ENCRYPTION
+# ========================================
+
+test-encryption:  ## Проверить работу шифрования
+	@echo "🔐 Проверка шифрования..."
+	python scripts/test_encryption.py
+
+check-encryption-db:  ## Проверить зашифрованные данные в БД
+	@echo "🔐 Проверка шифрования в БД..."
+	python scripts/check_encryption_in_db.py
+
+prod-install-deps:  ## Установить/обновить зависимости в контейнере
+	@echo "📦 Установка зависимостей в production контейнере..."
+	docker exec telegram_repair_bot_prod pip install -r /app/requirements.txt
+	@echo "✅ Зависимости установлены!"
+
+prod-test-encryption:  ## Проверить шифрование в production
+	@echo "🔐 Проверка шифрования в production..."
+	docker exec telegram_repair_bot_prod python /app/scripts/test_encryption.py
+
+prod-check-encryption:  ## Проверить зашифрованные данные в production БД
+	@echo "🔐 Проверка шифрования в production БД..."
+	docker exec telegram_repair_bot_prod python /app/scripts/check_encryption_in_db.py
