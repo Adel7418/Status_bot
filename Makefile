@@ -1,331 +1,168 @@
-# Makefile для упрощения команд разработки
+# ========================================
+# Makefile для Telegram Repair Bot
+# ========================================
 
-.PHONY: help install install-dev test lint format clean run migrate migrate-create docker-build docker-up docker-down docker-migrate
+.PHONY: help install test lint clean run
 
-help:  ## Показать эту справку
+# ========================================
+# HELP
+# ========================================
+
+help:  ## Показать справку
 	@echo "Доступные команды:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install:  ## Установить production зависимости
+# ========================================
+# LOCAL DEVELOPMENT
+# ========================================
+
+install:  ## Установить зависимости
 	pip install -r requirements.txt
 
-install-dev:  ## Установить все зависимости (включая dev)
+install-dev:  ## Установить dev зависимости
 	pip install -r requirements-dev.txt
 	pre-commit install
+
+run:  ## Запустить бота локально
+	python bot.py
 
 test:  ## Запустить тесты
 	pytest
 
-test-cov:  ## Запустить тесты с coverage
+test-cov:  ## Тесты с coverage
 	pytest --cov=app --cov-report=html --cov-report=term-missing
 
-lint:  ## Проверить код линтерами
+lint:  ## Проверить код
 	ruff check .
-	black --check .
 	mypy app/ --ignore-missing-imports
 
 format:  ## Отформатировать код
-	black .
 	ruff check --fix .
-	isort .
+	ruff format .
 
-pre-commit:  ## Запустить pre-commit hooks
+pre-commit:  ## Запустить pre-commit
 	pre-commit run --all-files
 
-clean:  ## Очистить временные файлы
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	find . -type d -name ".pytest_cache" -exec rm -rf {} +
-	find . -type d -name ".ruff_cache" -exec rm -rf {} +
-	find . -type d -name ".mypy_cache" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	find . -type f -name "*.pyo" -delete
-	find . -type f -name ".coverage" -delete
-	rm -rf htmlcov/
-	rm -rf dist/
-	rm -rf build/
+clean:  ## Очистить кэши
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf htmlcov/ dist/ build/
 
-run:  ## Запустить бота
-	python bot.py
+# ========================================
+# DATABASE MIGRATIONS (local)
+# ========================================
 
-migrate:  ## Применить миграции БД (локально, БЕЗ Docker)
-	@echo "⚠️  ВНИМАНИЕ: Остановите бота перед миграцией!"
-	@echo "⚠️  Нажмите Ctrl+C для отмены, Enter для продолжения..."
-	@read dummy
+migrate:  ## Применить миграции
 	alembic upgrade head
-	@echo "✅ Миграции применены"
-	@echo "ℹ️  Теперь можете запустить бота: make run"
 
-migrate-create:  ## Создать новую миграцию (использование: make migrate-create MSG="описание")
+migrate-create:  ## Создать миграцию (make migrate-create MSG="описание")
 	alembic revision --autogenerate -m "$(MSG)"
 
-migrate-history:  ## Показать историю миграций
+migrate-history:  ## История миграций
 	alembic history
 
-migrate-current:  ## Показать текущую версию БД
+migrate-current:  ## Текущая версия БД
 	alembic current
 
-migrate-downgrade:  ## Откатить одну миграцию
+migrate-rollback:  ## Откатить миграцию
 	alembic downgrade -1
 
-backup:  ## Создать backup базы данных (локально)
-	python scripts/backup_db.py
-	@echo "✅ Backup создан локально в папке backups/"
-
-check-db:  ## Проверить базу данных
-	python check_database.py
-
-sync-roles:  ## Синхронизировать роли из .env
-	python sync_roles_from_env.py
-
-docker-build:  ## Собрать Docker образ для production
-	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
-
-docker-up:  ## Запустить через Docker Compose (dev)
-	cd docker && docker compose -f docker-compose.yml up -d
-
-docker-up-dev:  ## Запустить в dev режиме
-	cd docker && docker compose -f docker-compose.dev.yml up
-
-docker-down:  ## Остановить Docker контейнеры (dev)
-	cd docker && docker compose -f docker-compose.yml down
-
-docker-down-dev:  ## Остановить Docker контейнеры (dev режим)
-	cd docker && docker compose -f docker-compose.dev.yml down
-
-docker-logs:  ## Показать логи Docker (dev)
-	cd docker && docker compose -f docker-compose.yml logs -f bot
-
-docker-restart:  ## Перезапустить Docker контейнеры (dev)
-	cd docker && docker compose -f docker-compose.yml restart
-
-docker-migrate:  ## Применить миграции через Docker [останавливает контейнеры]
-	@echo "⚠️  Останавливаем контейнеры перед миграцией..."
-	-cd docker && docker compose -f docker-compose.yml down
-	@echo "🔄 Применение миграций..."
-	cd docker && docker compose -f docker-compose.migrate.yml run --rm migrate
-	@echo "✅ Миграции применены"
-	@echo "⚠️  Не забудьте перезапустить: make docker-up"
-
-docker-clean:  ## Очистить Docker (удалить контейнеры и volumes)
-	cd docker && docker compose -f docker-compose.yml down -v
-	docker system prune -f
-
-venv:  ## Создать виртуальное окружение
-	python -m venv venv
-	@echo "Активируйте окружение:"
-	@echo "  Windows: venv\\Scripts\\activate"
-	@echo "  Linux/Mac: source venv/bin/activate"
-
-deps-update:  ## Обновить зависимости
-	pip install --upgrade pip
-	pip install --upgrade -r requirements.txt
-
-deps-check:  ## Проверить устаревшие зависимости
-	pip list --outdated
-
-security-check:  ## Проверка безопасности зависимостей
-	pip install safety
-	safety check
-	bandit -r app/
-
 # ========================================
-# PRODUCTION SERVER COMMANDS
-# Команды для использования НА production сервере
+# PRODUCTION (Docker на сервере)
 # ========================================
 
-prod-update:  ## Обновить код из git (на сервере)
-	@echo "🔄 Обновление кода из GitHub..."
-	git fetch origin
-	git pull origin main
-	@echo "✅ Код обновлен"
+prod-start:  ## 🚀 Запустить production бота
+	@echo "🚀 Запуск production бота..."
+	docker compose -f docker/docker-compose.prod.yml up -d --build
+	@echo "✅ Бот запущен!"
+	@echo "📋 Логи: make prod-logs"
 
-prod-stop:  ## Остановить production контейнеры
-	@echo "🛑 Остановка production контейнеров..."
-	@docker compose -f docker/docker-compose.prod.yml down || (cd docker && docker compose -f docker-compose.prod.yml down)
-	@echo "✅ Production контейнеры остановлены"
+prod-stop:  ## Остановить production
+	@echo "🛑 Остановка бота..."
+	docker compose -f docker/docker-compose.prod.yml down
+	@echo "✅ Остановлен"
 
-prod-migrate:  ## Применить миграции БД в production (Docker) [останавливает контейнеры]
-	@echo "⚠️  ВАЖНО: Останавливаем контейнеры перед миграцией..."
-	-@docker compose -f docker/docker-compose.prod.yml down || (cd docker && docker compose -f docker-compose.prod.yml down)
-	@echo "🔄 Применение миграций БД..."
-	@docker compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head || (cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic upgrade head)
-	@echo "✅ Миграции применены"
-	@echo "⚠️  Не забудьте перезапустить: make prod-restart или make prod-deploy"
-
-prod-migrate-stamp:  ## Пометить БД как готовую (для существующей БД без миграций)
-	@echo "📌 Установка версии миграции для существующей БД..."
-	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic stamp head
-	@echo "✅ БД помечена как готовая"
-	@echo "ℹ️  Теперь можете использовать: make prod-migrate"
-
-prod-migrate-check:  ## Проверить текущую версию миграции БД
-	@echo "🔍 Текущая версия миграции:"
-	cd docker && docker compose -f docker-compose.prod.yml run --rm bot alembic current
-
-prod-backup:  ## Создать backup БД в production (Docker)
-	@echo "💾 Создание backup БД в Docker..."
-	@docker exec telegram_repair_bot_prod python scripts/backup_db.py
-	@echo "✅ Backup создан в контейнере"
-	@echo "📦 Копирование backup на хост..."
-	@mkdir -p backups
-	@docker cp telegram_repair_bot_prod:/app/backups/. ./backups/
-	@echo "✅ Backup скопирован в ./backups/"
-	@ls -lh backups/ | tail -5
-
-backup-local:  ## Создать backup БД локально (без Docker)
-	@echo "💾 Создание локального backup..."
-	python scripts/backup_db.py
-	@echo "✅ Backup создан в папке backups/"
-
-prod-restart:  ## Перезапуск production бота (Docker)
+prod-restart:  ## Перезапустить production
 	@echo "🔄 Перезапуск бота..."
-	cd docker && docker compose -f docker-compose.prod.yml restart bot
-	@echo "✅ Бот перезапущен"
+	docker compose -f docker/docker-compose.prod.yml restart
+	@echo "✅ Перезапущен"
 
-prod-logs:  ## Показать логи production (Docker)
-	cd docker && docker compose -f docker-compose.prod.yml logs -f bot
+prod-logs:  ## Показать логи production
+	docker compose -f docker/docker-compose.prod.yml logs -f --tail=50
 
-prod-status:  ## Статус production контейнеров (Docker)
-	cd docker && docker compose -f docker-compose.prod.yml ps
+prod-status:  ## Статус контейнеров
+	docker compose -f docker/docker-compose.prod.yml ps
 
-prod-rebuild:  ## Пересобрать Docker образ с новым кодом
-	@echo "🔨 Пересборка Docker образа..."
-	cd docker && docker compose -f docker-compose.prod.yml build --no-cache bot
-	@echo "✅ Образ пересобран"
+prod-update:  ## Обновить код и перезапустить
+	@echo "🔄 Полное обновление..."
+	git pull
+	docker compose -f docker/docker-compose.prod.yml up -d --build
+	@echo "✅ Обновлено!"
 
-prod-deploy:  ## Полный деплой: pull + rebuild + restart (ГЛАВНАЯ КОМАНДА ДЛЯ DOCKER!)
-	@echo "🚀 Запуск полного деплоя..."
-	@echo "📥 1. Получение последнего кода..."
-	git pull origin main
-	@echo "🔨 2. Очистка build cache..."
-	docker builder prune -f
-	@echo "🔨 3. Пересборка Docker образа..."
-	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
-	@echo "🔄 4. Перезапуск всех сервисов (bot + redis)..."
-	cd docker && docker compose -f docker-compose.prod.yml up -d
-	@echo "✅ Деплой завершен! Проверьте логи: make prod-logs"
+prod-deploy:  ## Полный деплой с пересборкой
+	@echo "🚀 Полный деплой..."
+	git pull
+	docker compose -f docker/docker-compose.prod.yml down
+	docker compose -f docker/docker-compose.prod.yml up -d --build
+	@echo "✅ Деплой завершен!"
+	@make prod-logs
 
-prod-deploy-version:  ## Деплой конкретной версии (использование: make prod-deploy-version VERSION=v1.2.3)
-	@if [ -z "$(VERSION)" ]; then \
-		echo "❌ Ошибка: укажите версию"; \
-		echo "Использование: make prod-deploy-version VERSION=v1.2.3"; \
-		echo "Доступные версии: make git-tags"; \
-		exit 1; \
-	fi
-	@echo "🚀 Деплой версии $(VERSION)..."
-	@echo "📥 1. Получение версии $(VERSION)..."
-	git fetch --tags
-	git checkout tags/$(VERSION)
-	@echo "🔨 2. Очистка build cache..."
-	docker builder prune -f
-	@echo "🔨 3. Пересборка Docker образа..."
-	cd docker && docker compose -f docker-compose.prod.yml build --no-cache --pull bot
-	@echo "🔄 4. Перезапуск контейнера..."
-	cd docker && docker compose -f docker-compose.prod.yml up -d bot
-	@echo "✅ Версия $(VERSION) задеплоена! Проверьте логи: make prod-logs"
-	@echo "⚠️  Для возврата на main: git checkout main"
+prod-clean:  ## Очистить и перезапустить
+	@echo "🧹 Очистка..."
+	docker compose -f docker/docker-compose.prod.yml down -v
+	docker system prune -f
+	@echo "✅ Очищено"
 
-prod-deploy-script:  ## Деплой через скрипт (для non-Docker режима)
-	@echo "🚀 Запуск автоматического деплоя..."
-	chmod +x scripts/deploy_with_migrations.sh
-	./scripts/deploy_with_migrations.sh
+prod-backup:  ## Создать backup БД
+	@echo "💾 Создание backup..."
+	docker exec telegram_repair_bot_prod python scripts/backup_db.py
+	@mkdir -p backups
+	docker cp telegram_repair_bot_prod:/app/backups/. ./backups/
+	@echo "✅ Backup в ./backups/"
 
-prod-diagnose:  ## Диагностика проблем обновления
-	@echo "🔍 Запуск диагностики..."
-	chmod +x scripts/diagnose_update.sh
-	./scripts/diagnose_update.sh
+prod-shell:  ## Войти в контейнер
+	docker exec -it telegram_repair_bot_prod /bin/sh
 
-prod-full-update:  ## [УСТАРЕЛО] Используйте prod-deploy
-	@echo "⚠️  ВНИМАНИЕ: Эта команда устарела!"
-	@echo "ℹ️  Используйте вместо неё: make prod-deploy"
-	@echo ""
-	@echo "Запускаю prod-deploy через 3 секунды..."
-	@sleep 3
-	@make prod-deploy
-
-all: clean install-dev lint test  ## Выполнить всё: очистка, установка, линт, тесты
+prod-env:  ## Показать переменные окружения контейнера
+	@echo "🔍 Переменные окружения:"
+	@docker exec telegram_repair_bot_prod env | grep -E "BOT_TOKEN|LOG_LEVEL|DEV_MODE|USE_ORM|ADMIN_IDS|DATABASE_PATH|REDIS_URL" | sort
 
 # ========================================
-# GIT COMMANDS
-# Команды для работы с Git
+# GIT SHORTCUTS
 # ========================================
 
-git-status:  ## Показать статус Git
-	@git status
-
-git-add:  ## Добавить все изменения
-	@git add -A
-	@echo "✅ Все изменения добавлены"
-	@git status
-
-git-commit:  ## Коммит (использование: make git-commit MSG="описание")
+git-save:  ## Быстрое сохранение (make git-save MSG="описание")
 	@if [ -z "$(MSG)" ]; then \
-		echo "❌ Ошибка: укажите сообщение коммита"; \
-		echo "Использование: make git-commit MSG=\"ваше сообщение\""; \
+		echo "❌ Укажите MSG=\"описание\""; \
 		exit 1; \
 	fi
-	@git commit -m "$(MSG)"
-	@echo "✅ Коммит создан"
+	git add -A
+	git commit -m "$(MSG)"
+	git push
 
-git-push:  ## Отправить изменения в репозиторий
-	@echo "🚀 Отправка изменений в GitHub..."
-	@git push origin main
-	@echo "✅ Изменения отправлены"
+git-pull:  ## Получить изменения
+	git pull
 
-git-pull:  ## Получить изменения из репозитория
-	@echo "⬇️  Получение изменений из GitHub..."
-	@git pull origin main
-	@echo "✅ Изменения получены"
+git-status:  ## Статус git
+	git status
 
-git-save:  ## Быстрое сохранение: add + commit + push (использование: make git-save MSG="описание")
-	@if [ -z "$(MSG)" ]; then \
-		echo "❌ Ошибка: укажите сообщение коммита"; \
-		echo "Использование: make git-save MSG=\"ваше сообщение\""; \
-		exit 1; \
-	fi
-	@echo "📝 Добавление изменений..."
-	@git add -A
-	@echo "💾 Создание коммита..."
-	@git commit -m "$(MSG)"
-	@echo "🚀 Отправка в GitHub..."
-	@git push origin main
-	@echo "✅ Всё готово!"
+git-log:  ## Последние 10 коммитов
+	git log --oneline -10
 
-git-log:  ## Показать последние 10 коммитов
-	@git log --oneline -10
+# ========================================
+# UTILITIES
+# ========================================
 
-git-diff:  ## Показать изменения
-	@git diff
+backup:  ## Backup БД локально
+	python scripts/backup_db.py
 
-git-branch:  ## Показать текущую ветку
-	@git branch
+check-db:  ## Проверить БД
+	python scripts/check_database.py
 
-git-tag:  ## Создать тэг версии (использование: make git-tag VERSION=v1.2.3)
-	@if [ -z "$(VERSION)" ]; then \
-		echo "❌ Ошибка: укажите версию"; \
-		echo "Использование: make git-tag VERSION=v1.2.3"; \
-		exit 1; \
-	fi
-	@echo "🏷️  Создание тэга $(VERSION)..."
-	@git tag -a $(VERSION) -m "Release $(VERSION)"
-	@git push origin $(VERSION)
-	@echo "✅ Тэг $(VERSION) создан и отправлен в GitHub"
+check-role:  ## Проверить роль (make check-role ID=123456)
+	python scripts/check_user_role.py $(ID)
 
-git-tags:  ## Показать все тэги
-	@echo "🏷️  Список версий:"
-	@git tag -l
-
-git-release:  ## Полный релиз: add + commit + push + tag (использование: make git-release VERSION=v1.2.3 MSG="описание")
-	@if [ -z "$(VERSION)" ] || [ -z "$(MSG)" ]; then \
-		echo "❌ Ошибка: укажите версию и сообщение"; \
-		echo "Использование: make git-release VERSION=v1.2.3 MSG=\"описание релиза\""; \
-		exit 1; \
-	fi
-	@echo "📦 Подготовка релиза $(VERSION)..."
-	@git add -A
-	@git commit -m "$(MSG)"
-	@git push origin main
-	@git tag -a $(VERSION) -m "Release $(VERSION): $(MSG)"
-	@git push origin $(VERSION)
-	@echo "✅ Релиз $(VERSION) готов и отправлен!"
+set-role:  ## Установить роль (make set-role ID=123456 ROLE=ADMIN)
+	python scripts/set_user_role.py $(ID) $(ROLE)
