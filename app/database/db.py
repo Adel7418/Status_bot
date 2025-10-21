@@ -570,7 +570,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row and row["work_chat_id"] is not None
+                    if row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
@@ -611,7 +611,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row and row["work_chat_id"] is not None
+                    if row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
@@ -652,7 +652,7 @@ class Database:
                 is_approved=bool(row["is_approved"]),
                 work_chat_id=(
                     row["work_chat_id"]
-                    if "work_chat_id" in row and row["work_chat_id"] is not None
+                    if row["work_chat_id"] is not None
                     else None
                 ),
                 created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
