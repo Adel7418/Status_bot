@@ -42,6 +42,8 @@ EDITABLE_FIELDS = {
     "client_phone": "📞 Телефон",
     "notes": "📋 Заметки",
     "scheduled_time": "⏰ Время прибытия",
+    "estimated_completion_date": "📅 Срок окончания (DR)",
+    "prepayment_amount": "💰 Предоплата (DR)",
 }
 
 
@@ -111,6 +113,11 @@ async def callback_edit_order(callback: CallbackQuery, state: FSMContext, user_r
         builder = InlineKeyboardBuilder()
 
         for field_key, field_name in EDITABLE_FIELDS.items():
+            # Показываем поля DR только для заявок в статусе DR
+            if field_key in ["estimated_completion_date", "prepayment_amount"]:
+                if order.status != OrderStatus.DR:
+                    continue  # Пропускаем DR поля для других статусов
+            
             builder.row(
                 InlineKeyboardButton(
                     text=field_name,
@@ -201,6 +208,24 @@ async def callback_select_field(callback: CallbackQuery, state: FSMContext, user
         elif field == "notes":
             prompt += f"<i>Максимум {MAX_NOTES_LENGTH} символов. Для очистки введите '-'</i>"
 
+        elif field == "estimated_completion_date":
+            prompt += (
+                "<b>🤖 Примеры:</b>\n"
+                "• <code>завтра в 15:00</code>\n"
+                "• <code>через 3 дня</code>\n"
+                "• <code>через неделю</code>\n"
+                "• <code>20.10.2025</code>\n\n"
+                "<i>Для очистки введите '-'</i>"
+            )
+
+        elif field == "prepayment_amount":
+            prompt += (
+                "<b>Примеры:</b>\n"
+                "• <code>2000</code>\n"
+                "• <code>1500.50</code>\n\n"
+                "<i>Для очистки введите '-' или '0'</i>"
+            )
+
         elif field == "scheduled_time":
             prompt += (
                 "<b>🤖 Автоопределение даты (на русском):</b>\n"
@@ -280,7 +305,9 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str)
     new_value = message.text.strip()
 
     # Специальная обработка для очистки поля
-    if new_value == "-" and field in ["notes", "scheduled_time"]:
+    if new_value == "-" and field in ["notes", "scheduled_time", "estimated_completion_date"]:
+        new_value = None
+    if (new_value == "-" or new_value == "0") and field == "prepayment_amount":
         new_value = None
 
     # Валидация нового значения
@@ -477,5 +504,43 @@ async def validate_field_value(field: str, value: str | None, message: Message):
         if len(value) > 150:
             raise ValueError("Время/инструкция слишком длинные (максимум 150 символов)")
         return value
+
+    if field == "estimated_completion_date":
+        # Автоопределение даты для срока окончания DR
+        if should_parse_as_date(value):
+            parsed_dt, _ = parse_natural_datetime(value, validate=True)
+
+            if parsed_dt:
+                validation = validate_parsed_datetime(parsed_dt, value)
+
+                # Успешно распознали дату
+                formatted_date = parsed_dt.strftime("%d.%m.%Y %H:%M")
+                user_friendly = format_datetime_user_friendly(parsed_dt, value)
+
+                logger.info(f"Автоопределение срока DR: '{value}' -> '{formatted_date}'")
+
+                confirmation_text = f"✅ <b>Срок окончания распознан:</b>\n\n{user_friendly}"
+
+                if validation.get("warning"):
+                    confirmation_text += f"\n\n⚠️ <i>{validation['warning']}</i>"
+
+                await message.answer(confirmation_text, parse_mode="HTML")
+
+                return formatted_date
+
+        # Если не распознали - сохраняем как текст
+        return value
+
+    if field == "prepayment_amount":
+        # Валидация предоплаты
+        try:
+            amount = float(value.replace(",", "."))
+            if amount < 0:
+                raise ValueError("Предоплата не может быть отрицательной")
+            if amount > 1000000:
+                raise ValueError("Предоплата слишком большая (максимум 1 000 000 ₽)")
+            return amount
+        except ValueError:
+            raise ValueError("Неверный формат суммы. Используйте число, например: 2000 или 1500.50")
 
     return value

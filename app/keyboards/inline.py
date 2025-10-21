@@ -186,12 +186,6 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_complete_order", order.id),
                     )
                 )
-                builder.row(
-                    InlineKeyboardButton(
-                        text="✏️ Редактировать срок/предоплату",
-                        callback_data=create_callback_data("edit_dr_details", order.id),
-                    )
-                )
 
         if order.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
             # Кнопка редактирования заявки
@@ -448,13 +442,13 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
             callback_data=create_callback_data("filter_orders", OrderStatus.DR),
         ),
     )
-    # Завершенные заказы
-    builder.row(
-        InlineKeyboardButton(
-            text=closed_text,
-            callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
-        ),
-    )
+    # Завершенные заказы убраны - данные хранятся в архивах отчётов
+    # builder.row(
+    #     InlineKeyboardButton(
+    #         text=closed_text,
+    #         callback_data=create_callback_data("filter_orders", OrderStatus.CLOSED),
+    #     ),
+    # )
 
     return builder.as_markup()
 
