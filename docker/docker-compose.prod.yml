@@ -11,8 +11,10 @@ services:
     container_name: telegram_repair_bot_prod
     restart: always
     # Используем env.production для production конфигурации
+    # И .env для секретных данных (BOT_TOKEN)
     env_file:
       - ../env.production
+      - ../.env
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
