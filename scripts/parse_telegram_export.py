@@ -89,13 +89,14 @@ def extract_order_number(text: str) -> int | None:
     return None
 
 
-async def parse_and_restore(json_file: str, dispatcher_id: int):
+async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int = 1):
     """
     Парсинг JSON файла и восстановление заявок
 
     Args:
         json_file: Путь к result.json
         dispatcher_id: Telegram ID диспетчера (кто создавал заявки)
+        start_from: Восстанавливать только заявки с номером >= этого значения
     """
     print("=" * 80)
     print("ПАРСИНГ ЭКСПОРТА TELEGRAM И ВОССТАНОВЛЕНИЕ ЗАЯВОК")
@@ -158,11 +159,13 @@ async def parse_and_restore(json_file: str, dispatcher_id: int):
                     break
 
             if order_number and order_number not in restored_order_numbers:
-                order_data["order_number"] = order_number
-                orders_to_restore.append(order_data)
-                restored_order_numbers.add(order_number)
+                # Фильтруем по номеру заявки
+                if order_number >= start_from:
+                    order_data["order_number"] = order_number
+                    orders_to_restore.append(order_data)
+                    restored_order_numbers.add(order_number)
 
-    print(f"Найдено заявок для восстановления: {len(orders_to_restore)}")
+    print(f"Найдено заявок для восстановления (>= #{start_from}): {len(orders_to_restore)}")
     print()
 
     if not orders_to_restore:
@@ -237,20 +240,25 @@ async def main():
 
     if len(sys.argv) < 3:
         print("Использование:")
-        print(f"  python {sys.argv[0]} <путь_к_result.json> <dispatcher_telegram_id>")
+        print(f"  python {sys.argv[0]} <путь_к_result.json> <dispatcher_telegram_id> [start_from]")
         print()
-        print("Пример:")
+        print("Примеры:")
+        print(f"  # Восстановить все заявки:")
         print(f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457")
+        print()
+        print(f"  # Восстановить только заявки >= #45:")
+        print(f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457 45")
         return
 
     json_file = sys.argv[1]
     dispatcher_id = int(sys.argv[2])
+    start_from = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
     if not Path(json_file).exists():
         print(f"ERROR: Файл не найден: {json_file}")
         return
 
-    await parse_and_restore(json_file, dispatcher_id)
+    await parse_and_restore(json_file, dispatcher_id, start_from)
 
 
 if __name__ == "__main__":
