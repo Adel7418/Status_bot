@@ -12,7 +12,12 @@ from aiogram.types import CallbackQuery, Message
 from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard
-from app.states import CompleteOrderStates, LongRepairStates, RescheduleOrderStates
+from app.states import (
+    CompleteOrderStates,
+    EditDRDetailsStates,
+    LongRepairStates,
+    RescheduleOrderStates,
+)
 from app.utils import format_datetime, get_now, log_action
 
 
@@ -1673,3 +1678,212 @@ async def callback_download_archive_report(callback: CallbackQuery):
         await db.disconnect()
 
     await callback.answer()
+
+
+# ==================== РЕДАКТИРОВАНИЕ ДЕТАЛЕЙ ДЛИТЕЛЬНОГО РЕМОНТА ====================
+
+
+@router.callback_query(F.data.startswith("edit_dr_details:"))
+async def callback_edit_dr_details(callback: CallbackQuery, state: FSMContext, user_roles: list):
+    """
+    Начало редактирования срока/предоплаты для DR заявки
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_roles: Список ролей пользователя
+    """
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        if not order or order.status != OrderStatus.DR:
+            await callback.answer(
+                "Заявка не найдена или не в статусе длительного ремонта", show_alert=True
+            )
+            return
+
+        # Проверяем права (мастер или админ/диспетчер)
+        from app.config import UserRole
+
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+
+        # Мастер может редактировать только свои заявки
+        if UserRole.MASTER in user_roles and (not master or order.assigned_master_id != master.id):
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
+
+        # Сохраняем order_id в state
+        await state.update_data(order_id=order_id)
+        await state.set_state(EditDRDetailsStates.enter_new_details)
+
+        current_info = ""
+        if order.estimated_completion_date:
+            current_info += f"📅 Текущий срок: {order.estimated_completion_date}\n"
+        if order.prepayment_amount:
+            current_info += f"💰 Текущая предоплата: {order.prepayment_amount:.2f} ₽\n"
+
+        await callback.message.edit_text(
+            f"✏️ <b>Редактирование деталей длительного ремонта</b>\n\n"
+            f"📋 Заявка #{order_id}\n\n"
+            f"{current_info}\n"
+            f"Введите новые данные:\n\n"
+            f"<b>🤖 Примеры:</b>\n"
+            f"• <code>завтра в 15:00</code>\n"
+            f"• <code>через 3 дня, предоплата 2000</code>\n"
+            f"• <code>20.10.2025 предоплата 3000</code>\n"
+            f"• <code>через неделю</code>\n\n"
+            f"Или просто новую предоплату:\n"
+            f"• <code>предоплата 1500</code>\n\n"
+            f"Или отправьте <code>-</code> чтобы отменить",
+            parse_mode="HTML",
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer()
+
+
+@router.message(EditDRDetailsStates.enter_new_details, F.text)
+async def process_edit_dr_details(message: Message, state: FSMContext, user_roles: list):
+    """
+    Обработка редактирования деталей DR
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_roles: Список ролей
+    """
+    import re
+
+    from app.utils import parse_natural_datetime, should_parse_as_date, validate_parsed_datetime
+
+    # Получаем order_id из state
+    data = await state.get_data()
+    order_id = data.get("order_id")
+
+    if not order_id:
+        await message.reply("❌ Ошибка: не найден ID заявки")
+        await state.clear()
+        return
+
+    # Отмена
+    if message.text.strip() == "-":
+        await message.reply("❌ Редактирование отменено")
+        await state.clear()
+        return
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        # Проверяем права
+        from app.config import UserRole
+
+        master = await db.get_master_by_telegram_id(message.from_user.id)
+
+        if UserRole.MASTER in user_roles and (not master or order.assigned_master_id != master.id):
+            await message.reply("❌ Это не ваша заявка")
+            await state.clear()
+            return
+
+        user_input = message.text.strip()
+
+        # Парсинг предоплаты
+        prepayment_amount = None
+        prepayment_match = re.search(
+            r"предоплат[аы]?\s*[:=]?\s*(\d+(?:[.,]\d+)?)", user_input, re.IGNORECASE
+        )
+        if prepayment_match:
+            prepayment_str = prepayment_match.group(1).replace(",", ".")
+            try:
+                prepayment_amount = float(prepayment_str)
+            except ValueError:
+                pass
+
+        # Убираем упоминание о предоплате из текста для парсинга даты
+        date_text = re.sub(
+            r"предоплат[аы]?\s*[:=]?\s*\d+(?:[.,]\d+)?", "", user_input, flags=re.IGNORECASE
+        ).strip()
+
+        # Парсинг даты
+        completion_date = None
+        if date_text and date_text != "":
+            # Пробуем парсить естественную дату
+            if should_parse_as_date(date_text):
+                parsed_datetime, error = parse_natural_datetime(date_text)
+                if parsed_datetime and not error:
+                    is_valid, validation_error = validate_parsed_datetime(parsed_datetime, date_text)
+                    if is_valid:
+                        completion_date = parsed_datetime.strftime("%d.%m.%Y %H:%M")
+                    else:
+                        completion_date = date_text  # Сохраняем как текст
+                else:
+                    completion_date = date_text  # Сохраняем как текст
+            else:
+                completion_date = date_text  # Текстовое описание
+
+        # Обновляем данные
+        has_updates = False
+
+        if completion_date:
+            await db.connection.execute(
+                "UPDATE orders SET estimated_completion_date = ? WHERE id = ?",  # nosec B608
+                (completion_date, order_id),
+            )
+            has_updates = True
+
+        if prepayment_amount is not None:
+            await db.connection.execute(
+                "UPDATE orders SET prepayment_amount = ? WHERE id = ?",  # nosec B608
+                (prepayment_amount, order_id),
+            )
+            has_updates = True
+
+        if not has_updates:
+            await message.reply("❌ Не удалось распознать новые данные. Попробуйте ещё раз.")
+            return
+
+        await db.connection.commit()
+
+        # Формируем ответ
+        result_text = f"✅ <b>Детали обновлены!</b>\n\n📋 Заявка #{order_id}\n\n"
+
+        if completion_date:
+            result_text += f"📅 Новый срок: {completion_date}\n"
+        if prepayment_amount is not None:
+            result_text += f"💰 Новая предоплата: {prepayment_amount:.2f} ₽\n"
+
+        await message.reply(result_text, parse_mode="HTML")
+
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            initiator_name = master.get_display_name() if master else message.from_user.full_name
+
+            notification = f"✏️ <b>Обновлены детали длительного ремонта</b>\n\n📋 Заявка #{order_id}\n👨‍🔧 {initiator_name}\n\n"
+
+            if completion_date:
+                notification += f"📅 Новый срок: {completion_date}\n"
+            if prepayment_amount is not None:
+                notification += f"💰 Новая предоплата: {prepayment_amount:.2f} ₽"
+
+            try:
+                await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id}: {e}")
+
+        log_action(message.from_user.id, "EDIT_DR_DETAILS", f"Order #{order_id}")
+
+    except Exception as e:
+        logger.exception(f"Error editing DR details for order #{order_id}: {e}")
+        await message.reply("❌ Ошибка при обновлении данных")
+    finally:
+        await db.disconnect()
+        await state.clear()

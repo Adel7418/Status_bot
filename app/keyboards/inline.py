@@ -250,11 +250,17 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 ),
             )
         elif order.status == OrderStatus.DR:
-            # Для заявок в длительном ремонте - можно завершить
+            # Для заявок в длительном ремонте - можно завершить или редактировать
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Завершить ремонт",
                     callback_data=create_callback_data("complete_order", order.id),
+                )
+            )
+            builder.row(
+                InlineKeyboardButton(
+                    text="✏️ Редактировать срок/предоплату",
+                    callback_data=create_callback_data("edit_dr_details", order.id),
                 )
             )
 
