@@ -140,6 +140,9 @@ class Master(Base):
     # Связи
     user: Mapped["User"] = relationship("User", back_populates="masters")
     assigned_orders: Mapped[list["Order"]] = relationship("Order", back_populates="assigned_master")
+    report_archives: Mapped[list["MasterReportArchive"]] = relationship(
+        "MasterReportArchive", back_populates="master"
+    )
 
     # Индексы и ограничения
     __table_args__ = (
@@ -401,4 +404,34 @@ class EntityHistory(Base):
         Index("idx_entity_history_table_record", "table_name", "record_id"),
         Index("idx_entity_history_changed_at", "changed_at"),
         Index("idx_entity_history_changed_by", "changed_by"),
+    )
+
+
+class MasterReportArchive(Base):
+    """Модель архивного отчета мастера"""
+
+    __tablename__ = "master_report_archives"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    master_id: Mapped[int] = mapped_column(Integer, ForeignKey("masters.id"), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_orders: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_orders: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_orders: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_revenue: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Связи
+    master: Mapped["Master"] = relationship("Master", back_populates="report_archives")
+
+    # Индексы
+    __table_args__ = (
+        Index("idx_master_report_archives_master_id", "master_id"),
+        Index("idx_master_report_archives_period", "period_start", "period_end"),
+        Index("idx_master_report_archives_created_at", "created_at"),
     )

@@ -24,6 +24,7 @@ from app.database.orm_models import (
     FinancialReport,
     Master,
     MasterFinancialReport,
+    MasterReportArchive,
     Order,
     OrderStatusHistory,
     User,
@@ -956,3 +957,64 @@ class ORMDatabase:
 
             logger.info(f"Заявка #{order_id} мягко удалена")
             return True
+
+    # ==================== МЕТОДЫ ДЛЯ АРХИВОВ ОТЧЕТОВ ====================
+
+    async def save_master_report_archive(self, archive_data: dict[str, Any]) -> int:
+        """
+        Сохранение архивного отчета мастера
+
+        Args:
+            archive_data: Данные архива
+
+        Returns:
+            ID созданной записи
+        """
+        async with self.get_session() as session:
+            archive = MasterReportArchive(**archive_data)
+            session.add(archive)
+            await session.commit()
+            await session.refresh(archive)
+
+            logger.info(f"Архивный отчет для мастера {archive.master_id} сохранен (ID: {archive.id})")
+            return archive.id
+
+    async def get_master_archived_reports(
+        self, master_id: int, limit: int = 10
+    ) -> list[MasterReportArchive]:
+        """
+        Получение списка архивных отчетов мастера
+
+        Args:
+            master_id: ID мастера
+            limit: Максимальное количество записей
+
+        Returns:
+            Список архивных отчетов
+        """
+        async with self.get_session() as session:
+            stmt = (
+                select(MasterReportArchive)
+                .where(MasterReportArchive.master_id == master_id)
+                .order_by(MasterReportArchive.created_at.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_master_report_archive_by_id(
+        self, report_id: int
+    ) -> MasterReportArchive | None:
+        """
+        Получение архивного отчета по ID
+
+        Args:
+            report_id: ID отчета
+
+        Returns:
+            Архивный отчет или None
+        """
+        async with self.get_session() as session:
+            stmt = select(MasterReportArchive).where(MasterReportArchive.id == report_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()

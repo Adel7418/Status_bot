@@ -15,7 +15,6 @@ from openpyxl.utils import get_column_letter
 
 from app.config import OrderStatus
 from app.database import Database
-from app.database.models import MasterReportArchive
 from app.utils import format_datetime
 
 
@@ -108,24 +107,24 @@ class MasterReportsService:
             total_revenue = sum(o.total_amount or 0 for o in completed_orders)
 
             # Сохраняем запись в БД
-            archive_record = MasterReportArchive(
-                master_id=master_id,
-                period_start=period_start or all_orders[-1].created_at
+            archive_data = {
+                "master_id": master_id,
+                "period_start": period_start or all_orders[-1].created_at
                 if all_orders
                 else datetime.now(UTC),
-                period_end=period_end or datetime.now(UTC),
-                file_path=str(archive_path),
-                file_name=archive_filename,
-                file_size=os.path.getsize(archive_path),
-                total_orders=len(all_orders),
-                active_orders=len(active_orders),
-                completed_orders=len(completed_orders),
-                total_revenue=total_revenue,
-                created_at=datetime.now(UTC),
-                notes="Автоматически созданный архивный отчет за период",
-            )
+                "period_end": period_end or datetime.now(UTC),
+                "file_path": str(archive_path),
+                "file_name": archive_filename,
+                "file_size": os.path.getsize(archive_path),
+                "total_orders": len(all_orders),
+                "active_orders": len(active_orders),
+                "completed_orders": len(completed_orders),
+                "total_revenue": total_revenue,
+                "created_at": datetime.now(UTC),
+                "notes": "Автоматически созданный архивный отчет за период",
+            }
 
-            await self.db.save_master_report_archive(archive_record)
+            await self.db.save_master_report_archive(archive_data)
 
             logger.info(
                 f"Архивная копия отчета для мастера {master_id} сохранена: {archive_filename}"
