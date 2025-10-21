@@ -562,10 +562,15 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
             f"• <code>через 3 дня</code>\n"
             f"• <code>через неделю, предоплата 2000</code>\n"
             f"• <code>послезавтра предоплата 1500</code>\n\n"
-            f"<b>Точная дата:</b>\n"
+            f"<b>⏱ Через часы/дни:</b>\n"
+            f"• <code>через час</code>\n"
+            f"• <code>через полтора часа</code>\n"
+            f"• <code>через 1-1.5 часа</code>\n"
+            f"• <code>через 2 дня</code>\n\n"
+            f"<b>📅 Точная дата:</b>\n"
             f"• <code>20.10.2025</code>\n"
             f"• <code>25/10/2025 14:00 предоплата 3000</code>\n\n"
-            f"<b>Примерный срок (текст):</b>\n"
+            f"<b>📝 Примерный срок (текст):</b>\n"
             f"• <code>неделя</code>\n"
             f"• <code>10-14 дней</code>\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
@@ -644,12 +649,16 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         format_datetime_user_friendly,
         parse_natural_datetime,
         should_parse_as_date,
+        validate_parsed_datetime,
     )
 
     if should_parse_as_date(completion_date):
-        parsed_dt, _ = parse_natural_datetime(completion_date)
+        parsed_dt, _ = parse_natural_datetime(completion_date, validate=True)
 
         if parsed_dt:
+            # Проверяем валидацию
+            validation = validate_parsed_datetime(parsed_dt, completion_date)
+
             # Успешно распознали дату - форматируем для хранения
             formatted_date = format_datetime_for_storage(parsed_dt, completion_date)
             user_friendly = format_datetime_user_friendly(parsed_dt, completion_date)
@@ -661,9 +670,15 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             # Обновляем completion_date с распознанной датой
             completion_date = formatted_date
 
+            # Формируем сообщение с предупреждением если есть
+            confirmation_text = f"✅ <b>Дата завершения распознана:</b>\n\n{user_friendly}"
+
+            if validation.get("warning"):
+                confirmation_text += f"\n\n⚠️ <i>{validation['warning']}</i>"
+
             # Показываем пользователю что распознали
             await message.answer(
-                f"✅ <b>Дата завершения распознана:</b>\n\n{user_friendly}",
+                confirmation_text,
                 parse_mode="HTML",
             )
 

@@ -4,6 +4,7 @@ from app.utils.date_parser import (
     format_datetime_user_friendly,
     parse_natural_datetime,
     should_parse_as_date,
+    validate_parsed_datetime,
 )
 from app.utils.helpers import (
     calculate_profit_split,
@@ -55,6 +56,7 @@ __all__ = [
     "get_now",
     "parse_natural_datetime",
     "should_parse_as_date",
+    "validate_parsed_datetime",
     # User utilities
     "get_user_display_name",
     # Logging

@@ -987,7 +987,11 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
-                    scheduled_time=row.get("scheduled_time", None),
+                    scheduled_time=(
+                        row["scheduled_time"]
+                        if "scheduled_time" in row and row["scheduled_time"] is not None
+                        else None
+                    ),
                     total_amount=(
                         row["total_amount"]
                         if "total_amount" in row and row["total_amount"] is not None
@@ -1322,7 +1326,11 @@ class Database:
                     assigned_master_id=row["assigned_master_id"],
                     dispatcher_id=row["dispatcher_id"],
                     notes=row["notes"],
-                    scheduled_time=row.get("scheduled_time", None),
+                    scheduled_time=(
+                        row["scheduled_time"]
+                        if "scheduled_time" in row and row["scheduled_time"] is not None
+                        else None
+                    ),
                     total_amount=(
                         row["total_amount"]
                         if "total_amount" in row and row["total_amount"] is not None
