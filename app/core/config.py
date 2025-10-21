@@ -52,6 +52,10 @@ class Config:
     # Интервал напоминаний о непринятых заявках (в минутах)
     REMINDER_INTERVAL: int = int(os.getenv("REMINDER_INTERVAL", "5"))
 
+    # Автоматические бэкапы
+    BACKUP_ENABLED: bool = os.getenv("BACKUP_ENABLED", "true").lower() in ("true", "1", "yes")
+    BACKUP_SCHEDULE: str = os.getenv("BACKUP_SCHEDULE", "0 3 * * *")  # Cron формат
+
     @classmethod
     def validate(cls) -> bool:
         """Валидация конфигурации"""
