@@ -10,8 +10,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: telegram_repair_bot_prod
     restart: always
-    env_file:
-      - ../.env
+    # env_file закомментирован - используем автоматический .env
+    # Docker Compose автоматически читает .env из корня проекта
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
