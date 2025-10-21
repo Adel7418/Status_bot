@@ -4,6 +4,7 @@
 
 import contextlib
 import logging
+import os
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -109,6 +110,17 @@ class TaskScheduler:
             name="Архивирование отчетов мастеров",
             replace_existing=True,
         )
+
+        # Автоматический бэкап БД (каждый день в 03:00)
+        if Config.BACKUP_ENABLED:
+            self.scheduler.add_job(
+                self.create_database_backup,
+                trigger=CronTrigger(hour=3, minute=0, timezone=MOSCOW_TZ),
+                id="database_backup",
+                name="Автоматический бэкап БД",
+                replace_existing=True,
+            )
+            logger.info("Автоматический бэкап БД включён (каждый день в 03:00 МСК)")
 
         self.scheduler.start()
         logger.info("Планировщик задач запущен")
@@ -705,3 +717,101 @@ class TaskScheduler:
 
         except Exception as e:
             logger.error(f"Критическая ошибка при архивировании отчетов мастеров: {e}")
+
+    async def create_database_backup(self):
+        """
+        Автоматическое создание резервной копии базы данных
+        Запускается по расписанию (ежедневно в 03:00 МСК)
+        """
+        import shutil
+        from pathlib import Path
+
+        try:
+            logger.info("Начало автоматического бэкапа БД...")
+
+            # Пути
+            db_path = Path(Config.DATABASE_PATH)
+            backup_dir = Path("/app/backups" if os.path.exists("/app") else "backups")
+            backup_dir.mkdir(exist_ok=True, parents=True)
+
+            # Имя файла бэкапа
+            timestamp = datetime.now(MOSCOW_TZ).strftime("%Y-%m-%d_%H-%M-%S")
+            backup_file = backup_dir / f"bot_database_{timestamp}.db"
+
+            # Создаём бэкап
+            if db_path.exists():
+                shutil.copy2(db_path, backup_file)
+                file_size = backup_file.stat().st_size / 1024  # KB
+
+                logger.info(
+                    f"Бэкап создан: {backup_file.name} ({file_size:.2f} KB)"
+                )
+
+                # Удаление старых бэкапов (храним последние 30 дней)
+                cutoff_date = datetime.now(MOSCOW_TZ) - timedelta(days=30)
+                deleted_count = 0
+
+                for old_backup in backup_dir.glob("bot_database_*.db"):
+                    try:
+                        file_time = datetime.fromtimestamp(old_backup.stat().st_mtime)
+                        if file_time < cutoff_date:
+                            old_backup.unlink()
+                            deleted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить старый бэкап {old_backup.name}: {e}")
+
+                if deleted_count > 0:
+                    logger.info(f"Удалено старых бэкапов: {deleted_count}")
+
+                # Уведомляем админов об успешном бэкапе
+                try:
+                    admins = await self.db.get_users_by_role("ADMIN")
+                    notification = (
+                        f"💾 <b>Автоматический бэкап БД</b>\n\n"
+                        f"✅ Бэкап создан успешно\n"
+                        f"📁 Файл: {backup_file.name}\n"
+                        f"📊 Размер: {file_size:.2f} KB\n"
+                        f"📅 Дата: {timestamp}\n\n"
+                        f"🗑️ Удалено старых: {deleted_count}"
+                    )
+
+                    for admin in admins:
+                        with contextlib.suppress(Exception):
+                            await safe_send_message(
+                                self.bot,
+                                admin.telegram_id,
+                                notification,
+                                parse_mode="HTML",
+                                max_attempts=1
+                            )
+
+                except Exception as notify_error:
+                    logger.warning(f"Не удалось отправить уведомление о бэкапе: {notify_error}")
+
+            else:
+                logger.error(f"База данных не найдена: {db_path}")
+
+        except Exception as e:
+            logger.error(f"Критическая ошибка при создании бэкапа БД: {e}")
+
+            # Уведомляем админов об ошибке
+            try:
+                admins = await self.db.get_users_by_role("ADMIN")
+                error_notification = (
+                    f"❌ <b>Ошибка автоматического бэкапа БД</b>\n\n"
+                    f"Ошибка: {str(e)}\n\n"
+                    f"⚠️ Необходимо проверить систему!"
+                )
+
+                for admin in admins:
+                    with contextlib.suppress(Exception):
+                        await safe_send_message(
+                            self.bot,
+                            admin.telegram_id,
+                            error_notification,
+                            parse_mode="HTML",
+                            max_attempts=1
+                        )
+
+            except Exception:
+                pass
