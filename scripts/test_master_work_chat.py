@@ -20,6 +20,13 @@ async def main():
     print("=" * 80)
     print()
 
+    # Проверяем конфигурацию
+    from app.core.config import Config
+    print(f"🔧 USE_ORM: {Config.USE_ORM}")
+    print(f"📁 DATABASE_PATH: {Config.DATABASE_PATH}")
+    print(f"🏗️  Database class: {Database.__name__} from {Database.__module__}")
+    print()
+
     db = Database()
     await db.connect()
 
