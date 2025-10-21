@@ -11,16 +11,16 @@ services:
     container_name: telegram_repair_bot_prod
     restart: always
     env_file:
-      - ../env.production
+      - ../.env
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
-      # LOG_LEVEL и DEV_MODE берутся из env.production
+      # LOG_LEVEL и DEV_MODE берутся из .env
       # Не перезаписываем их здесь
     volumes:
-      - bot_data:/app/data
-      - bot_logs:/app/logs
-      - bot_backups:/app/backups
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../backups:/app/backups
     depends_on:
       redis:
         condition: service_healthy
@@ -51,7 +51,7 @@ services:
     container_name: telegram_bot_redis_prod
     restart: always
     volumes:
-      - redis_data:/data
+      - ../data/redis:/data
     networks:
       - bot_network
     healthcheck:
@@ -97,15 +97,18 @@ networks:
   bot_network:
     driver: bridge
 
-volumes:
-  bot_data:
-    driver: local
-  bot_logs:
-    driver: local
-  bot_backups:
-    driver: local
-  redis_data:
-    driver: local
+# Volumes закомментированы - используем bind mounts
+# Данные хранятся в локальной файловой системе сервера
+# Это защищает от случайного удаления через docker volume rm
+# volumes:
+#   bot_data:
+#     driver: local
+#   bot_logs:
+#     driver: local
+#   bot_backups:
+#     driver: local
+#   redis_data:
+#     driver: local
   # prometheus_data:
   #   driver: local
   # grafana_data:
