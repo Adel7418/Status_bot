@@ -15,6 +15,94 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.database import Database
 
 
+def parse_new_order_message(text: str) -> dict | None:
+    """
+    Парсинг сообщения "🆕 Новая заявка #X"
+
+    Формат:
+    🆕 Новая заявка #48
+
+    👤 Создал: Валерий
+    🔧 Тип: Духовой шкаф
+    📝 Не греет низ
+
+    👤 Клиент: Неизвестно
+    📍 Карабаш Ул 10
+    📞 +79999032683
+
+    ⏰ Прибытие: ⏭️ Пропустить
+
+    📝 Заметки: Позвонить предварительным
+    """
+    if "🆕 Новая заявка #" not in text and "Новая заявка #" not in text:
+        return None
+
+    order = {}
+
+    # Номер заявки
+    match = re.search(r"Новая заявка\s*#(\d+)", text)
+    if match:
+        order["order_number"] = int(match.group(1))
+
+    # Тип техники
+    match = re.search(r"🔧\s*Тип:\s*(.+?)(?:\n|$)", text)
+    if match:
+        order["equipment_type"] = match.group(1).strip()
+
+    # Описание (после эмодзи 📝, но не "Заметки:")
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        if '🔧 Тип:' in line and i + 1 < len(lines):
+            # Следующая строка после типа - это описание
+            next_line = lines[i + 1].strip()
+            if next_line and '📝' not in next_line and '👤' not in next_line:
+                order["description"] = next_line
+                break
+
+    # Клиент
+    match = re.search(r"👤\s*Клиент:\s*(.+?)(?:\n|$)", text)
+    if match:
+        client = match.group(1).strip()
+        if client.lower() not in ['неизвестно', 'unknown', '']:
+            order["client_name"] = client
+        else:
+            order["client_name"] = "Клиент"
+
+    # Адрес
+    match = re.search(r"📍\s*(?:Адрес:\s*)?(.+?)(?:\n|$)", text)
+    if match:
+        order["client_address"] = match.group(1).strip()
+
+    # Телефон
+    match = re.search(r"📞\s*(.+?)(?:\n|$)", text)
+    if match:
+        phone = match.group(1).strip()
+        phone = re.sub(r'[^\d+]', '', phone)
+        if not phone.startswith('+'):
+            phone = '+' + phone
+        order["client_phone"] = phone
+
+    # Заметки
+    match = re.search(r"📝\s*Заметки:\s*(.+?)(?:\n|$)", text)
+    if match:
+        order["notes"] = match.group(1).strip()
+    else:
+        order["notes"] = ""
+
+    # Проверяем обязательные поля
+    required = ["equipment_type", "client_address", "client_phone"]
+    if all(field in order for field in required):
+        # Если нет описания, используем тип техники
+        if "description" not in order or not order["description"]:
+            order["description"] = f"Ремонт: {order['equipment_type']}"
+        # Если нет имени клиента, используем "Клиент"
+        if "client_name" not in order:
+            order["client_name"] = "Клиент"
+        return order
+
+    return None
+
+
 def parse_order_confirmation(text: str) -> dict | None:
     """
     Парсинг сообщения подтверждения заявки
@@ -128,8 +216,13 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
         else:
             text = str(text_parts)
 
-        # Парсим подтверждение заявки
-        order_data = parse_order_confirmation(text)
+        # Пробуем парсить как "Новая заявка"
+        order_data = parse_new_order_message(text)
+        
+        # Если не получилось, пробуем как подтверждение
+        if not order_data:
+            order_data = parse_order_confirmation(text)
+        
         if order_data:
             # Дата создания
             date_str = msg.get("date", "")
@@ -139,24 +232,27 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
             except:
                 order_data["created_at"] = None
 
-            # Ищем номер заявки в следующих сообщениях
-            order_number = None
-            for next_msg in messages[i+1:i+5]:  # Смотрим следующие 5 сообщений
-                next_text_parts = next_msg.get("text", "")
-                if isinstance(next_text_parts, list):
-                    next_text = ""
-                    for part in next_text_parts:
-                        if isinstance(part, str):
-                            next_text += part
-                        elif isinstance(part, dict) and "text" in part:
-                            next_text += part["text"]
-                else:
-                    next_text = str(next_text_parts)
+            # Проверяем, есть ли номер в самих данных заявки
+            order_number = order_data.get("order_number")
+            
+            # Если нет, ищем в следующих сообщениях
+            if not order_number:
+                for next_msg in messages[i+1:i+5]:  # Смотрим следующие 5 сообщений
+                    next_text_parts = next_msg.get("text", "")
+                    if isinstance(next_text_parts, list):
+                        next_text = ""
+                        for part in next_text_parts:
+                            if isinstance(part, str):
+                                next_text += part
+                            elif isinstance(part, dict) and "text" in part:
+                                next_text += part["text"]
+                    else:
+                        next_text = str(next_text_parts)
 
-                num = extract_order_number(next_text)
-                if num:
-                    order_number = num
-                    break
+                    num = extract_order_number(next_text)
+                    if num:
+                        order_number = num
+                        break
 
             if order_number and order_number not in restored_order_numbers:
                 # Фильтруем по номеру заявки
