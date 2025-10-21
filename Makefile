@@ -100,6 +100,11 @@ prod-update:  ## Обновить код и перезапустить
 	git pull
 	docker compose -f docker/docker-compose.prod.yml up -d --build
 	@echo "✅ Обновлено!"
+	@echo ""
+	@echo "📋 Последние строки логов:"
+	@docker compose -f docker/docker-compose.prod.yml logs --tail=20
+	@echo ""
+	@echo "💡 Для просмотра логов в реальном времени: make prod-logs"
 
 prod-deploy:  ## Полный деплой с пересборкой
 	@echo "🚀 Полный деплой..."
@@ -107,7 +112,11 @@ prod-deploy:  ## Полный деплой с пересборкой
 	docker compose -f docker/docker-compose.prod.yml down
 	docker compose -f docker/docker-compose.prod.yml up -d --build
 	@echo "✅ Деплой завершен!"
-	@make prod-logs
+	@echo ""
+	@echo "📋 Последние строки логов:"
+	@docker compose -f docker/docker-compose.prod.yml logs --tail=20
+	@echo ""
+	@echo "💡 Для просмотра логов в реальном времени: make prod-logs"
 
 prod-clean:  ## Очистить и перезапустить
 	@echo "🧹 Очистка..."
