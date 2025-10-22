@@ -161,17 +161,17 @@ async def main():
 
         # ОТЛАДКА: Явное логирование конфигурации storage
         logger.info("=" * 60)
-        logger.info("🔧 Конфигурация FSM Storage:")
+        logger.info("Конфигурация FSM Storage:")
         logger.info(f"  REDIS_URL: {redis_url}")
         logger.info(f"  DEV_MODE: {Config.DEV_MODE}")
         logger.info(f"  Условие (redis_url and not DEV_MODE): {redis_url and not Config.DEV_MODE}")
         logger.info("=" * 60)
 
         if redis_url and not Config.DEV_MODE:
-            logger.info("✅ Используется RedisStorage для FSM: %s", redis_url)
+            logger.info("OK: Используется RedisStorage для FSM: %s", redis_url)
             storage = RedisStorage.from_url(redis_url)
         else:
-            logger.warning("⚠️  Используется MemoryStorage (состояния потеряются при рестарте)")
+            logger.warning("WARNING: Используется MemoryStorage (состояния потеряются при рестарте)")
             logger.warning(f"   Причина: redis_url={redis_url}, DEV_MODE={Config.DEV_MODE}")
             storage = MemoryStorage()
 
@@ -180,11 +180,11 @@ async def main():
 
         # Инициализация базы данных
         logger.info("=" * 60)
-        logger.info("🔧 Инициализация базы данных...")
+        logger.info("Инициализация базы данных...")
         logger.info(f"   USE_ORM: {Config.USE_ORM}")
         logger.info(f"   DATABASE_PATH: {Config.DATABASE_PATH}")
         logger.info("=" * 60)
-        
+
         db = Database()
         await db.connect()
 
@@ -193,7 +193,7 @@ async def main():
         # ORM не требует init_db - таблицы уже созданы через миграции
         if hasattr(db, "init_db"):
             await db.init_db()
-        logger.info("✅ База данных инициализирована")
+        logger.info("OK: База данных инициализирована")
 
         # Инициализация планировщика (передаем shared DB instance)
         scheduler = TaskScheduler(bot, db)

@@ -148,7 +148,7 @@ class TaskScheduler:
             reminder_text = (
                 f"⏰ <b>Напоминание о визите через 2 часа!</b>\n\n"
                 f"📋 Заявка #{order.id}\n"
-                f"🔧 {order.equipment_type}\n"
+                f"[EQUIPMENT] {order.equipment_type}\n"
                 f"👤 Клиент: {order.client_name}\n"
                 f"📍 Адрес: {order.client_address}\n"
                 f"📞 Телефон: {order.client_phone}\n\n"
@@ -309,7 +309,7 @@ class TaskScheduler:
             # Отправляем уведомления администраторам
             if alerts:
                 for admin_id in Config.ADMIN_IDS:
-                    text = "⚠️ <b>Превышение SLA</b>\n\n"
+                    text = "WARNING: <b>Превышение SLA</b>\n\n"
                     text += f"Найдено заявок с превышением SLA: {len(alerts)}\n\n"
 
                     for alert in alerts[:5]:  # Показываем первые 5
@@ -455,16 +455,16 @@ class TaskScheduler:
                             reminder_text = (
                                 f"⏰ <b>Напоминание</b>\n\n"
                                 f"У вас есть непринятая заявка #{order.id}\n"
-                                f"🔧 {order.equipment_type}\n"
+                                f"[EQUIPMENT] {order.equipment_type}\n"
                                 f"⏱ Назначена {minutes} мин. назад\n\n"
                             )
 
                             # Упоминаем мастера в группе (ORM: через master.user)
                             master_username = master.user.username if hasattr(master, "user") and master.user else None
                             if master_username:
-                                reminder_text += f"👨‍🔧 Мастер: @{master_username}\n\n"
+                                reminder_text += f"[MASTER] Мастер: @{master_username}\n\n"
                             else:
-                                reminder_text += f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
+                                reminder_text += f"[MASTER] Мастер: {master.get_display_name()}\n\n"
 
                             reminder_text += "Пожалуйста, примите или отклоните заявку."
 
@@ -487,7 +487,7 @@ class TaskScheduler:
                                 target_chat_id,
                                 f"⏰ <b>Напоминание</b>\n\n"
                                 f"У вас есть непринятая заявка #{order.id}\n"
-                                f"🔧 {order.equipment_type}\n"
+                                f"[EQUIPMENT] {order.equipment_type}\n"
                                 f"⏱ Назначена {minutes} мин. назад\n\n"
                                 f"Пожалуйста, примите или отклоните заявку.",
                                 parse_mode="HTML",
@@ -540,7 +540,7 @@ class TaskScheduler:
                 admins_and_dispatchers = await self.db.get_admins_and_dispatchers()
 
                 # Формируем текст уведомления
-                text = "⚠️ <b>Неназначенные заявки!</b>\n\n"
+                text = "WARNING: <b>Неназначенные заявки!</b>\n\n"
                 text += f"Найдено заявок без мастера: {len(unassigned_alerts)}\n\n"
 
                 for alert in unassigned_alerts[:5]:  # Показываем первые 5
@@ -549,7 +549,7 @@ class TaskScheduler:
 
                     text += (
                         f"📋 <b>Заявка #{order.id}</b>\n"
-                        f"   🔧 {order.equipment_type}\n"
+                        f"   [EQUIPMENT] {order.equipment_type}\n"
                         f"   👤 {order.client_name}\n"
                         f"   ⏱ Создана {minutes} мин. назад\n\n"
                     )
@@ -557,7 +557,7 @@ class TaskScheduler:
                 if len(unassigned_alerts) > 5:
                     text += f"<i>И еще {len(unassigned_alerts) - 5} заявок...</i>\n\n"
 
-                text += "⚠️ <b>Требуется назначить мастеров!</b>"
+                text += "WARNING: <b>Требуется назначить мастеров!</b>"
 
                 # Отправляем всем админам и диспетчерам
                 for user in admins_and_dispatchers:
@@ -697,7 +697,7 @@ class TaskScheduler:
 
                 admin_notification = (
                     f"📊 <b>Архивирование отчетов мастеров</b>\n\n"
-                    f"✅ Успешно: {archived_count}\n"
+                    f"OK: Успешно: {archived_count}\n"
                     f"❌ Ошибок: {failed_count}\n\n"
                     f"📅 Период: {period_start.strftime('%d.%m.%Y')} - {period_end.strftime('%d.%m.%Y')}"
                 )
@@ -768,7 +768,7 @@ class TaskScheduler:
                     admins = await self.db.get_users_by_role("ADMIN")
                     notification = (
                         f"💾 <b>Автоматический бэкап БД</b>\n\n"
-                        f"✅ Бэкап создан успешно\n"
+                        f"OK: Бэкап создан успешно\n"
                         f"📁 Файл: {backup_file.name}\n"
                         f"📊 Размер: {file_size:.2f} KB\n"
                         f"📅 Дата: {timestamp}\n\n"
@@ -800,7 +800,7 @@ class TaskScheduler:
                 error_notification = (
                     f"❌ <b>Ошибка автоматического бэкапа БД</b>\n\n"
                     f"Ошибка: {str(e)}\n\n"
-                    f"⚠️ Необходимо проверить систему!"
+                    f"WARNING: Необходимо проверить систему!"
                 )
 
                 for admin in admins:
