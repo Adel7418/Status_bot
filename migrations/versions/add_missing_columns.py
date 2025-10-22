@@ -20,13 +20,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Добавляем недостающие колонки в таблицу users
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
-        batch_op.add_column(sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
+    # Проверяем, существуют ли колонки перед добавлением
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('users')]
+    
+    if 'deleted_at' not in columns:
+        op.add_column('users', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
+    
+    if 'version' not in columns:
+        op.add_column('users', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
 
 
 def downgrade() -> None:
     # Удаляем добавленные колонки
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('users')]
+    
+    if 'version' in columns:
+        op.drop_column('users', 'version')
+    
+    if 'deleted_at' in columns:
+        op.drop_column('users', 'deleted_at')
