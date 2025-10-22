@@ -18,6 +18,7 @@ services:
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
+      - USE_ORM=true
       # Остальные переменные берутся из env.production
     volumes:
       - ../data:/app/data
