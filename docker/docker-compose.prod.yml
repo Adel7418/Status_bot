@@ -19,6 +19,9 @@ services:
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
+      - PYTHONIOENCODING=utf-8
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
       # Остальные переменные берутся из env.production
     volumes:
       - ../data:/app/data

@@ -54,7 +54,10 @@ COPY --chown=botuser:botuser . .
 # Установка переменной PATH для venv
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # Переключение на непривилегированного пользователя
 USER botuser
