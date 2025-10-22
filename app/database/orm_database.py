@@ -65,10 +65,10 @@ class ORMDatabase:
     async def connect(self):
         """Подключение к базе данных"""
         try:
-            logger.info(f"🔧 Инициализация подключения к БД...")
+            logger.info("Инициализация подключения к БД...")
             logger.info(f"   Database URL: {self.database_url}")
             logger.info(f"   Is SQLite: {self._is_sqlite}")
-            
+
             # Создаем async engine
             self.engine = create_async_engine(
                 self.database_url,
@@ -86,18 +86,19 @@ class ORMDatabase:
                 expire_on_commit=False,  # Важно для async работы
             )
 
-            logger.info("🔧 Создание таблиц...")
+            logger.info("Создание таблиц...")
             # Создаем таблицы если их нет
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
 
-            logger.info(f"✅ Подключено к базе данных: {self.database_url}")
-            logger.info("✅ Таблицы созданы/проверены")
+            logger.info(f"OK: Подключено к базе данных: {self.database_url}")
+            logger.info("OK: Таблицы созданы/проверены")
 
         except Exception as e:
-            logger.error(f"❌ Ошибка подключения к БД: {e}")
+            logger.error(f"ERROR: Ошибка подключения к БД: {e}")
             import traceback
-            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+
+            logger.error(f"ERROR: Traceback: {traceback.format_exc()}")
             raise
 
     async def disconnect(self):
@@ -123,10 +124,10 @@ class ORMDatabase:
             try:
                 yield session
                 await session.commit()
-                logger.debug("✅ Транзакция успешно завершена (commit)")
+                logger.debug("OK: Транзакция успешно завершена (commit)")
             except Exception as e:
                 await session.rollback()
-                logger.error(f"❌ Транзакция отменена (rollback): {e}")
+                logger.error(f"ERROR: Транзакция отменена (rollback): {e}")
                 raise
 
     # ==================== USERS ====================
@@ -582,9 +583,9 @@ class ORMDatabase:
                         user_roles=user_roles,
                         raise_exception=True,
                     )
-                    logger.info(f"✅ Валидация перехода пройдена: {old_status} → {status}")
+                    logger.info(f"OK: Валидация перехода пройдена: {old_status} -> {status}")
                 except InvalidStateTransitionError as e:
-                    logger.error(f"❌ Недопустимый переход статуса для заявки #{order_id}: {e}")
+                    logger.error(f"ERROR: Недопустимый переход статуса для заявки #{order_id}: {e}")
                     raise
 
             # Обновляем статус заявки
@@ -612,7 +613,7 @@ class ORMDatabase:
 
             logger.info(
                 f"Статус заявки #{order_id} изменен с {old_status} на {status}"
-                + (f" пользователем {changed_by}" if changed_by else "")
+                f"{f' пользователем {changed_by}' if changed_by else ''}"
             )
             return True
 

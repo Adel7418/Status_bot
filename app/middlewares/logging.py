@@ -87,10 +87,11 @@ class LoggingMiddleware(BaseMiddleware):
             else:
                 text_preview = "[other media]"
 
-            # Логируем текст как есть (UTF-8 поддерживается в Docker)
+            # Логируем текст с безопасной обработкой Unicode
+            safe_text = text_preview.encode('ascii', 'replace').decode('ascii')
             logger.log(
                 self.log_level,
-                f"[MSG] Message from {user_info} in {chat_type}: {text_preview}",
+                f"[MSG] Message from {user_info} in {chat_type}: {safe_text}",
             )
 
         elif isinstance(event, CallbackQuery):
