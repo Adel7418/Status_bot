@@ -357,9 +357,9 @@ class ORMDatabase:
             stmt = select(Master).options(joinedload(Master.user))
 
             if only_approved:
-                stmt = stmt.where(Master.is_approved is True)
+                stmt = stmt.where(Master.is_approved == True)
             if only_active:
-                stmt = stmt.where(Master.is_active is True)
+                stmt = stmt.where(Master.is_active == True)
 
             stmt = stmt.order_by(Master.created_at.desc())
             result = await session.execute(stmt)
@@ -879,7 +879,7 @@ class ORMDatabase:
 
             # Количество активных мастеров
             stmt = select(func.count(Master.id).label("count")).where(
-                and_(Master.is_active is True, Master.is_approved is True)
+                and_(Master.is_active == True, Master.is_approved == True)
             )
             result = await session.execute(stmt)
             stats["active_masters"] = result.scalar()
