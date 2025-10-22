@@ -552,6 +552,12 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         await callback.answer()
 
+    except Exception as e:
+        logger.error(f"Ошибка в callback_group_start_long_repair: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+    finally:
+        await db.disconnect()
+
 
 @router.callback_query(F.data.startswith("group_show_phone:"))
 async def callback_group_show_phone(callback: CallbackQuery, user_roles: list):
@@ -597,11 +603,6 @@ async def callback_group_show_phone(callback: CallbackQuery, user_roles: list):
         logger.debug(
             f"[DR] Group DR process started for order #{order_id}, master: {master.telegram_id}"
         )
-
-        return
-
-    finally:
-        await db.disconnect()
 
 
 @router.callback_query(F.data.startswith("group_reschedule_order:"))

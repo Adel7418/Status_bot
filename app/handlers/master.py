@@ -324,12 +324,13 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
 
 
 @router.callback_query(F.data.startswith("refuse_order_master:"))
-async def callback_refuse_order_master(callback: CallbackQuery):
+async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list):
     """
     Отклонение заявки мастером
 
     Args:
         callback: Callback query
+        user_roles: Роли пользователя (передаётся из RoleCheckMiddleware)
     """
     order_id = int(callback.data.split(":")[1])
 
@@ -344,6 +345,19 @@ async def callback_refuse_order_master(callback: CallbackQuery):
         if not master or order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
+
+        # Удаляем карточки заявки в рабочей группе (если были сохранены)
+        try:
+            if hasattr(db, "get_active_group_messages_by_order"):
+                messages = await db.get_active_group_messages_by_order(order_id)
+                if messages:
+                    from app.utils.retry import safe_delete_message
+
+                    for m in messages:
+                        await safe_delete_message(callback.bot, m.chat_id, m.message_id)
+                    await db.deactivate_group_messages(order_id)
+        except Exception:
+            pass
 
         # Возвращаем статус в NEW и убираем мастера (ORM compatible)
         if hasattr(db, "unassign_master_from_order"):
@@ -363,6 +377,14 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             details=f"Master refused order #{order_id}",
         )
 
+        # Удаляем текущее сообщение, если возможно; иначе редактируем
+        try:
+            await callback.message.delete()
+        except Exception:
+            await callback.message.edit_text(
+                f"❌ Заявка #{order_id} отклонена.\n\n" f"Диспетчер получил уведомление."
+            )
+
         # Меню обновится автоматически в update_order_status
 
         # Уведомляем диспетчера с retry механизмом
@@ -378,10 +400,6 @@ async def callback_refuse_order_master(callback: CallbackQuery):
             )
             if not result:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
-
-        await callback.message.edit_text(
-            f"❌ Заявка #{order_id} отклонена.\n\n" f"Диспетчер получил уведомление."
-        )
 
         log_action(callback.from_user.id, "REFUSE_ORDER_MASTER", f"Order #{order_id}")
 

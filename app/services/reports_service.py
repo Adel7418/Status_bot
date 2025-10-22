@@ -301,6 +301,11 @@ class ReportsService:
                 if row["created_at"] and row["updated_at"]:
                     created = datetime.fromisoformat(row["created_at"])
                     updated = datetime.fromisoformat(row["updated_at"])
+                    # Удаляем timezone информацию для корректного вычитания
+                    if created.tzinfo is not None:
+                        created = created.replace(tzinfo=None)
+                    if updated.tzinfo is not None:
+                        updated = updated.replace(tzinfo=None)
                     history_stats["days_to_complete"] = (updated - created).days
 
             orders_list.append(

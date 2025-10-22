@@ -25,6 +25,7 @@ from app.database.orm_models import (
     Master,
     MasterFinancialReport,
     MasterReportArchive,
+    OrderGroupMessage,
     Order,
     OrderStatusHistory,
     User,
@@ -372,6 +373,47 @@ class ORMDatabase:
             )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
+
+    # ==================== ORDER GROUP MESSAGES ====================
+
+    async def save_order_group_message(
+        self, order_id: int, master_id: int, chat_id: int, message_id: int
+    ) -> int:
+        """Сохранение сообщения заявки в рабочей группе"""
+        async with self.get_session() as session:
+            record = OrderGroupMessage(
+                order_id=order_id,
+                master_id=master_id,
+                chat_id=chat_id,
+                message_id=message_id,
+                is_active=True,
+            )
+            session.add(record)
+            await session.flush()
+            return record.id
+
+    async def get_active_group_messages_by_order(self, order_id: int) -> list[OrderGroupMessage]:
+        """Получение активных групповых сообщений по заявке"""
+        async with self.get_session() as session:
+            stmt = select(OrderGroupMessage).where(
+                and_(OrderGroupMessage.order_id == order_id, OrderGroupMessage.is_active.is_(True))
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def deactivate_group_messages(self, order_id: int) -> int:
+        """Пометить сообщения заявки как неактивные (после удаления из чата)"""
+        async with self.get_session() as session:
+            stmt = select(OrderGroupMessage).where(
+                and_(OrderGroupMessage.order_id == order_id, OrderGroupMessage.is_active.is_(True))
+            )
+            result = await session.execute(stmt)
+            messages = list(result.scalars().all())
+            for m in messages:
+                m.is_active = False
+                m.deleted_at = get_now()
+            await session.commit()
+            return len(messages)
 
     async def update_master_status(self, telegram_id: int, is_active: bool) -> bool:
         """Обновление статуса мастера (активен/неактивен)"""

@@ -1016,27 +1016,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
             if not result:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
-        # Уведомляем мастера с retry механизмом
-        result = await safe_send_message(
-            callback.bot,
-            master.telegram_id,
-            f"✅ <b>Заявка #{order_id} принята администратором от вашего имени!</b>\n\n"
-            f"🔧 <b>Детали заявки:</b>\n"
-            f"📱 Тип техники: {order.equipment_type}\n"
-            f"📝 Описание: {order.description}\n"
-            f"👤 Клиент: {order.client_name}\n"
-            f"📍 Адрес: {order.client_address}\n"
-            + (f"\n📝 <b>Заметки:</b> {order.notes}\n" if order.notes else "")
-            + (
-                f"\n⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
-                if order.scheduled_time
-                else ""
-            )
-            + "\n<b>Телефон клиента будет доступен после прибытия на объект.</b>",
-            parse_mode="HTML",
-        )
-        if not result:
-            logger.error(f"Failed to notify master {master.telegram_id} after retries")
+        # Личных уведомлений мастеру нет — бот работает только в рабочих группах
 
         await callback.answer("Заявка принята от имени мастера!")
 
@@ -1144,17 +1124,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
             if not result:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
-        # Уведомляем мастера с retry механизмом
-        result = await safe_send_message(
-            callback.bot,
-            master.telegram_id,
-            f"🏠 <b>Статус заявки #{order_id} обновлен администратором!</b>\n\n"
-            f"Заявка отмечена как 'На объекте' от вашего имени.\n\n"
-            f"📞 <b>Телефон клиента:</b> {order.client_phone}",
-            parse_mode="HTML",
-        )
-        if not result:
-            logger.error(f"Failed to notify master {master.telegram_id} after retries")
+        # Личных уведомлений мастеру нет — бот работает только в рабочих группах
 
         await callback.answer("Статус обновлен от имени мастера!")
 

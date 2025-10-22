@@ -245,3 +245,8 @@ class MasterReportArchive:
     total_revenue: float = 0.0
     created_at: datetime | None = None
     notes: str | None = None
+
+
+@dataclass
+class OrderGroupMessage:  # Удалено из использования (legacy не нужен)
+    id: int | None = None

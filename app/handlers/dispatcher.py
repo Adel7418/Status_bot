@@ -1132,6 +1132,18 @@ async def callback_select_master_for_order(
 
         if result:
             logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
+            # Сохраняем message_id для последующего удаления при снятии мастера
+            try:
+                # ORM: сохраняем в таблицу order_group_messages
+                if hasattr(db, "save_order_group_message"):
+                    await db.save_order_group_message(
+                        order_id=order_id,
+                        master_id=master_id,
+                        chat_id=target_chat_id,
+                        message_id=result.message_id,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to persist group message for order {order_id}: {e}")
         else:
             logger.error(f"CRITICAL: Failed to notify master in group {target_chat_id}")
 
@@ -1337,6 +1349,18 @@ async def callback_select_new_master_for_order(
         )
         if result:
             logger.info(f"Notification sent to new master group {target_chat_id}")
+            try:
+                if hasattr(db, "save_order_group_message"):
+                    await db.save_order_group_message(
+                        order_id=order_id,
+                        master_id=new_master_id,
+                        chat_id=target_chat_id,
+                        message_id=result.message_id,
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to persist group message for reassigned order {order_id}: {e}"
+                )
         else:
             logger.warning(f"Failed to send notification to new master group {target_chat_id}")
 
@@ -1411,12 +1435,30 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
         # Меню обновится автоматически в update_order_status
 
-        # Уведомляем мастера с retry
-        if master:
-            target_chat_id = master.work_chat_id if master.work_chat_id else master.telegram_id
+        # Удаляем сообщение о заявке в рабочей группе мастера, если ранее отправляли
+        try:
+            if hasattr(db, "get_active_group_messages_by_order"):
+                messages = await db.get_active_group_messages_by_order(order_id)
+                if messages:
+                    from app.utils.retry import safe_delete_message
+
+                    for m in messages:
+                        # Пытаемся удалить сообщение
+                        deleted = await safe_delete_message(callback.bot, m.chat_id, m.message_id)
+                        if deleted:
+                            logger.info(
+                                f"Deleted group message {m.message_id} for order {order_id} in chat {m.chat_id}"
+                            )
+                    # Помечаем записи неактивными
+                    await db.deactivate_group_messages(order_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete group messages for order {order_id}: {e}")
+
+        # Уведомляем мастера только в рабочей группе (личка отключена)
+        if master and master.work_chat_id:
             await safe_send_message(
                 callback.bot,
-                target_chat_id,
+                master.work_chat_id,
                 f"ℹ️ <b>Заявка снята</b>\n\n"
                 f"📋 Заявка #{order_id} была снята с вас диспетчером.\n"
                 f"🔧 {order.equipment_type}\n"

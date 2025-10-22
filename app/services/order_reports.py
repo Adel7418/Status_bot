@@ -63,6 +63,12 @@ class OrderReportsService:
                     else:
                         updated_dt = order.updated_at
 
+                    # Удаляем timezone информацию для корректного вычитания
+                    if created_dt.tzinfo is not None:
+                        created_dt = created_dt.replace(tzinfo=None)
+                    if updated_dt.tzinfo is not None:
+                        updated_dt = updated_dt.replace(tzinfo=None)
+
                     time_diff = updated_dt - created_dt
                     completion_time_hours = time_diff.total_seconds() / 3600  # в часах
                 except Exception as e:
