@@ -10,15 +10,15 @@ services:
       dockerfile: docker/Dockerfile
     container_name: telegram_repair_bot_prod
     restart: always
-    # Используем env.production для production конфигурации
-    # И .env для секретных данных (BOT_TOKEN)
+    # Порядок загрузки env_file (от низкого к высокому приоритету):
+    # 1. .env (низкий приоритет - для секретных данных)
+    # 2. env.production (высокий приоритет - перезаписывает .env)
     env_file:
-      - ../env.production
       - ../.env
+      - ../env.production
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
-      - USE_ORM=true
       # Остальные переменные берутся из env.production
     volumes:
       - ../data:/app/data
