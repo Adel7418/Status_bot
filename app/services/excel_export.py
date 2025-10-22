@@ -1014,7 +1014,6 @@ class ExcelExportService:
             subheader_fill = PatternFill(
                 start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
             )
-            stat_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
             center_alignment = Alignment(horizontal="center", vertical="center")
             left_alignment = Alignment(horizontal="left", vertical="center")
             right_alignment = Alignment(horizontal="right", vertical="center")
@@ -1086,7 +1085,8 @@ class ExcelExportService:
                 ws[f"A{row}"] = label
                 ws[f"A{row}"].font = Font(bold=True)
                 ws[f"B{row}"] = value
-                ws[f"B{row}"].fill = stat_fill
+                ws[f"B{row}"].font = Font(bold=True)
+                ws[f"B{row}"].alignment = right_alignment
                 ws.merge_cells(f"B{row}:C{row}")
                 row += 1
 
@@ -1241,7 +1241,7 @@ class ExcelExportService:
                     cell.value = val
                     cell.font = Font(bold=True, size=11)
                     cell.number_format = "#,##0.00 ₽"
-                    cell.fill = stat_fill
+                    cell.alignment = right_alignment
                     cell.border = thin_border
 
             # Ширина столбцов
