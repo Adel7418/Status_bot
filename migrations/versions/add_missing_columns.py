@@ -19,23 +19,42 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Добавляем недостающие колонки в таблицу users
-    # Используем простой SQL для проверки и добавления колонок
+    # Создаём таблицу users если она не существует
     conn = op.get_bind()
     
-    # Проверяем существование колонки deleted_at
+    # Проверяем существование таблицы users
     try:
-        conn.execute(sa.text("SELECT deleted_at FROM users LIMIT 1"))
+        conn.execute(sa.text("SELECT 1 FROM users LIMIT 1"))
+        table_exists = True
     except Exception:
-        # Колонка не существует, добавляем её
-        op.add_column('users', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
+        table_exists = False
     
-    # Проверяем существование колонки version
-    try:
-        conn.execute(sa.text("SELECT version FROM users LIMIT 1"))
-    except Exception:
-        # Колонка не существует, добавляем её
-        op.add_column('users', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
+    if not table_exists:
+        # Создаём таблицу users с базовой структурой
+        op.create_table('users',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('telegram_id', sa.Integer(), nullable=False),
+            sa.Column('username', sa.String(length=255), nullable=True),
+            sa.Column('first_name', sa.String(length=255), nullable=True),
+            sa.Column('last_name', sa.String(length=255), nullable=True),
+            sa.Column('role', sa.String(length=100), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=False),
+            sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True),
+            sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('telegram_id')
+        )
+    else:
+        # Таблица существует, добавляем недостающие колонки
+        try:
+            conn.execute(sa.text("SELECT deleted_at FROM users LIMIT 1"))
+        except Exception:
+            op.add_column('users', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
+        
+        try:
+            conn.execute(sa.text("SELECT version FROM users LIMIT 1"))
+        except Exception:
+            op.add_column('users', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
 
 
 def downgrade() -> None:
