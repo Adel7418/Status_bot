@@ -20,26 +20,38 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Добавляем недостающие колонки в таблицу users
-    # Проверяем, существуют ли колонки перед добавлением
+    # Используем простой SQL для проверки и добавления колонок
     conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    columns = [col['name'] for col in inspector.get_columns('users')]
     
-    if 'deleted_at' not in columns:
+    # Проверяем существование колонки deleted_at
+    try:
+        conn.execute(sa.text("SELECT deleted_at FROM users LIMIT 1"))
+    except Exception:
+        # Колонка не существует, добавляем её
         op.add_column('users', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
     
-    if 'version' not in columns:
+    # Проверяем существование колонки version
+    try:
+        conn.execute(sa.text("SELECT version FROM users LIMIT 1"))
+    except Exception:
+        # Колонка не существует, добавляем её
         op.add_column('users', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
 
 
 def downgrade() -> None:
     # Удаляем добавленные колонки
     conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    columns = [col['name'] for col in inspector.get_columns('users')]
     
-    if 'version' in columns:
+    # Проверяем существование колонки version
+    try:
+        conn.execute(sa.text("SELECT version FROM users LIMIT 1"))
         op.drop_column('users', 'version')
+    except Exception:
+        pass  # Колонка не существует
     
-    if 'deleted_at' in columns:
+    # Проверяем существование колонки deleted_at
+    try:
+        conn.execute(sa.text("SELECT deleted_at FROM users LIMIT 1"))
         op.drop_column('users', 'deleted_at')
+    except Exception:
+        pass  # Колонка не существует
