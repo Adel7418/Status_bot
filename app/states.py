@@ -86,12 +86,6 @@ class LongRepairStates(StatesGroup):
     )  # Ввод срока окончания + предоплаты (опционально)
 
 
-class EditDRDetailsStates(StatesGroup):
-    """Состояния для редактирования деталей длительного ремонта"""
-
-    enter_new_details = State()  # Ввод новых срока/предоплаты
-
-
 class RescheduleOrderStates(StatesGroup):
     """Состояния для переноса заявки"""
 

@@ -1148,7 +1148,7 @@ class Database:
 
         return history
 
-    async def update_order_field(self, order_id: int, field: str, value: str | None) -> bool:
+    async def update_order_field(self, order_id: int, field: str, value: Any) -> bool:
         """
         Обновление отдельного поля заявки
 
@@ -1172,6 +1172,8 @@ class Database:
             "client_phone",
             "notes",
             "scheduled_time",
+            "estimated_completion_date",
+            "prepayment_amount",
         }
 
         if field not in allowed_fields:

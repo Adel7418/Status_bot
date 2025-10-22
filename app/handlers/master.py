@@ -450,6 +450,10 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         from aiogram.utils.keyboard import InlineKeyboardBuilder
 
         keyboard_builder = InlineKeyboardBuilder()
+        # Кнопка показа телефона (эпhemeral)
+        keyboard_builder.row(
+            InlineKeyboardButton(text="📞 Показать телефон", callback_data=f"show_phone:{order_id}")
+        )
         keyboard_builder.row(
             InlineKeyboardButton(text="💰 Завершить", callback_data=f"complete_order:{order_id}")
         )
@@ -460,8 +464,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         await callback.message.edit_text(
             f"🏠 <b>Статус обновлен!</b>\n\n"
             f"Заявка #{order_id} - вы на объекте.\n\n"
-            f"📞 <b>Телефон клиента:</b> {order.client_phone}\n\n"
-            f"После завершения работы нажмите кнопку ниже.",
+            f"Контактный телефон не сохраняется в чате. Нажмите кнопку ниже, чтобы посмотреть номер во всплывающем окне.",
             parse_mode="HTML",
             reply_markup=keyboard_builder.as_markup(),
         )
@@ -472,6 +475,39 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         await db.disconnect()
 
     await callback.answer("Статус обновлен!")
+
+
+@router.callback_query(F.data.startswith("show_phone:"))
+async def callback_show_phone(callback: CallbackQuery, user_roles: list):
+    """
+    Показ телефона клиента мастеру во всплывающем окне (не сохраняется в чате)
+
+    Args:
+        callback: Callback query
+        user_roles: Роли пользователя (из middleware)
+    """
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+
+        if not order or not master or order.assigned_master_id != master.id:
+            await callback.answer("❌ Нет доступа", show_alert=True)
+            return
+
+        # Телефон доступен после прибытия (ONSITE) и в DR/закрытых
+        if order.status not in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
+            await callback.answer("📵 Телефон доступен после прибытия на объект", show_alert=True)
+            return
+
+        await callback.answer(f"📞 Телефон клиента: {order.client_phone}", show_alert=True)
+
+    finally:
+        await db.disconnect()
 
 
 @router.callback_query(F.data.startswith("complete_order:"))

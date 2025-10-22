@@ -435,3 +435,24 @@ class MasterReportArchive(Base):
         Index("idx_master_report_archives_period", "period_start", "period_end"),
         Index("idx_master_report_archives_created_at", "created_at"),
     )
+
+
+class OrderGroupMessage(Base):
+    """Сообщение заявки в рабочей группе мастера (для последующего удаления)"""
+
+    __tablename__ = "order_group_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"), nullable=False)
+    master_id: Mapped[int] = mapped_column(Integer, ForeignKey("masters.id"), nullable=False)
+    chat_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    message_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_order_group_messages_order", "order_id", "is_active"),
+        Index("idx_order_group_messages_master", "master_id", "is_active"),
+        Index("idx_order_group_messages_chat_msg", "chat_id", "message_id"),
+    )
