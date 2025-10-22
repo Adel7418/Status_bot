@@ -630,40 +630,53 @@ class ReportsService:
 
             row += 1
 
-            # Данные по заказам
-            for order in closed_orders:
-                additional_info = []
-                if order["out_of_city"]:
-                    additional_info.append("Выезд за город")
-                if order["has_review"]:
-                    additional_info.append("Отзыв")
+        # Данные по заказам
+        for order in closed_orders:
+            additional_info = []
+            if order["out_of_city"]:
+                additional_info.append("Выезд за город")
+            if order["has_review"]:
+                additional_info.append("Отзыв")
 
-                data = [
-                    order["id"],
-                    order["equipment_type"],
-                    order["client_name"],
-                    order["master_name"],
-                    order.get("created_at"),
-                    order.get("closed_at"),
-                    order["total_amount"],
-                    order["materials_cost"],
-                    order["master_profit"],
-                    order["company_profit"],
-                    ", ".join(additional_info) if additional_info else "-",
-                ]
+            # Безопасное форматирование строк
+            equipment_type = (
+                str(order["equipment_type"] or "").encode("utf-8", errors="ignore").decode("utf-8")
+            )
+            client_name = (
+                str(order["client_name"] or "").encode("utf-8", errors="ignore").decode("utf-8")
+            )
+            master_name = (
+                str(order["master_name"] or "Не назначен")
+                .encode("utf-8", errors="ignore")
+                .decode("utf-8")
+            )
 
-                for col_idx, value in enumerate(data, start=1):
-                    cell = ws2.cell(row=row, column=col_idx, value=value)
-                    cell.border = thin_border
-                    if col_idx == 1:
-                        cell.alignment = center_alignment
-                    elif col_idx in [2, 3, 4, 5, 6, 11]:
-                        cell.alignment = left_alignment
-                    else:
-                        cell.alignment = right_alignment
-                        if col_idx >= 7 and col_idx <= 10:
-                            cell.number_format = "#,##0.00 ₽"
-                row += 1
+            data = [
+                order["id"],
+                equipment_type,
+                client_name,
+                master_name,
+                order.get("created_at"),
+                order.get("closed_at"),
+                order["total_amount"],
+                order["materials_cost"],
+                order["master_profit"],
+                order["company_profit"],
+                ", ".join(additional_info) if additional_info else "-",
+            ]
+
+            for col_idx, value in enumerate(data, start=1):
+                cell = ws2.cell(row=row, column=col_idx, value=value)
+                cell.border = thin_border
+                if col_idx == 1:
+                    cell.alignment = center_alignment
+                elif col_idx in [2, 3, 4, 5, 6, 11]:
+                    cell.alignment = left_alignment
+                else:
+                    cell.alignment = right_alignment
+                    if col_idx >= 7 and col_idx <= 10:
+                        cell.number_format = "#,##0.00 ₽"
+            row += 1
 
             # Итоги
             row += 1
@@ -777,9 +790,14 @@ class ReportsService:
                 cash_to_company = float(stats_row["company_profit_sum"] or 0)
 
                 # Данные по мастеру
+                master_name = (
+                    str(master["name"] or "Неизвестен")
+                    .encode("utf-8", errors="ignore")
+                    .decode("utf-8")
+                )
                 master_data = [
                     master_id,
-                    master["name"],
+                    master_name,
                     stats_row["total_orders"] or 0,
                     stats_row["closed"] or 0,
                     stats_row["in_work"] or 0,
@@ -918,7 +936,11 @@ class ReportsService:
             # Получаем все заявки для каждого мастера
             for master in masters:
                 master_id = master["id"]
-                master_name = master["name"]
+                master_name = (
+                    str(master["name"] or "Неизвестен")
+                    .encode("utf-8", errors="ignore")
+                    .decode("utf-8")
+                )
 
                 # Получаем ВСЕ заявки мастера (активные и закрытые)
                 cursor = await self.db.connection.execute(
@@ -995,22 +1017,70 @@ class ReportsService:
                     if order_row["has_review"]:
                         notes.append("Есть отзыв")
                     if order_row["scheduled_time"]:
-                        notes.append(f"Время: {order_row['scheduled_time']}")
+                        scheduled_time = (
+                            str(order_row["scheduled_time"] or "")
+                            .encode("utf-8", errors="ignore")
+                            .decode("utf-8")
+                        )
+                        notes.append(f"Время: {scheduled_time}")
                     if order_row["notes"]:
-                        notes.append(order_row["notes"][:50])
+                        notes_text = (
+                            str(order_row["notes"] or "")
+                            .encode("utf-8", errors="ignore")
+                            .decode("utf-8")
+                        )
+                        notes.append(notes_text[:50])
+
+                    # Безопасное форматирование строк
+                    equipment_type = (
+                        str(order_row["equipment_type"] or "")
+                        .encode("utf-8", errors="ignore")
+                        .decode("utf-8")
+                    )
+                    client_name = (
+                        str(order_row["client_name"] or "")
+                        .encode("utf-8", errors="ignore")
+                        .decode("utf-8")
+                    )
+                    client_address = (
+                        str(order_row["client_address"] or "")
+                        .encode("utf-8", errors="ignore")
+                        .decode("utf-8")
+                    )
+                    client_phone = (
+                        str(order_row["client_phone"] or "")
+                        .encode("utf-8", errors="ignore")
+                        .decode("utf-8")
+                    )
+
+                    # Безопасное обрезание адреса
+                    if len(client_address) > 30:
+                        client_address = client_address[:30] + "..."
+
+                    # Безопасное форматирование дат
+                    created_at = ""
+                    updated_at = ""
+                    if order_row["created_at"]:
+                        try:
+                            created_at = str(order_row["created_at"])[:16]
+                        except Exception:
+                            created_at = ""
+                    if order_row["updated_at"]:
+                        try:
+                            updated_at = str(order_row["updated_at"])[:16]
+                        except Exception:
+                            updated_at = ""
 
                     order_data = [
                         "",  # Пустая колонка для мастера (он в заголовке)
                         order_row["id"],
                         f"{status_emoji} {order_row['status']}",
-                        order_row["equipment_type"],
-                        order_row["client_name"],
-                        order_row["client_address"][:30] + "..."
-                        if len(order_row["client_address"]) > 30
-                        else order_row["client_address"],
-                        order_row["client_phone"],
-                        order_row["created_at"][:16] if order_row["created_at"] else "",
-                        order_row["updated_at"][:16] if order_row["updated_at"] else "",
+                        equipment_type,
+                        client_name,
+                        client_address,
+                        client_phone,
+                        created_at,
+                        updated_at,
                         float(order_row["total_amount"] or 0),
                         float(order_row["materials_cost"] or 0),
                         float(order_row["master_profit"] or 0),

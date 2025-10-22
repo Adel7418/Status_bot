@@ -210,6 +210,7 @@ class MasterReportsService:
         # Автоширина столбцов
         for col_num in range(1, 9):
             ws.column_dimensions[get_column_letter(col_num)].width = 15
+        ws.column_dimensions["A"].width = 20  # № Заявки - делаем шире
         ws.column_dimensions["C"].width = 20  # Оборудование
         ws.column_dimensions["F"].width = 30  # Адрес
 
@@ -311,6 +312,7 @@ class MasterReportsService:
         # Автоширина столбцов
         for col_num in range(1, 11):
             ws.column_dimensions[get_column_letter(col_num)].width = 15
+        ws.column_dimensions["A"].width = 20  # № Заявки - делаем шире
         ws.column_dimensions["B"].width = 20  # Оборудование
         ws.column_dimensions["E"].width = 30  # Адрес
 

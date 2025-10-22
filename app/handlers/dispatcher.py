@@ -1782,7 +1782,10 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
                     text += f"\n<b>{status_emoji} {status_name}:</b>\n"
 
                     for order in by_status[status]:
-                        text += f"  • Заявка #{order.id} - {order.equipment_type}\n"
+                        scheduled_time = (
+                            f" ({order.scheduled_time})" if order.scheduled_time else ""
+                        )
+                        text += f"  • Заявка #{order.id} - {order.equipment_type}{scheduled_time}\n"
 
                     text += "\n"
 

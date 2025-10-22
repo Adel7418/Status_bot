@@ -684,16 +684,61 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
         return
 
     # Отправляем файл
+    import logging
     from pathlib import Path
 
     from aiogram.types import FSInputFile
 
-    file = FSInputFile(filepath, filename=Path(filepath).name)
+    logger = logging.getLogger(__name__)
 
-    await callback.message.answer_document(
-        document=file,
-        caption="✅ Отчет по мастеру готов!",
-    )
+    try:
+        # Проверяем, что файл существует
+        if not Path(filepath).exists():
+            logger.error(f"Excel файл не найден: {filepath}")
+            await callback.message.edit_text(
+                "❌ Файл отчета не найден.",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🔙 Назад", callback_data="report_masters_stats_excel"
+                            )
+                        ]
+                    ]
+                ),
+            )
+            return
+
+        # Создаем безопасное имя файла
+        safe_filename = str(Path(filepath).name).encode("utf-8", errors="ignore").decode("utf-8")
+        file = FSInputFile(filepath, filename=safe_filename)
+
+        logger.info(
+            f"Отправляем Excel файл: {filepath} (размер: {Path(filepath).stat().st_size} байт)"
+        )
+
+        await callback.message.answer_document(
+            document=file,
+            caption="✅ Отчет по мастеру готов!",
+        )
+
+        logger.info(f"Excel файл успешно отправлен: {filepath}")
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки Excel файла {filepath}: {e}")
+        await callback.message.edit_text(
+            f"❌ Ошибка отправки файла: {e!s}",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад", callback_data="report_masters_stats_excel"
+                        )
+                    ]
+                ]
+            ),
+        )
+        return
 
     await callback.message.edit_text(
         "✅ Отчет создан!",
