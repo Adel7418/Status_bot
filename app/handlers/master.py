@@ -610,7 +610,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
             await callback.answer(
                 "❌ Эта заявка уже в статусе 'Длительный ремонт'!\n"
                 "Для изменения срока используйте кнопку '✏️ Редактировать'",
-                show_alert=True
+                show_alert=True,
             )
             return
 
@@ -619,7 +619,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
             logger.warning(f"[DR] Cannot move order #{order_id} to DR from status {order.status}")
             await callback.answer(
                 "❌ Перевести в длительный ремонт можно только из статуса 'На объекте'",
-                show_alert=True
+                show_alert=True,
             )
             return
 

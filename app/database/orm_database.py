@@ -25,8 +25,8 @@ from app.database.orm_models import (
     Master,
     MasterFinancialReport,
     MasterReportArchive,
-    OrderGroupMessage,
     Order,
+    OrderGroupMessage,
     OrderStatusHistory,
     User,
 )
@@ -65,6 +65,10 @@ class ORMDatabase:
     async def connect(self):
         """Подключение к базе данных"""
         try:
+            logger.info(f"🔧 Инициализация подключения к БД...")
+            logger.info(f"   Database URL: {self.database_url}")
+            logger.info(f"   Is SQLite: {self._is_sqlite}")
+            
             # Создаем async engine
             self.engine = create_async_engine(
                 self.database_url,
@@ -82,14 +86,18 @@ class ORMDatabase:
                 expire_on_commit=False,  # Важно для async работы
             )
 
+            logger.info("🔧 Создание таблиц...")
             # Создаем таблицы если их нет
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
 
             logger.info(f"✅ Подключено к базе данных: {self.database_url}")
+            logger.info("✅ Таблицы созданы/проверены")
 
         except Exception as e:
             logger.error(f"❌ Ошибка подключения к БД: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             raise
 
     async def disconnect(self):
@@ -1018,7 +1026,9 @@ class ORMDatabase:
             await session.commit()
             await session.refresh(archive)
 
-            logger.info(f"Архивный отчет для мастера {archive.master_id} сохранен (ID: {archive.id})")
+            logger.info(
+                f"Архивный отчет для мастера {archive.master_id} сохранен (ID: {archive.id})"
+            )
             return archive.id
 
     async def get_master_archived_reports(
@@ -1044,9 +1054,7 @@ class ORMDatabase:
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def get_master_report_archive_by_id(
-        self, report_id: int
-    ) -> MasterReportArchive | None:
+    async def get_master_report_archive_by_id(self, report_id: int) -> MasterReportArchive | None:
         """
         Получение архивного отчета по ID
 

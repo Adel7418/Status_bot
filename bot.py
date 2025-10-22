@@ -179,6 +179,12 @@ async def main():
         dp = Dispatcher(storage=storage)
 
         # Инициализация базы данных
+        logger.info("=" * 60)
+        logger.info("🔧 Инициализация базы данных...")
+        logger.info(f"   USE_ORM: {Config.USE_ORM}")
+        logger.info(f"   DATABASE_PATH: {Config.DATABASE_PATH}")
+        logger.info("=" * 60)
+        
         db = Database()
         await db.connect()
 
@@ -187,7 +193,7 @@ async def main():
         # ORM не требует init_db - таблицы уже созданы через миграции
         if hasattr(db, "init_db"):
             await db.init_db()
-        logger.info("База данных инициализирована")
+        logger.info("✅ База данных инициализирована")
 
         # Инициализация планировщика (передаем shared DB instance)
         scheduler = TaskScheduler(bot, db)

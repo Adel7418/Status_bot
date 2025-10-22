@@ -1241,7 +1241,6 @@ class Database:
         logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
         return True
 
-
     async def update_order(
         self,
         order_id: int,

@@ -15,7 +15,6 @@ from app.filters import IsGroupChat, IsMasterInGroup
 from app.keyboards.inline import get_group_order_keyboard
 from app.states import RescheduleOrderStates
 from app.utils import format_datetime, get_now, log_action
-from app.keyboards.inline import get_group_order_keyboard
 
 
 logger = logging.getLogger(__name__)
@@ -337,7 +336,7 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
             f"📝 Описание: {order.description}\n"
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n\n"
-            f"Контактный телефон не сохраняется в чате. Нажмите кнопку \"📞 Показать телефон\" для просмотра.",
+            f'Контактный телефон не сохраняется в чате. Нажмите кнопку "📞 Показать телефон" для просмотра.',
             parse_mode="HTML",
             reply_markup=get_group_order_keyboard(order, OrderStatus.ONSITE),
         )
