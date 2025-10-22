@@ -731,6 +731,58 @@ class ORMDatabase:
             logger.info(f"Заявка #{order_id} обновлена")
             return True
 
+    async def update_order_field(self, order_id: int, field: str, value: Any) -> bool:
+        """Обновление отдельного поля заявки (совместимость с legacy-обработчиком)
+
+        Разрешены только безопасные поля. Метод используется обработчиком редактирования
+        (`order_edit`) и должен присутствовать в ORM-режиме, чтобы избежать прямого SQL.
+
+        Args:
+            order_id: ID заявки
+            field: Название поля для обновления
+            value: Новое значение
+
+        Returns:
+            True если успешно обновлено, иначе False
+
+        Raises:
+            ValueError: Если поле не разрешено к обновлению
+        """
+        allowed_fields = {
+            "equipment_type",
+            "description",
+            "client_name",
+            "client_address",
+            "client_phone",
+            "notes",
+            "scheduled_time",
+            # DR поля
+            "estimated_completion_date",
+            "prepayment_amount",
+        }
+
+        if field not in allowed_fields:
+            raise ValueError(f"Поле {field} не может быть обновлено через этот метод")
+
+        async with self.get_session() as session:
+            stmt = select(Order).where(Order.id == order_id)
+            result = await session.execute(stmt)
+            order = result.scalar_one_or_none()
+
+            if not order:
+                logger.error(f"Заявка #{order_id} не найдена")
+                return False
+
+            # Устанавливаем новое значение
+            setattr(order, field, value)
+            order.updated_at = get_now()
+            order.version += 1
+
+            await session.commit()
+
+        logger.info(f"Order #{order_id}: field '{field}' updated")
+        return True
+
     async def get_orders_by_master(
         self, master_id: int, exclude_closed: bool = True
     ) -> list[Order]:
