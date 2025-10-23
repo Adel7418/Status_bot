@@ -1132,6 +1132,14 @@ async def process_total_amount(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+            "Введите число (например: 5000, 5000.50 или 0):"
+        )
+        return
+
     # Проверяем, что введена корректная сумма
     try:
         total_amount = float(message.text.replace(",", ".").strip())
@@ -1183,6 +1191,14 @@ async def process_materials_cost(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+            "Введите число (например: 500, 0):"
+        )
+        return
+
     # Проверяем, что введена корректная сумма
     try:
         materials_cost = float(message.text.replace(",", ".").strip())
@@ -1593,6 +1609,14 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с новой датой.\n"
+            "Примеры: завтра в 15:00, через 3 дня, 25.10.2025 14:00"
+        )
+        return
+
     new_time = message.text.strip()
 
     # Попытка автоопределения даты
@@ -1685,6 +1709,14 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с причиной переноса.\n"
+            "Или отправьте \"-\" если причины нет."
+        )
+        return
+
     reason = message.text.strip()
 
     # Если пользователь указал "-", причины нет

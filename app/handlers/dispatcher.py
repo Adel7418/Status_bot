@@ -118,6 +118,14 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с описанием проблемы.\n"
+            f"Минимум {10} символов, максимум {MAX_DESCRIPTION_LENGTH} символов."
+        )
+        return
+
     description = message.text.strip()
 
     # Валидация через Pydantic
@@ -185,6 +193,14 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с ФИО клиента.\n"
+            "Минимум 2 символа, максимум 100 символов."
+        )
+        return
+
     client_name = message.text.strip()
 
     # Валидация через Pydantic
@@ -240,6 +256,14 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
         user_role: Роль пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с адресом клиента.\n"
+            "Минимум 5 символов, максимум 200 символов."
+        )
         return
 
     client_address = message.text.strip()
@@ -300,6 +324,14 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         user_role: Роль пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с номером телефона.\n"
+            "Формат: +7XXXXXXXXXX или 8XXXXXXXXXX"
+        )
         return
 
     phone = message.text.strip()
@@ -394,6 +426,14 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с заметками.\n"
+            f"Максимум {MAX_NOTES_LENGTH} символов."
+        )
+        return
+
     notes = message.text.strip()
 
     if len(notes) > MAX_NOTES_LENGTH:
@@ -428,6 +468,14 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
         user_role: Роль пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с временем прибытия.\n"
+            "Примеры: завтра в 15:00, через 3 дня, 25.10.2025 14:00"
+        )
         return
 
     scheduled_time = message.text.strip()
@@ -527,7 +575,6 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                 return
 
     # Если не похоже на дату - проверяем, не является ли это простой цифрой
-    import re
     if re.match(r"^\d{1,2}$", scheduled_time.strip()):
         # Простая цифра - показываем примеры
         await message.answer(
@@ -1685,8 +1732,6 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
 
-
-
 @router.callback_query(F.data == "back_to_orders")
 async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
     """
@@ -2237,6 +2282,14 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+            "Введите число (например: 5000, 5000.50 или 0):"
+        )
+        return
+
     # Проверяем, что введена корректная сумма
     try:
         total_amount = float(message.text.replace(",", ".").strip())
@@ -2289,6 +2342,14 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+            "Введите число (например: 500, 0):"
+        )
+        return
+
     logger.info(f"Processing materials cost: {message.text}")
 
     # Проверяем, что введена корректная сумма
