@@ -9,27 +9,48 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.sql import func
 
 
 # revision identifiers, used by Alembic.
 revision: str = 'd0a601a63b16'
-down_revision: Union[str, None] = 'add_missing_columns_to_orders_masters'
+down_revision: Union[str, None] = 'create_audit_log_table'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Добавляем колонку deleted_at в таблицу audit_log
+    # Создаем таблицу audit_log если она не существует, затем добавляем колонку deleted_at
     conn = op.get_bind()
     
-    # Сначала проверяем, существует ли таблица audit_log
+    # Проверяем, существует ли таблица audit_log
     try:
         result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")).fetchone()
         if not result:
-            print("[SKIP] Таблица audit_log не существует - пропускаем миграцию")
+            print("[INFO] Таблица audit_log не существует - создаем её")
+            # Создаем таблицу audit_log
+            op.create_table('audit_log',
+                sa.Column('id', sa.Integer(), nullable=False),
+                sa.Column('user_id', sa.Integer(), nullable=True),
+                sa.Column('action', sa.String(length=255), nullable=False),
+                sa.Column('details', sa.Text(), nullable=True),
+                sa.Column('timestamp', sa.DateTime(), server_default=func.now(), nullable=False),
+                sa.Column('deleted_at', sa.DateTime(), nullable=True),
+                sa.PrimaryKeyConstraint('id'),
+                sa.ForeignKeyConstraint(['user_id'], ['users.telegram_id'], ),
+            )
+            
+            # Создаем индексы
+            op.create_index('idx_audit_user_id', 'audit_log', ['user_id'])
+            op.create_index('idx_audit_timestamp', 'audit_log', ['timestamp'])
+            op.create_index('idx_audit_log_deleted_at', 'audit_log', ['deleted_at'])
+            
+            print("[OK] Создана таблица audit_log с колонкой deleted_at")
             return
+        else:
+            print("[INFO] Таблица audit_log существует - проверяем колонку deleted_at")
     except Exception as e:
-        print(f"[SKIP] Ошибка при проверке таблицы audit_log: {e} - пропускаем миграцию")
+        print(f"[ERROR] Ошибка при проверке таблицы audit_log: {e}")
         return
     
     # Проверяем, существует ли уже колонка deleted_at
@@ -47,26 +68,20 @@ def upgrade() -> None:
             print("[OK] Добавлена колонка deleted_at в audit_log")
             
     except Exception as e:
-        print(f"[SKIP] Ошибка при проверке/добавлении колонки: {e} - пропускаем миграцию")
+        print(f"[ERROR] Ошибка при проверке/добавлении колонки: {e}")
 
 
 def downgrade() -> None:
-    # Удаляем колонку deleted_at из таблицы audit_log
+    # Удаляем таблицу audit_log
     conn = op.get_bind()
     
     # Проверяем, существует ли таблица audit_log
     try:
         result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")).fetchone()
-        if not result:
-            print("[SKIP] Таблица audit_log не существует - пропускаем откат")
-            return
+        if result:
+            op.drop_table('audit_log')
+            print("[OK] Удалена таблица audit_log")
+        else:
+            print("[SKIP] Таблица audit_log не существует")
     except Exception as e:
-        print(f"[SKIP] Ошибка при проверке таблицы audit_log: {e} - пропускаем откат")
-        return
-    
-    # Удаляем колонку
-    try:
-        op.drop_column('audit_log', 'deleted_at')
-        print("[OK] Удалена колонка deleted_at из audit_log")
-    except Exception as e:
-        print(f"[SKIP] Ошибка при удалении колонки: {e}")
+        print(f"[ERROR] Ошибка при удалении таблицы audit_log: {e}")
