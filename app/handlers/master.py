@@ -755,6 +755,18 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             except ValueError as e:
                 logger.warning(f"[DR] Failed to parse prepayment amount '{prepayment_str}': {e}")
 
+    # ВАЛИДАЦИЯ ПРЕДОПЛАТЫ
+    if prepayment_amount is not None:
+        prepayment_validation = validate_dr_prepayment(prepayment_amount)
+        if not prepayment_validation["valid"]:
+            await message.reply(
+                f"❌ <b>Ошибка валидации предоплаты:</b>\n\n"
+                f"{prepayment_validation['error']}\n\n"
+                f"Пожалуйста, введите корректную сумму предоплаты.",
+                parse_mode="HTML"
+            )
+            return
+
     # 🆕 АВТООПРЕДЕЛЕНИЕ ДАТЫ из естественного языка
     from app.utils import (
         format_datetime_for_storage,
@@ -770,6 +782,18 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         if parsed_dt:
             # Проверяем валидацию
             validation = validate_parsed_datetime(parsed_dt, completion_date)
+
+            # СТРОГАЯ ВАЛИДАЦИЯ ДЛЯ ДЛИТЕЛЬНОГО РЕМОНТА
+            dr_validation = validate_dr_completion_date(parsed_dt, completion_date)
+            
+            if not dr_validation["valid"]:
+                await message.reply(
+                    f"❌ <b>Ошибка валидации даты:</b>\n\n"
+                    f"{dr_validation['error']}\n\n"
+                    f"Пожалуйста, введите корректную дату завершения ремонта.",
+                    parse_mode="HTML"
+                )
+                return
 
             # Успешно распознали дату - форматируем для хранения
             formatted_date = format_datetime_for_storage(parsed_dt, completion_date)
@@ -787,6 +811,9 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
 
             if validation.get("warning"):
                 confirmation_text += f"\n\n⚠️ <i>{validation['warning']}</i>"
+            
+            if dr_validation.get("warning"):
+                confirmation_text += f"\n\n⚠️ <i>{dr_validation['warning']}</i>"
 
             # Показываем пользователю что распознали
             await message.answer(
@@ -825,7 +852,97 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             f"completion_date='{completion_date}', prepayment={prepayment_amount}"
         )
 
-        # Сначала обновляем поля DR
+        # Сохраняем данные в состоянии для подтверждения
+        await state.update_data(
+            completion_date=completion_date,
+            prepayment_amount=prepayment_amount
+        )
+        
+        # Переходим к подтверждению
+        await state.set_state(LongRepairStates.confirm_dr)
+        
+        # Формируем сообщение с подтверждением
+        confirmation_text = (
+            f"📋 <b>Подтверждение перевода в длительный ремонт</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"⏰ <b>Примерный срок:</b> {completion_date}\n"
+        )
+
+        if prepayment_amount:
+            confirmation_text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+        else:
+            confirmation_text += "💰 <b>Предоплата:</b> не было\n"
+
+        confirmation_text += (
+            f"\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
+            f"'Длительный ремонт' и диспетчер получит уведомление.\n\n"
+            f"Подтвердить перевод в длительный ремонт?"
+        )
+
+        # Создаем клавиатуру подтверждения
+        from app.keyboards.inline import get_yes_no_keyboard
+        keyboard = get_yes_no_keyboard("confirm_dr", order_id)
+
+        await message.reply(confirmation_text, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.exception(f"[DR] ❌ Error processing DR for order #{order_id}: {e}")
+        await message.reply(
+            "❌ Произошла ошибка при переводе заявки в длительный ремонт.\n"
+            "Попробуйте еще раз или обратитесь к диспетчеру."
+        )
+        await state.clear()
+    finally:
+        await db.disconnect()
+        logger.debug(f"[DR] DB disconnected for order #{order_id}")
+
+
+@router.callback_query(lambda c: c.data.startswith("confirm_dr"))
+async def process_dr_confirmation_callback(callback_query: CallbackQuery, state: FSMContext, user_roles: list):
+    """
+    Обработка подтверждения перевода в длительный ремонт
+    
+    Args:
+        callback_query: Callback запрос
+        state: FSM контекст
+        user_roles: Список ролей пользователя
+    """
+    from app.utils import parse_callback_data
+    
+    # Извлекаем данные из callback
+    callback_data = parse_callback_data(callback_query.data)
+    order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
+    answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
+    
+    # Определяем ответ
+    confirmed = answer == "yes"
+    
+    if not confirmed:
+        await callback_query.message.edit_text(
+            "❌ Перевод в длительный ремонт отменен.\n\n"
+            "Заявка остается в текущем статусе."
+        )
+        await state.clear()
+        await callback_query.answer("Операция отменена")
+        return
+    
+    # Получаем данные из состояния
+    data = await state.get_data()
+    completion_date = data.get("completion_date")
+    prepayment_amount = data.get("prepayment_amount")
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        order = await db.get_order_by_id(int(order_id))
+        master = await db.get_master_by_telegram_id(callback_query.from_user.id)
+        
+        if not order or not master or order.assigned_master_id != master.id:
+            await callback_query.message.edit_text("❌ Ошибка: заявка не найдена или не принадлежит вам.")
+            return
+        
+        # Обновляем поля DR
         await db.connection.execute(
             """
             UPDATE orders
@@ -837,19 +954,19 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         )
         await db.connection.commit()
 
-        # Затем обновляем статус с валидацией через State Machine
+        # Обновляем статус с валидацией через State Machine
         await db.update_order_status(
-            order_id=order_id,
+            order_id=int(order_id),
             status=OrderStatus.DR,
-            changed_by=message.from_user.id,
-            user_roles=user_roles,  # Передаём роли для валидации
+            changed_by=callback_query.from_user.id,
+            user_roles=user_roles,
         )
 
         logger.info(f"[DR] Order #{order_id} updated to DR status successfully")
 
         # Добавляем в лог
         await db.add_audit_log(
-            user_id=message.from_user.id,
+            user_id=callback_query.from_user.id,
             action="DR_ORDER",
             details=f"Order #{order_id} marked as long-term repair. Completion: {completion_date}, Prepayment: {prepayment_amount or 0}",
         )
@@ -865,14 +982,13 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         else:
             result_text += "💰 <b>Предоплата:</b> не было\n"
 
-        result_text += "\n<i>Диспетчер получит уведомление.</i>"
+        result_text += "\n<i>Диспетчер получил уведомление.</i>"
 
-        await message.reply(result_text, parse_mode="HTML")
+        await callback_query.message.edit_text(result_text, parse_mode="HTML")
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
-            # Определяем кто перевел заявку в DR
-            initiator_name = master.get_display_name() if master else message.from_user.full_name
+            initiator_name = master.get_display_name()
 
             notification = (
                 f"⏳ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
@@ -883,28 +999,31 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             if prepayment_amount:
                 notification += f"💰 Предоплата: {prepayment_amount:.2f} ₽"
 
-            logger.debug(f"[DR] Sending notification to dispatcher {order.dispatcher_id}")
+            from app.utils import safe_send_message
+            result = await safe_send_message(
+                callback_query.bot,
+                order.dispatcher_id,
+                notification,
+                parse_mode="HTML",
+            )
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} about DR")
 
-            try:
-                await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
-                logger.debug("[DR] Dispatcher notification sent successfully")
-            except Exception as e:
-                logger.error(f"[DR] Failed to notify dispatcher {order.dispatcher_id}: {e}")
-
-        log_action(message.from_user.id, "DR_ORDER", f"Order #{order_id}")
-
+        log_action(callback_query.from_user.id, "DR_ORDER", f"Order #{order_id}")
         logger.info(f"[DR] ✅ Order #{order_id} successfully marked as DR")
 
     except Exception as e:
-        logger.exception(f"[DR] ❌ Error processing DR for order #{order_id}: {e}")
-        await message.reply(
-            "❌ Произошла ошибка при переводе заявки в длительный ремонт.\n"
+        logger.exception(f"[DR] ❌ Error confirming DR for order #{order_id}: {e}")
+        await callback_query.message.edit_text(
+            "❌ Произошла ошибка при подтверждении перевода в длительный ремонт.\n"
             "Попробуйте еще раз или обратитесь к диспетчеру."
         )
     finally:
         await db.disconnect()
         await state.clear()
         logger.debug(f"[DR] State cleared and DB disconnected for order #{order_id}")
+
+    await callback_query.answer("Заявка переведена в длительный ремонт")
 
 
 @router.message(F.text == "📊 Моя статистика")
@@ -1903,3 +2022,98 @@ async def complete_order_as_refusal(
         await message.reply("❌ Ошибка при завершении заявки как отказ")
     finally:
         await db.disconnect()
+
+
+def validate_dr_completion_date(parsed_dt, original_text: str) -> dict:
+    """
+    Строгая валидация даты завершения длительного ремонта
+    
+    Args:
+        parsed_dt: Распознанная дата
+        original_text: Исходный текст
+        
+    Returns:
+        dict: {"valid": bool, "error": str, "warning": str}
+    """
+    from datetime import datetime, timedelta
+    from app.utils import get_now
+    
+    now = get_now()
+    tomorrow = now + timedelta(days=1)
+    max_date = now + timedelta(days=180)  # 6 месяцев
+    
+    # Проверяем, что дата не в прошлом
+    if parsed_dt.date() < tomorrow.date():
+        return {
+            "valid": False,
+            "error": f"Дата завершения ремонта не может быть раньше завтра ({tomorrow.strftime('%d.%m.%Y')})"
+        }
+    
+    # Проверяем, что дата не слишком далеко в будущем
+    if parsed_dt.date() > max_date.date():
+        return {
+            "valid": False,
+            "error": f"Дата завершения ремонта не может быть позже чем через 6 месяцев ({max_date.strftime('%d.%m.%Y')})"
+        }
+    
+    # Проверяем разумность срока (не менее 1 дня, не более 6 месяцев)
+    days_difference = (parsed_dt.date() - now.date()).days
+    
+    warnings = []
+    
+    # Предупреждения для необычных сроков
+    if days_difference < 3:
+        warnings.append("Очень короткий срок для длительного ремонта")
+    elif days_difference > 90:
+        warnings.append("Очень длительный срок ремонта - убедитесь в корректности")
+    
+    # Проверяем на выходные дни
+    if parsed_dt.weekday() >= 5:  # Суббота или воскресенье
+        warnings.append("Дата завершения выпадает на выходной день")
+    
+    return {
+        "valid": True,
+        "warning": "; ".join(warnings) if warnings else None
+    }
+
+
+def validate_dr_prepayment(amount: float) -> dict:
+    """
+    Валидация предоплаты для длительного ремонта
+    
+    Args:
+        amount: Сумма предоплаты
+        
+    Returns:
+        dict: {"valid": bool, "error": str, "warning": str}
+    """
+    # Проверяем, что сумма положительная
+    if amount <= 0:
+        return {
+            "valid": False,
+            "error": "Сумма предоплаты должна быть больше 0"
+        }
+    
+    # Проверяем разумность суммы
+    if amount < 100:
+        return {
+            "valid": False,
+            "error": "Сумма предоплаты слишком мала (минимум 100 ₽)"
+        }
+    
+    if amount > 100000:
+        return {
+            "valid": False,
+            "error": "Сумма предоплаты слишком велика (максимум 100,000 ₽)"
+        }
+    
+    warnings = []
+    
+    # Предупреждения для необычных сумм
+    if amount > 50000:
+        warnings.append("Очень большая сумма предоплаты - убедитесь в корректности")
+    
+    return {
+        "valid": True,
+        "warning": "; ".join(warnings) if warnings else None
+    }

@@ -84,6 +84,7 @@ class LongRepairStates(StatesGroup):
     enter_completion_date_and_prepayment = (
         State()
     )  # Ввод срока окончания + предоплаты (опционально)
+    confirm_dr = State()  # Подтверждение перевода в длительный ремонт
 
 
 class RescheduleOrderStates(StatesGroup):
