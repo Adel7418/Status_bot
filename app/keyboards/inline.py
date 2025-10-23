@@ -68,7 +68,7 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
                 callback_data=create_callback_data("group_complete_order", order.id),
             ),
             InlineKeyboardButton(
-                text="⏳ Длительный ремонт",
+                text="⏳ ДР",
                 callback_data=create_callback_data("group_dr_order", order.id),
             ),
         )
@@ -252,7 +252,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             )
             builder.row(
                 InlineKeyboardButton(
-                    text="⏳ Длительный ремонт",
+                    text="⏳ ДР",
                     callback_data=create_callback_data("dr_order", order.id),
                 )
             )

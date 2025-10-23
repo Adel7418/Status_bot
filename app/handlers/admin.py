@@ -1419,7 +1419,7 @@ async def callback_admin_complete_order(callback: CallbackQuery, state: FSMConte
 @router.callback_query(F.data.startswith("admin_dr_order:"))
 async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, user_role: str):
     """
-    Длительный ремонт - админ от имени мастера
+    ДР - админ от имени мастера
 
     Args:
         callback: Callback query
@@ -1467,7 +1467,7 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
         await callback.message.answer(
-            f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n"
+            f"⏳ <b>ДР - Заявка #{order_id}</b>\n"
             f"<b>От имени мастера:</b> {master.get_display_name()}\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",

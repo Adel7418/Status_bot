@@ -71,7 +71,7 @@ async def show_edit_order_menu(message: Message, order, user_role: str, allow_cl
         OrderStatus.ASSIGNED: "👨‍🔧 Назначена",
         OrderStatus.ACCEPTED: "✅ Принята",
         OrderStatus.ONSITE: "🏠 На объекте",
-        OrderStatus.DR: "⏳ Длительный ремонт",
+        OrderStatus.DR: "⏳ ДР",
         OrderStatus.CLOSED: "✅ Закрыта",
         OrderStatus.REFUSED: "❌ Отклонена",
     }

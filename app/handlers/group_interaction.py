@@ -526,7 +526,7 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
         await callback.message.reply(
-            f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n\n"
+            f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
             parse_mode="HTML",

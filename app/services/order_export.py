@@ -88,10 +88,10 @@ class OrderExportService:
             if order.master_name:
                 data.append(("Мастер", order.master_name))
 
-            # Длительный ремонт
+            # ДР
             if order.status == OrderStatus.DR:
                 data.append(("", ""))
-                data.append(("ДЛИТЕЛЬНЫЙ РЕМОНТ", ""))
+                data.append(("ДР", ""))
                 if order.estimated_completion_date:
                     data.append(("Срок окончания", order.estimated_completion_date))
                 if order.prepayment_amount:

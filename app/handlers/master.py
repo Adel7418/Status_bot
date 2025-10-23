@@ -524,7 +524,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
             InlineKeyboardButton(text="💰 Завершить", callback_data=f"complete_order:{order_id}")
         )
         keyboard_builder.row(
-            InlineKeyboardButton(text="⏳ Длительный ремонт", callback_data=f"dr_order:{order_id}")
+            InlineKeyboardButton(text="⏳ ДР", callback_data=f"dr_order:{order_id}")
         )
 
         await callback.message.edit_text(
@@ -647,7 +647,7 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("dr_order:"))
 async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
     """
-    Длительный ремонт - запрос срока окончания и предоплаты
+    ДР - запрос срока окончания и предоплаты
 
     Args:
         callback: Callback query
@@ -678,7 +678,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
         if order.status == OrderStatus.DR:
             logger.warning(f"[DR] Order #{order_id} is already in DR status")
             await callback.answer(
-                "❌ Эта заявка уже в статусе 'Длительный ремонт'!\n"
+                "❌ Эта заявка уже в статусе 'ДР'!\n"
                 "Для изменения срока используйте кнопку '✏️ Редактировать'",
                 show_alert=True,
             )
@@ -702,7 +702,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
         await callback.message.edit_text(
-            f"⏳ <b>Длительный ремонт - Заявка #{order_id}</b>\n\n"
+            f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
             parse_mode="HTML",
@@ -1023,7 +1023,7 @@ async def btn_my_stats(message: Message, user_role: str):
             f"• Всего: {total}\n"
             f"• ✅ Завершено: {completed}\n"
             f"• 🔄 Активных: {active}\n"
-            f"• ⏳ Длительный ремонт: {dr}\n\n"
+            f"• ⏳ ДР: {dr}\n\n"
         )
 
         if total > 0:
@@ -1989,7 +1989,7 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
 
         text += (
             "\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
-            "'Длительный ремонт' и диспетчер получит уведомление.\n\n"
+            "'ДР' и диспетчер получит уведомление.\n\n"
             "Подтвердите перевод в длительный ремонт:"
         )
 

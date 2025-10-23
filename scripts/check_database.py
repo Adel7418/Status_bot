@@ -171,7 +171,7 @@ def check_database():
                 "ONSITE": "🏠 На объекте",
                 "CLOSED": "💰 Завершены",
                 "REFUSED": "❌ Отклонены",
-                "DR": "⏳ Длительный ремонт",
+                "DR": "⏳ ДР",
             }
             status_name = status_names.get(stat["status"], stat["status"])
             print(f"   {status_name}: {stat['count']}")
@@ -249,7 +249,7 @@ def check_database():
                 "ONSITE": "🏠 На объекте",
                 "CLOSED": "💰 Завершена",
                 "REFUSED": "❌ Отклонена",
-                "DR": "⏳ Длительный ремонт",
+                "DR": "⏳ ДР",
             }
             old = status_names.get(h["old_status"], h["old_status"]) if h["old_status"] else "-"
             new = status_names.get(h["new_status"], h["new_status"])

@@ -26,7 +26,7 @@ class OrderStatus:
     ONSITE = "ONSITE"  # Мастер на объекте
     CLOSED = "CLOSED"  # Завершена
     REFUSED = "REFUSED"  # Отклонена
-    DR = "DR"  # Длительный ремонт
+    DR = "DR"  # ДР
 
     @classmethod
     def all_statuses(cls) -> list[str]:
@@ -57,7 +57,7 @@ class OrderStatus:
             cls.ONSITE: "На объекте",
             cls.CLOSED: "Завершена",
             cls.REFUSED: "Отклонена",
-            cls.DR: "Длительный ремонт",
+            cls.DR: "ДР",
         }
         return names.get(status, status)
 
