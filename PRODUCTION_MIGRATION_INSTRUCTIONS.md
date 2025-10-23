@@ -75,6 +75,25 @@ docker-compose -f docker/docker-compose.prod.yml restart bot
 [SKIP] Таблица audit_log не существует - пропускаем миграцию
 ```
 
+## Важно!
+Если миграция все еще падает с ошибкой, попробуйте:
+
+1. **Проверить версию миграции:**
+```bash
+docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic current
+```
+
+2. **Принудительно обновить до последней версии:**
+```bash
+docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
+```
+
+3. **Если проблема persists, попробуйте откатиться и применить заново:**
+```bash
+docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic downgrade -1
+docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
+```
+
 ## Откат (если что-то пошло не так)
 ```bash
 docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic downgrade -1
