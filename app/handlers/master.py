@@ -784,6 +784,34 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
                 confirmation_text,
                 parse_mode="HTML",
             )
+        else:
+            # Не удалось распарсить дату - показываем примеры
+            await message.reply(
+                f"❌ <b>Не удалось распознать дату:</b> '{completion_date}'\n\n"
+                f"<b>Примеры правильного ввода:</b>\n"
+                f"• завтра\n"
+                f"• через 3 дня\n"
+                f"• через неделю\n"
+                f"• 25.12.2025\n"
+                f"• послезавтра в 15:00\n\n"
+                f"Пожалуйста, введите дату в одном из указанных форматов.",
+                parse_mode="HTML",
+            )
+            return
+    else:
+        # Текст не похож на дату - показываем примеры
+        await message.reply(
+            f"❌ <b>Введенный текст не похож на дату:</b> '{completion_date}'\n\n"
+            f"<b>Примеры правильного ввода:</b>\n"
+            f"• завтра\n"
+            f"• через 3 дня\n"
+            f"• через неделю\n"
+            f"• 25.12.2025\n"
+            f"• послезавтра в 15:00\n\n"
+            f"Пожалуйста, введите дату в одном из указанных форматов.",
+            parse_mode="HTML",
+        )
+        return
 
     db = Database()
     await db.connect()
