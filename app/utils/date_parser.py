@@ -286,13 +286,20 @@ def should_parse_as_date(text: str) -> bool:
         >>> should_parse_as_date("через 1-1.5 часа")
         True
 
+        >>> should_parse_as_date("3")
+        False
+
         >>> should_parse_as_date("Набрать клиенту")
         False
     """
     if not text or not text.strip():
         return False
 
-    text_lower = text.lower()
+    text_lower = text.lower().strip()
+
+    # Если текст состоит только из цифр (1-2 цифры) - не парсим как дату
+    if re.match(r"^\d{1,2}$", text_lower):
+        return False
 
     # Ключевые слова для дат/времени
     date_keywords = [
@@ -322,9 +329,16 @@ def should_parse_as_date(text: str) -> bool:
     # Проверка на диапазоны типа "1-1.5"
     has_range = re.search(r"\d+\s*-\s*\d+", text_lower)
 
-    # Если есть хотя бы одно ключевое слово или цифры или диапазон - пытаемся парсить
+    # Проверка на даты в формате DD.MM.YYYY или DD/MM/YYYY
+    has_date_format = re.search(r"\d{1,2}[./]\d{1,2}[./]\d{2,4}", text_lower)
+
+    # Проверка на время в формате HH:MM
+    has_time_format = re.search(r"\d{1,2}:\d{2}", text_lower)
+
+    # Если есть хотя бы одно ключевое слово, диапазон, формат даты или времени - пытаемся парсить
     return (
         any(keyword in text_lower for keyword in date_keywords)
-        or any(char.isdigit() for char in text)
         or bool(has_range)
+        or bool(has_date_format)
+        or bool(has_time_format)
     )
