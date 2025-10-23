@@ -11,22 +11,27 @@ table audit_log has no column named deleted_at
 
 ## Команды для выполнения на сервере
 
-### 1. Остановить бота
+### 1. Обновить код
+```bash
+git pull origin main
+```
+
+### 2. Остановить бота
 ```bash
 docker-compose -f docker/docker-compose.prod.yml down
 ```
 
-### 2. Применить миграцию
+### 3. Применить миграцию
 ```bash
 docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
 ```
 
-### 3. Запустить бота
+### 4. Запустить бота
 ```bash
 docker-compose -f docker/docker-compose.prod.yml up -d
 ```
 
-### 4. Проверить логи
+### 5. Проверить логи
 ```bash
 docker-compose -f docker/docker-compose.prod.yml logs -f bot
 ```
