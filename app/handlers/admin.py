@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus, UserRole
 from app.database import Database
+from app.database.orm_database import ORMDatabase
 from app.decorators import handle_errors
 from app.keyboards.inline import (
     get_master_management_keyboard,
@@ -105,24 +106,9 @@ async def callback_generate_monthly_report(callback: CallbackQuery, user_role: s
     await callback.answer()
 
 
-@router.callback_query(F.data == "generate_custom_report")
-@handle_errors
-async def callback_generate_custom_report(callback: CallbackQuery, user_role: str):
-    """Генерация кастомного отчета"""
-    if user_role not in [UserRole.ADMIN]:
-        return
+# Хэндлер кнопки "Обновить все отчеты" удален - таблицы обновляются при каждом запросе
 
-    await callback.message.edit_text(
-        "📋 <b>Кастомный отчет</b>\n\n"
-        "Для создания кастомного отчета введите период в формате:\n"
-        "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
-        "Например: <code>2025-10-01 2025-10-15</code>\n\n"
-        "Или введите <code>отмена</code> для возврата к меню.",
-        parse_mode="HTML",
-    )
 
-    # Здесь можно добавить состояние для ввода дат
-    await callback.answer()
 
 
 @router.callback_query(F.data == "export_active_orders_admin")
@@ -142,10 +128,13 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
     await callback.answer("📊 Генерирую отчет...", show_alert=False)
 
     try:
-        from app.services.active_orders_export import ActiveOrdersExportService
+        from app.services.realtime_active_orders import realtime_active_orders_service
 
-        export_service = ActiveOrdersExportService()
-        filepath = await export_service.export_active_orders_to_excel()
+        # Обновляем таблицу активных заказов
+        await realtime_active_orders_service.update_table()
+        
+        # Получаем путь к текущей таблице
+        filepath = await realtime_active_orders_service.get_current_table_path()
 
         if filepath:
             # Отправляем файл
@@ -156,11 +145,13 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
                 file,
                 caption="📋 <b>Отчет по активным заявкам</b>\n\n"
                 "В файле указаны все незакрытые заявки:\n"
+                "• Сводный лист со всеми заявками\n"
+                "• Отдельные листы для каждого мастера\n"
                 "• Статус и время создания\n"
                 "• Назначенный мастер\n"
                 "• Контакты клиента\n"
                 "• Запланированное время\n\n"
-                "Сводка по статусам в конце файла.",
+                "Таблица обновляется при каждом запросе.",
                 parse_mode="HTML",
             )
 
@@ -570,12 +561,31 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
     await db.connect()
 
     try:
+        # Получаем информацию о мастере для архивирования
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Архивируем заявки мастера
+        from app.services.master_archive_service import MasterArchiveService
+        archive_service = MasterArchiveService()
+        archive_path = await archive_service.archive_master_orders(master.id, "deactivation")
+        
+        if archive_path:
+            await callback.message.answer(
+                f"📁 <b>Архив создан</b>\n\n"
+                f"Заявки мастера {master.get_display_name()} сохранены в архиве:\n"
+                f"<code>{archive_path}</code>",
+                parse_mode="HTML"
+            )
+
         await db.update_master_status(telegram_id, is_active=False)
 
         await db.add_audit_log(
             user_id=callback.from_user.id,
             action="DEACTIVATE_MASTER",
-            details=f"Deactivated master {telegram_id}",
+            details=f"Deactivated master {telegram_id} and archived orders",
         )
 
         # Обновляем сообщение
@@ -586,7 +596,7 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
     finally:
         await db.disconnect()
 
-    await callback.answer("Мастер деактивирован")
+    await callback.answer("Мастер деактивирован и заявки заархивированы")
 
 
 @router.callback_query(F.data.startswith("activate_master:"))
@@ -624,6 +634,71 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
     await callback.answer("Мастер активирован")
+
+
+@router.callback_query(F.data.startswith("fire_master:"))
+async def callback_fire_master(callback: CallbackQuery, user_role: str):
+    """
+    Увольнение мастера (удаление из системы)
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    telegram_id = int(callback.data.split(":")[1])
+
+    db = ORMDatabase()
+    await db.connect()
+
+    try:
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Проверяем, есть ли активные заказы у мастера
+        orders = await db.get_orders_by_master(master.id, exclude_closed=True)
+        if orders:
+            await callback.answer(
+                f"❌ Нельзя уволить мастера с активными заказами ({len(orders)} шт.)", 
+                show_alert=True
+            )
+            return
+
+        # Архивируем заявки мастера перед увольнением
+        from app.services.master_archive_service import MasterArchiveService
+        archive_service = MasterArchiveService()
+        archive_path = await archive_service.archive_master_orders(master.id, "firing")
+        
+        if archive_path:
+            await callback.message.answer(
+                f"📁 <b>Архив создан</b>\n\n"
+                f"Заявки мастера {master.get_display_name()} сохранены в архиве:\n"
+                f"<code>{archive_path}</code>",
+                parse_mode="HTML"
+            )
+
+        # Удаляем мастера из системы
+        await db.delete_master(telegram_id)
+
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="FIRE_MASTER",
+            details=f"Fired master {telegram_id} ({master.get_display_name()}) and archived orders",
+        )
+
+        # Возвращаемся к списку мастеров
+        await callback_list_all_masters(callback, user_role)
+
+        log_action(callback.from_user.id, "FIRE_MASTER", f"Master ID: {telegram_id}")
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer("Мастер уволен и заявки заархивированы")
 
 
 @router.callback_query(F.data.startswith("master_stats:"))
@@ -679,6 +754,52 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
 
+@router.message(F.text.regexp(r"^/closed_order(\d+)$"))
+@handle_errors
+async def cmd_closed_order_edit(message: Message, user_role: str):
+    """
+    Команда для редактирования закрытой заявки
+    Формат: /closed_order123
+    """
+    if user_role not in [UserRole.ADMIN]:
+        await message.reply("❌ У вас нет прав для выполнения этой команды.")
+        return
+    
+    # Извлекаем номер заявки из команды
+    import re
+    match = re.match(r"^/closed_order(\d+)$", message.text)
+    if not match:
+        await message.reply("❌ Неверный формат команды. Используйте: /closed_order123")
+        return
+    
+    order_id = int(match.group(1))
+    
+    db = Database()
+    await db.connect()
+    
+    try:
+        # Получаем заявку
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await message.reply(f"❌ Заявка #{order_id} не найдена.")
+            return
+        
+        # Проверяем, что заявка закрыта
+        if order.status != OrderStatus.CLOSED:
+            await message.reply(f"❌ Заявка #{order_id} не закрыта (статус: {order.status.value}).")
+            return
+        
+        # Показываем информацию о заявке и предлагаем редактирование
+        from app.handlers.order_edit import show_edit_order_menu
+        await show_edit_order_menu(message, order, user_role, allow_closed=True)
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при редактировании закрытой заявки #{order_id}: {e}")
+        await message.reply("❌ Произошла ошибка при получении заявки.")
+    finally:
+        await db.disconnect()
+
+
 @router.message(F.text == "👤 Пользователи")
 async def btn_users(message: Message, user_role: str):
     """
@@ -724,7 +845,13 @@ async def btn_users(message: Message, user_role: str):
         for role, role_users in by_role.items():
             text += f"<b>{role_headers.get(role, role)}:</b>\n"
             for user in role_users:
-                display_name = user.get_full_name()
+                # Формируем имя пользователя из доступных полей
+                display_name = user.first_name or ""
+                if user.last_name:
+                    display_name += f" {user.last_name}"
+                if not display_name.strip():
+                    display_name = user.username or f"User{user.telegram_id}"
+                
                 # Показываем все роли пользователя
                 user_roles = user.get_roles()
                 roles_str = ", ".join([role_names.get(r, r) for r in user_roles])

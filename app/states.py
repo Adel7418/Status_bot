@@ -65,6 +65,7 @@ class CompleteOrderStates(StatesGroup):
 
     enter_total_amount = State()  # Ввод общей суммы заказа
     enter_materials_cost = State()  # Ввод суммы расходного материала
+    confirm_materials = State()  # Подтверждение суммы материалов
     confirm_review = State()  # Подтверждение наличия отзыва
     confirm_out_of_city = State()  # Подтверждение выезда за город
 
@@ -74,6 +75,7 @@ class AdminCloseOrderStates(StatesGroup):
 
     enter_total_amount = State()  # Ввод общей суммы заказа
     enter_materials_cost = State()  # Ввод суммы расходного материала
+    confirm_materials = State()  # Подтверждение суммы материалов
     confirm_review = State()  # Подтверждение наличия отзыва
     confirm_out_of_city = State()  # Подтверждение выезда за город
 
@@ -85,6 +87,7 @@ class LongRepairStates(StatesGroup):
         State()
     )  # Ввод срока окончания + предоплаты (опционально)
     confirm_dr = State()  # Подтверждение перевода в длительный ремонт
+    change_date = State()  # Изменение даты завершения
 
 
 class RescheduleOrderStates(StatesGroup):
@@ -92,6 +95,7 @@ class RescheduleOrderStates(StatesGroup):
 
     enter_new_time = State()  # Ввод нового времени прибытия
     enter_reason = State()  # Ввод причины переноса (опционально)
+    confirm = State()  # Подтверждение переноса
 
 
 class RefuseOrderStates(StatesGroup):

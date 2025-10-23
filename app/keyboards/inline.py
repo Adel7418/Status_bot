@@ -156,12 +156,6 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_accept_order", order.id),
                     )
                 )
-                builder.row(
-                    InlineKeyboardButton(
-                        text="📅 Перенести визит",
-                        callback_data=create_callback_data("reschedule_order", order.id),
-                    )
-                )
             elif order.status == OrderStatus.ACCEPTED:
                 builder.row(
                     InlineKeyboardButton(
@@ -231,12 +225,6 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     text="❌ Отклонить",
                     callback_data=create_callback_data("refuse_order_master", order.id),
                 ),
-            )
-            builder.row(
-                InlineKeyboardButton(
-                    text="📅 Перенести визит",
-                    callback_data=create_callback_data("reschedule_order", order.id),
-                )
             )
         elif order.status == OrderStatus.ACCEPTED:
             builder.row(
@@ -576,6 +564,11 @@ def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineK
     builder.row(
         InlineKeyboardButton(
             text="📊 Статистика", callback_data=create_callback_data("master_stats", telegram_id)
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="💼 Уволить", callback_data=create_callback_data("fire_master", telegram_id)
         )
     )
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_masters"))

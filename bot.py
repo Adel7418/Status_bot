@@ -47,6 +47,9 @@ file_handler.setFormatter(log_formatter)
 # Console handler
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(log_formatter)
+# Устанавливаем кодировку UTF-8 для консоли
+if hasattr(console_handler.stream, 'reconfigure'):
+    console_handler.stream.reconfigure(encoding='utf-8')
 
 # Настройка root logger
 # Используем LOG_LEVEL из .env (по умолчанию INFO)
@@ -197,6 +200,16 @@ async def main():
 
         # Инициализация планировщика (передаем shared DB instance)
         scheduler = TaskScheduler(bot, db)
+
+        # Инициализация сервиса ежедневных таблиц в реальном времени
+        from app.services.realtime_daily_table import realtime_table_service
+        await realtime_table_service.init()
+        logger.info("Сервис ежедневных таблиц в реальном времени инициализирован")
+        
+        # Инициализация сервиса активных заказов в реальном времени
+        from app.services.realtime_active_orders import realtime_active_orders_service
+        await realtime_active_orders_service.init()
+        logger.info("Сервис активных заказов в реальном времени инициализирован")
 
         # Подключение middleware (после инициализации БД)
         # 1. Logging middleware (первым - логирует все входящие события)

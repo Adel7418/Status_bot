@@ -11,14 +11,14 @@ def install_package(package):
     """Установка пакета через pip"""
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        print(f"✅ {package} установлен успешно")
+        print(f"[OK] {package} установлен успешно")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Ошибка установки {package}: {e}")
+        print(f"[ERROR] Ошибка установки {package}: {e}")
 
 
 def main():
     """Основная функция"""
-    print("🔧 Установка зависимостей для Alembic...")
+    print("Установка зависимостей для Alembic...")
 
     # Список необходимых пакетов
     packages = ["python-dotenv", "alembic", "sqlalchemy", "aiosqlite"]
@@ -26,9 +26,10 @@ def main():
     for package in packages:
         install_package(package)
 
-    print("\n🎉 Установка завершена!")
+    print("\nУстановка завершена!")
     print("Теперь можно запустить: alembic upgrade head")
 
 
 if __name__ == "__main__":
     main()
+

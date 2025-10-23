@@ -47,19 +47,103 @@ EDITABLE_FIELDS = {
 }
 
 
-def can_edit_order(order, user_role: str) -> tuple[bool, str | None]:
+async def show_edit_order_menu(message: Message, order, user_role: str, allow_closed: bool = False):
+    """
+    Показать меню редактирования заявки
+    
+    Args:
+        message: Сообщение
+        order: Заявка
+        user_role: Роль пользователя
+        allow_closed: Разрешить редактирование закрытых заявок
+    """
+    from aiogram.fsm.context import FSMContext
+    from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    
+    # Проверка прав
+    can_edit, error_msg = can_edit_order(order, user_role, allow_closed)
+    if not can_edit:
+        await message.reply(f"❌ {error_msg}")
+        return
+    
+    # Формируем информацию о заявке
+    status_names = {
+        OrderStatus.NEW: "🆕 Новая",
+        OrderStatus.ASSIGNED: "👨‍🔧 Назначена",
+        OrderStatus.ACCEPTED: "✅ Принята",
+        OrderStatus.ONSITE: "🏠 На объекте",
+        OrderStatus.DR: "⏳ Длительный ремонт",
+        OrderStatus.CLOSED: "✅ Закрыта",
+        OrderStatus.REFUSED: "❌ Отклонена",
+    }
+    
+    order_text = (
+        f"📋 <b>Заявка #{order.id}</b>\n"
+        f"📱 <b>Тип техники:</b> {order.equipment_type}\n"
+        f"📝 <b>Описание:</b> {order.description}\n"
+        f"👤 <b>Клиент:</b> {order.client_name}\n"
+        f"📍 <b>Адрес:</b> {order.client_address}\n"
+        f"📞 <b>Телефон:</b> {order.client_phone}\n"
+        f"📊 <b>Статус:</b> {status_names.get(order.status, order.status.value)}\n"
+    )
+    
+    if order.notes:
+        order_text += f"📋 <b>Заметки:</b> {order.notes}\n"
+    
+    if order.scheduled_time:
+        order_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
+    
+    if order.estimated_completion_date:
+        order_text += f"📅 <b>Срок окончания (DR):</b> {order.estimated_completion_date}\n"
+    
+    if order.prepayment_amount:
+        order_text += f"💰 <b>Предоплата (DR):</b> {order.prepayment_amount} ₽\n"
+    
+    order_text += f"\n✏️ <b>Выберите поле для редактирования:</b>"
+    
+    # Создаем клавиатуру с полями для редактирования
+    builder = InlineKeyboardBuilder()
+    
+    for field_key, field_name in EDITABLE_FIELDS.items():
+        # Показываем поля DR только для заявок в статусе DR
+        if field_key in ["estimated_completion_date", "prepayment_amount"]:
+            if order.status != OrderStatus.DR:
+                continue  # Пропускаем DR поля для других статусов
+        
+        builder.row(
+            InlineKeyboardButton(
+                text=field_name,
+                callback_data=f"edit_field:{field_key}",
+            )
+        )
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="cancel_edit"
+        )
+    )
+    
+    await message.reply(order_text, parse_mode="HTML", reply_markup=builder.as_markup())
+
+
+def can_edit_order(order, user_role: str, allow_closed: bool = False) -> tuple[bool, str | None]:
     """
     Проверка прав на редактирование заявки
 
     Args:
         order: Заявка
         user_role: Роль пользователя
+        allow_closed: Разрешить редактирование закрытых заявок (только для админов)
 
     Returns:
         (can_edit, error_message)
     """
-    # Закрытые и отклоненные заявки редактировать нельзя
+    # Закрытые и отклоненные заявки редактировать нельзя (кроме специального случая)
     if order.status in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
+        if allow_closed and user_role == UserRole.ADMIN and order.status == OrderStatus.CLOSED:
+            return True, None
         return False, "Нельзя редактировать закрытые или отклоненные заявки"
 
     # Админы и диспетчеры могут редактировать на любом статусе
@@ -100,7 +184,7 @@ async def callback_edit_order(callback: CallbackQuery, state: FSMContext, user_r
             return
 
         # Проверка прав
-        can_edit, error_msg = can_edit_order(order, user_role)
+        can_edit, error_msg = can_edit_order(order, user_role, allow_closed=False)
         if not can_edit:
             await callback.answer(error_msg, show_alert=True)
             return

@@ -101,3 +101,27 @@ def get_confirm_keyboard() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.row(KeyboardButton(text="✅ Подтвердить"), KeyboardButton(text="❌ Отмена"))
     return builder.as_markup(resize_keyboard=True)
+
+
+def get_reschedule_confirm_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура подтверждения переноса
+
+    Returns:
+        ReplyKeyboardMarkup
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="✅ Подтвердить перенос"), KeyboardButton(text="❌ Отмена"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def get_dr_confirm_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура подтверждения длительного ремонта
+
+    Returns:
+        ReplyKeyboardMarkup
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="✅ Подтвердить перевод"), KeyboardButton(text="❌ Отмена"))
+    return builder.as_markup(resize_keyboard=True)

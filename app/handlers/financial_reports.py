@@ -13,6 +13,7 @@ from app.config import UserRole
 from app.database.db import Database
 from app.decorators import handle_errors, require_role
 from app.services.financial_reports import FinancialReportsService
+from app.services.master_reports_detailed import MasterReportsService
 from app.utils.helpers import get_now
 
 
@@ -30,7 +31,17 @@ def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="✅ Закрытые заказы (Excel)", callback_data="report_closed_orders_excel"
+                text="📊 Ежедневная сводка", callback_data="report_daily_master_summary"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📈 Еженедельная сводка", callback_data="report_weekly_master_summary"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Ежемесячная сводка", callback_data="report_monthly_master_summary"
             ),
         ],
         [
@@ -39,26 +50,14 @@ def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
             ),
         ],
         [
-            InlineKeyboardButton(text="📅 Ежедневный отчет", callback_data="report_daily"),
-        ],
-        [
-            InlineKeyboardButton(text="📆 Еженедельный отчет", callback_data="report_weekly"),
-        ],
-        [
-            InlineKeyboardButton(text="🗓️ Ежемесячный отчет", callback_data="report_monthly"),
-        ],
-        [
-            InlineKeyboardButton(text="📋 Кастомный отчет", callback_data="report_custom"),
-        ],
-        [
             InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main_menu"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_daily_report_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для выбора дня отчета"""
+def get_daily_master_report_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора дня отчета по мастерам"""
     today = get_now()
     yesterday = today - timedelta(days=1)
 
@@ -66,14 +65,17 @@ def get_daily_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"Сегодня ({today.strftime('%d.%m')})",
-                callback_data=f"daily_report_{today.strftime('%Y-%m-%d')}",
+                callback_data=f"daily_master_report_{today.strftime('%Y-%m-%d')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"Вчера ({yesterday.strftime('%d.%m')})",
-                callback_data=f"daily_report_{yesterday.strftime('%Y-%m-%d')}",
+                callback_data=f"daily_master_report_{yesterday.strftime('%Y-%m-%d')}",
             ),
+        ],
+        [
+            InlineKeyboardButton(text="📅 Выбрать дату", callback_data="select_daily_master_date"),
         ],
         [
             InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu"),
@@ -82,8 +84,8 @@ def get_daily_report_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_weekly_report_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для выбора недели отчета"""
+def get_weekly_master_report_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора недели отчета по мастерам"""
     today = get_now()
     # Находим начало текущей недели (понедельник)
     days_since_monday = today.weekday()
@@ -94,14 +96,17 @@ def get_weekly_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"Эта неделя ({current_week_start.strftime('%d.%m')} - {(current_week_start + timedelta(days=6)).strftime('%d.%m')})",
-                callback_data=f"weekly_report_{current_week_start.strftime('%Y-%m-%d')}",
+                callback_data=f"weekly_master_report_{current_week_start.strftime('%Y-%m-%d')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"Прошлая неделя ({previous_week_start.strftime('%d.%m')} - {(previous_week_start + timedelta(days=6)).strftime('%d.%m')})",
-                callback_data=f"weekly_report_{previous_week_start.strftime('%Y-%m-%d')}",
+                callback_data=f"weekly_master_report_{previous_week_start.strftime('%Y-%m-%d')}",
             ),
+        ],
+        [
+            InlineKeyboardButton(text="📅 Выбрать неделю", callback_data="select_weekly_master_date"),
         ],
         [
             InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu"),
@@ -110,8 +115,8 @@ def get_weekly_report_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_monthly_report_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для выбора месяца отчета"""
+def get_monthly_master_report_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора месяца отчета по мастерам"""
     today = get_now()
     current_month = today.replace(day=1)
     previous_month = (current_month - timedelta(days=1)).replace(day=1)
@@ -120,14 +125,17 @@ def get_monthly_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"Этот месяц ({current_month.strftime('%B %Y')})",
-                callback_data=f"monthly_report_{current_month.year}_{current_month.month}",
+                callback_data=f"monthly_master_report_{current_month.strftime('%Y-%m-%d')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"Прошлый месяц ({previous_month.strftime('%B %Y')})",
-                callback_data=f"monthly_report_{previous_month.year}_{previous_month.month}",
+                callback_data=f"monthly_master_report_{previous_month.strftime('%Y-%m-%d')}",
             ),
+        ],
+        [
+            InlineKeyboardButton(text="📅 Выбрать месяц", callback_data="select_monthly_master_date"),
         ],
         [
             InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu"),
@@ -487,10 +495,13 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
     await callback.answer("📊 Генерирую отчет...", show_alert=False)
 
     try:
-        from app.services.active_orders_export import ActiveOrdersExportService
+        from app.services.realtime_active_orders import realtime_active_orders_service
 
-        export_service = ActiveOrdersExportService()
-        filepath = await export_service.export_active_orders_to_excel()
+        # Обновляем таблицу активных заказов
+        await realtime_active_orders_service.update_table()
+        
+        # Получаем путь к текущей таблице
+        filepath = await realtime_active_orders_service.get_current_table_path()
 
         if filepath:
             # Отправляем файл
@@ -501,11 +512,13 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
                 file,
                 caption="📋 <b>Отчет по активным заявкам</b>\n\n"
                 "В файле указаны все незакрытые заявки:\n"
+                "• Сводный лист со всеми заявками\n"
+                "• Отдельные листы для каждого мастера\n"
                 "• Статус и время создания\n"
                 "• Назначенный мастер\n"
                 "• Контакты клиента\n"
                 "• Запланированное время\n\n"
-                "Сводка по статусам в конце файла.",
+                "Таблица обновляется при каждом запросе.",
                 parse_mode="HTML",
             )
 
@@ -518,21 +531,6 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
         await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
 
 
-@router.callback_query(F.data == "report_custom")
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-@handle_errors
-async def callback_report_custom(callback: CallbackQuery, user_role: str):
-    """Кастомный отчет"""
-    await callback.message.edit_text(
-        "📋 <b>Кастомный отчет</b>\n\n"
-        "Для создания кастомного отчета введите период в формате:\n"
-        "<code>YYYY-MM-DD YYYY-MM-DD</code>\n\n"
-        "Например: <code>2025-10-01 2025-10-15</code>\n\n"
-        "Или введите <code>отмена</code> для возврата к меню.",
-        parse_mode="HTML",
-        reply_markup=get_reports_menu_keyboard(),
-    )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "back_to_main_menu")
@@ -753,6 +751,241 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
         ),
     )
 
+    await callback.answer()
+
+
+# ==================== НОВЫЕ ОТЧЕТЫ ПО МАСТЕРАМ ====================
+
+@router.callback_query(F.data == "report_daily_master_summary")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_report_daily_master_summary(callback: CallbackQuery, user_role: str):
+    """Выбор ежедневной сводки по мастерам"""
+    await callback.message.edit_text(
+        "📊 <b>Ежедневная сводка по мастерам</b>\n\n" "Выберите день:",
+        parse_mode="HTML",
+        reply_markup=get_daily_master_report_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "report_weekly_master_summary")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_report_weekly_master_summary(callback: CallbackQuery, user_role: str):
+    """Выбор еженедельной сводки по мастерам"""
+    await callback.message.edit_text(
+        "📈 <b>Еженедельная сводка по мастерам</b>\n\n" "Выберите неделю:",
+        parse_mode="HTML",
+        reply_markup=get_weekly_master_report_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "report_monthly_master_summary")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_report_monthly_master_summary(callback: CallbackQuery, user_role: str):
+    """Выбор ежемесячной сводки по мастерам"""
+    await callback.message.edit_text(
+        "📊 <b>Ежемесячная сводка по мастерам</b>\n\n" "Выберите месяц:",
+        parse_mode="HTML",
+        reply_markup=get_monthly_master_report_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("daily_master_report_"))
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_generate_daily_master_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежедневной сводки по мастерам"""
+    from app.utils.helpers import MOSCOW_TZ
+
+    date_str = callback.data.split("_")[-1]
+    report_date = datetime.strptime(date_str, "%Y-%m-%d")
+    # Добавляем московский часовой пояс
+    report_date = report_date.replace(tzinfo=MOSCOW_TZ)
+
+    try:
+        await callback.message.edit_text("⏳ Генерирую ежедневную сводку по мастерам...")
+    except Exception as e:
+        logger.warning(f"Could not edit message: {e}")
+        # Продолжаем выполнение, даже если не удалось отредактировать сообщение
+
+    service = MasterReportsService()
+    filepath = await service.generate_daily_master_report(report_date)
+
+    if not filepath:
+        try:
+            await callback.message.edit_text(
+                f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                f"❌ За этот день не было завершенных заказов.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                    ]
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit message for no data: {e}")
+            await callback.message.answer(
+                f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                f"❌ За этот день не было завершенных заказов.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                    ]
+                ),
+            )
+        await callback.answer()
+        return
+
+    # Отправляем файл
+    from aiogram.types import BufferedInputFile
+    with open(filepath, "rb") as f:
+        file_data = f.read()
+    
+    file_input = BufferedInputFile(file_data, filename=f"daily_master_summary_{date_str}.xlsx")
+    
+    try:
+        await callback.message.answer_document(
+            document=file_input,
+            caption=f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
+        
+        await callback.message.delete()
+    except Exception as e:
+        logger.warning(f"Could not send document or delete message: {e}")
+        # Пытаемся отправить файл как обычное сообщение
+        try:
+            await callback.message.answer(
+                f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                f"Файл создан: {filepath}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                    ]
+                ),
+            )
+        except Exception as e2:
+            logger.error(f"Could not send fallback message: {e2}")
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("weekly_master_report_"))
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_generate_weekly_master_report(callback: CallbackQuery, user_role: str):
+    """Генерация еженедельной сводки по мастерам"""
+    from app.utils.helpers import MOSCOW_TZ
+
+    date_str = callback.data.split("_")[-1]
+    week_start = datetime.strptime(date_str, "%Y-%m-%d")
+    # Добавляем московский часовой пояс
+    week_start = week_start.replace(tzinfo=MOSCOW_TZ)
+
+    await callback.message.edit_text("⏳ Генерирую еженедельную сводку по мастерам...")
+
+    service = MasterReportsService()
+    filepath = await service.generate_weekly_master_report(week_start)
+
+    if not filepath:
+        await callback.message.edit_text(
+            f"📈 <b>Еженедельная сводка за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
+            f"❌ За эту неделю не было завершенных заказов.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Отправляем файл
+    from aiogram.types import BufferedInputFile
+    with open(filepath, "rb") as f:
+        file_data = f.read()
+    
+    file_input = BufferedInputFile(file_data, filename=f"weekly_master_summary_{date_str}.xlsx")
+    
+    await callback.message.answer_document(
+        document=file_input,
+        caption=f"📈 <b>Еженедельная сводка по мастерам за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+            ]
+        ),
+    )
+    
+    await callback.message.delete()
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("monthly_master_report_"))
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_generate_monthly_master_report(callback: CallbackQuery, user_role: str):
+    """Генерация ежемесячной сводки по мастерам"""
+    from app.utils.helpers import MOSCOW_TZ
+
+    date_str = callback.data.split("_")[-1]
+    month_start = datetime.strptime(date_str, "%Y-%m-%d")
+    # Добавляем московский часовой пояс
+    month_start = month_start.replace(tzinfo=MOSCOW_TZ)
+
+    await callback.message.edit_text("⏳ Генерирую ежемесячную сводку по мастерам...")
+
+    service = MasterReportsService()
+    filepath = await service.generate_monthly_master_report(month_start)
+
+    if not filepath:
+        await callback.message.edit_text(
+            f"📊 <b>Ежемесячная сводка за {month_start.strftime('%B %Y')}</b>\n\n"
+            f"❌ За этот месяц не было завершенных заказов.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Отправляем файл
+    from aiogram.types import BufferedInputFile
+    with open(filepath, "rb") as f:
+        file_data = f.read()
+    
+    file_input = BufferedInputFile(file_data, filename=f"monthly_master_summary_{date_str}.xlsx")
+    
+    await callback.message.answer_document(
+        document=file_input,
+        caption=f"📊 <b>Ежемесячная сводка по мастерам за {month_start.strftime('%B %Y')}</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+            ]
+        ),
+    )
+    
+    await callback.message.delete()
     await callback.answer()
 
 

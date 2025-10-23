@@ -63,6 +63,27 @@ def _preprocess_time_text(text: str) -> str:
     text_lower = re.sub(r"\bдва\s+с\s+половиной\b", "2.5", text_lower)
     text_lower = re.sub(r"\bтри\s+с\s+половиной\b", "3.5", text_lower)
 
+    # Улучшенная обработка времени: "завтра в 12" -> "завтра в 12:00"
+    # Паттерн: "в" + пробел + число (1-23) + конец строки или пробел
+    time_pattern = r"\bв\s+(\d{1,2})\b(?=\s|$|[^\d])"
+    def format_time(match):
+        hour = int(match.group(1))
+        if 0 <= hour <= 23:
+            return f"в {hour}:00"
+        return match.group(0)
+    
+    text_lower = re.sub(time_pattern, format_time, text_lower)
+    
+    # Дополнительная обработка для случаев типа "завтра в 12" в конце строки
+    time_pattern_end = r"\bв\s+(\d{1,2})$"
+    def format_time_end(match):
+        hour = int(match.group(1))
+        if 0 <= hour <= 23:
+            return f"в {hour}:00"
+        return match.group(0)
+    
+    text_lower = re.sub(time_pattern_end, format_time_end, text_lower)
+
     # Замена диапазонов типа "1-1.5" на среднее значение "1.25"
     # Паттерн: "1-1.5", "2-3" и т.д.
     # Важно: НЕ заменяем даты типа "20-10-2025"

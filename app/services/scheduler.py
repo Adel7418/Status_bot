@@ -75,12 +75,39 @@ class TaskScheduler:
             replace_existing=True,
         )
 
+        # Автоматическое обновление отчетов ОТКЛЮЧЕНО (таблицы обновляются при запросе)
+        # self.scheduler.add_job(
+        #     self.update_reports_automatically,
+        #     trigger=IntervalTrigger(hours=1),
+        #     id="auto_update_reports",
+        #     name="Автоматическое обновление отчетов",
+        #     replace_existing=True,
+        # )
+
+        # Очистка старых отчетов ОТКЛЮЧЕНА (файлы не должны удаляться)
+        # self.scheduler.add_job(
+        #     self.cleanup_old_reports,
+        #     trigger=CronTrigger(hour=2, minute=0),
+        #     id="cleanup_reports",
+        #     name="Очистка старых отчетов",
+        #     replace_existing=True,
+        # )
+
         # Ежедневная сводка (в 9:00 каждый день)
         self.scheduler.add_job(
             self.send_daily_summary,
             trigger=CronTrigger(hour=9, minute=0),
             id="daily_summary",
             name="Ежедневная сводка",
+            replace_existing=True,
+        )
+
+        # Автоматическое создание ежедневной таблицы (в 00:00 каждый день)
+        self.scheduler.add_job(
+            self.create_daily_master_report,
+            trigger=CronTrigger(hour=0, minute=0),
+            id="daily_master_report",
+            name="Автоматическое создание ежедневной таблицы",
             replace_existing=True,
         )
 
@@ -146,14 +173,9 @@ class TaskScheduler:
                 return
 
             reminder_text = (
-                f"⏰ <b>Напоминание о визите через 2 часа!</b>\n\n"
-                f"📋 Заявка #{order.id}\n"
-                f"[EQUIPMENT] {order.equipment_type}\n"
-                f"👤 Клиент: {order.client_name}\n"
-                f"📍 Адрес: {order.client_address}\n"
-                f"📞 Телефон: {order.client_phone}\n\n"
-                f"⏰ Запланированное время: {scheduled_datetime.strftime('%H:%M')}\n\n"
-                f"Не забудьте подготовиться к выезду!"
+                f"<b>Напоминание о визите</b> #{order.id}\n"
+                f"{order.equipment_type} в {scheduled_datetime.strftime('%H:%M')}\n"
+                f"Подготовьтесь к выезду"
             )
 
             # Определяем, куда отправлять
@@ -281,7 +303,12 @@ class TaskScheduler:
                 if not order.updated_at:
                     continue
 
-                time_in_status = now - order.updated_at
+                # Убеждаемся что updated_at имеет timezone
+                updated_at = order.updated_at
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=MOSCOW_TZ)
+                
+                time_in_status = now - updated_at
 
                 # SLA правила
                 sla_rules = {
@@ -294,10 +321,11 @@ class TaskScheduler:
                 sla_limit = sla_rules.get(order.status)
 
                 # Для заявок с указанным временем прибытия - используем умные напоминания
-                # Работает для статусов ASSIGNED и ACCEPTED
+                # Работает для статусов ASSIGNED, ACCEPTED и DR
                 if order.scheduled_time and order.status in [
                     OrderStatus.ASSIGNED,
                     OrderStatus.ACCEPTED,
+                    OrderStatus.DR,
                 ]:
                     scheduled_alert_sent = self._check_scheduled_time_alert(order, now)
                     if scheduled_alert_sent:
@@ -309,19 +337,14 @@ class TaskScheduler:
             # Отправляем уведомления администраторам
             if alerts:
                 for admin_id in Config.ADMIN_IDS:
-                    text = "WARNING: <b>Превышение SLA</b>\n\n"
-                    text += f"Найдено заявок с превышением SLA: {len(alerts)}\n\n"
+                    text = f"<b>Превышение SLA</b> - {len(alerts)} заявок\n\n"
 
                     for alert in alerts[:5]:  # Показываем первые 5
                         order = alert["order"]
                         hours = int(alert["time"].total_seconds() / 3600)
 
                         status_name = OrderStatus.get_status_name(order.status)
-                        text += (
-                            f"📋 Заявка #{order.id}\n"
-                            f"   Статус: {status_name}\n"
-                            f"   В статусе: {hours} ч.\n\n"
-                        )
+                        text += f"📋 #{order.id} - {status_name} ({hours}ч)\n"
 
                     if len(alerts) > 5:
                         text += f"<i>И еще {len(alerts) - 5} заявок...</i>"
@@ -347,7 +370,15 @@ class TaskScheduler:
             all_orders = await self.db.get_all_orders()
             yesterday = get_now() - timedelta(days=1)
 
-            new_orders = [o for o in all_orders if o.created_at and o.created_at > yesterday]
+            new_orders = []
+            for o in all_orders:
+                if o.created_at:
+                    # Убеждаемся что created_at имеет timezone
+                    created_at = o.created_at
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=MOSCOW_TZ)
+                    if created_at > yesterday:
+                        new_orders.append(o)
 
             # Активные заявки
             active_orders = [
@@ -453,18 +484,16 @@ class TaskScheduler:
                         if master.work_chat_id:
                             # Отправляем в группу с упоминанием мастера
                             reminder_text = (
-                                f"⏰ <b>Напоминание</b>\n\n"
-                                f"У вас есть непринятая заявка #{order.id}\n"
-                                f"[EQUIPMENT] {order.equipment_type}\n"
-                                f"⏱ Назначена {minutes} мин. назад\n\n"
+                                f"<b>Непринятая заявка</b> #{order.id}\n"
+                                f"{order.equipment_type} ({minutes}мин)\n"
                             )
 
                             # Упоминаем мастера в группе (ORM: через master.user)
                             master_username = master.user.username if hasattr(master, "user") and master.user else None
                             if master_username:
-                                reminder_text += f"[MASTER] Мастер: @{master_username}\n\n"
+                                reminder_text += f"Мастер: @{master_username}\n\n"
                             else:
-                                reminder_text += f"[MASTER] Мастер: {master.get_display_name()}\n\n"
+                                reminder_text += f"Мастер: {master.get_display_name()}\n\n"
 
                             reminder_text += "Пожалуйста, примите или отклоните заявку."
 
@@ -485,11 +514,9 @@ class TaskScheduler:
                             result = await safe_send_message(
                                 self.bot,
                                 target_chat_id,
-                                f"⏰ <b>Напоминание</b>\n\n"
-                                f"У вас есть непринятая заявка #{order.id}\n"
-                                f"[EQUIPMENT] {order.equipment_type}\n"
-                                f"⏱ Назначена {minutes} мин. назад\n\n"
-                                f"Пожалуйста, примите или отклоните заявку.",
+                                f"<b>Непринятая заявка</b> #{order.id}\n"
+                                f"{order.equipment_type} ({minutes}мин)\n"
+                                f"Примите или отклоните заявку.",
                                 parse_mode="HTML",
                                 max_attempts=5,
                             )
@@ -497,6 +524,28 @@ class TaskScheduler:
                             if result:
                                 logger.info(
                                     f"Reminder sent to DM {target_chat_id} for master {master.telegram_id}"
+                                )
+
+                        # Отправляем уведомление диспетчеру
+                        if order.dispatcher_id:
+                            dispatcher_text = (
+                                f"<b>Непринятая заявка</b> #{order.id}\n"
+                                f"{order.equipment_type} ({minutes}мин)\n"
+                                f"Мастер: {master.get_display_name()}\n\n"
+                                f"Пожалуйста, примите или отклоните заявку."
+                            )
+
+                            dispatcher_result = await safe_send_message(
+                                self.bot,
+                                order.dispatcher_id,
+                                dispatcher_text,
+                                parse_mode="HTML",
+                                max_attempts=5,
+                            )
+
+                            if dispatcher_result:
+                                logger.info(
+                                    f"Reminder sent to dispatcher {order.dispatcher_id} for order #{order.id}"
                                 )
 
             logger.info(
@@ -540,24 +589,16 @@ class TaskScheduler:
                 admins_and_dispatchers = await self.db.get_admins_and_dispatchers()
 
                 # Формируем текст уведомления
-                text = "WARNING: <b>Неназначенные заявки!</b>\n\n"
-                text += f"Найдено заявок без мастера: {len(unassigned_alerts)}\n\n"
+                text = f"<b>Неназначенные заявки</b> - {len(unassigned_alerts)} шт\n\n"
 
                 for alert in unassigned_alerts[:5]:  # Показываем первые 5
                     order = alert["order"]
                     minutes = int(alert["time"].total_seconds() / 60)
 
-                    text += (
-                        f"📋 <b>Заявка #{order.id}</b>\n"
-                        f"   [EQUIPMENT] {order.equipment_type}\n"
-                        f"   👤 {order.client_name}\n"
-                        f"   ⏱ Создана {minutes} мин. назад\n\n"
-                    )
+                    text += f"📋 #{order.id} - {order.equipment_type} ({minutes}мин)\n"
 
                 if len(unassigned_alerts) > 5:
-                    text += f"<i>И еще {len(unassigned_alerts) - 5} заявок...</i>\n\n"
-
-                text += "WARNING: <b>Требуется назначить мастеров!</b>"
+                    text += f"<i>И еще {len(unassigned_alerts) - 5} заявок...</i>"
 
                 # Отправляем всем админам и диспетчерам
                 for user in admins_and_dispatchers:
@@ -815,3 +856,106 @@ class TaskScheduler:
 
             except Exception:
                 pass
+
+    async def update_reports_automatically(self):
+        """Автоматическое обновление отчетов"""
+        try:
+            from app.services.auto_update_service import AutoUpdateService
+            
+            auto_update_service = AutoUpdateService()
+            results = await auto_update_service.update_all_reports()
+            
+            logger.info(f"Автоматическое обновление отчетов завершено: {results['total_updated']} отчетов обновлено")
+            
+            # Если есть ошибки, уведомляем админов
+            if results["errors"]:
+                admins = await self.db.get_users_by_role("ADMIN")
+                error_notification = (
+                    f"⚠️ <b>Ошибки при автоматическом обновлении отчетов</b>\n\n"
+                    f"Обновлено отчетов: {results['total_updated']}\n"
+                    f"Ошибок: {len(results['errors'])}\n\n"
+                    f"Ошибки:\n" + "\n".join(f"• {error}" for error in results["errors"][:3])
+                )
+
+                for admin in admins:
+                    with contextlib.suppress(Exception):
+                        await safe_send_message(
+                            self.bot,
+                            admin.telegram_id,
+                            error_notification,
+                            parse_mode="HTML",
+                            max_attempts=1
+                        )
+
+        except Exception as e:
+            logger.error(f"Ошибка при автоматическом обновлении отчетов: {e}")
+
+    async def cleanup_old_reports(self):
+        """Очистка старых отчетов"""
+        try:
+            from app.services.auto_update_service import AutoUpdateService
+            
+            auto_update_service = AutoUpdateService()
+            results = await auto_update_service.cleanup_old_reports(max_age_hours=168)  # 7 дней
+            
+            logger.info(f"Очистка старых отчетов завершена: {results['total_deleted']} файлов удалено")
+            
+            # Если удалено много файлов, уведомляем админов
+            if results["total_deleted"] > 10:
+                admins = await self.db.get_users_by_role("ADMIN")
+                cleanup_notification = (
+                    f"🧹 <b>Очистка старых отчетов</b>\n\n"
+                    f"Удалено файлов: {results['total_deleted']}\n"
+                    f"Время: {results['timestamp']}"
+                )
+
+                for admin in admins:
+                    with contextlib.suppress(Exception):
+                        await safe_send_message(
+                            self.bot,
+                            admin.telegram_id,
+                            cleanup_notification,
+                            parse_mode="HTML",
+                            max_attempts=1
+                        )
+
+        except Exception as e:
+            logger.error(f"Ошибка при очистке старых отчетов: {e}")
+
+    async def create_daily_master_report(self):
+        """
+        Сохранение текущей таблицы и создание новой в 00:00
+        """
+        try:
+            from app.services.realtime_daily_table import realtime_table_service
+            
+            logger.info("Сохранение текущей таблицы и создание новой в 00:00")
+            
+            # Сохраняем текущую таблицу и создаем новую
+            await realtime_table_service.save_and_create_new_table()
+            
+            # Уведомления отключены по запросу пользователя
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании ежедневной таблицы: {e}")
+            
+            # Уведомляем администраторов об ошибке
+            try:
+                admins = await self.db.get_users_by_role("ADMIN")
+                error_text = (
+                    f"❌ <b>Ошибка создания ежедневной таблицы</b>\n\n"
+                    f"📅 Дата: {yesterday.strftime('%d.%m.%Y')}\n"
+                    f"🔍 Ошибка: {str(e)}"
+                )
+                
+                for admin in admins:
+                    with contextlib.suppress(Exception):
+                        await safe_send_message(
+                            self.bot,
+                            admin.telegram_id,
+                            error_text,
+                            parse_mode="HTML",
+                            max_attempts=1
+                        )
+            except Exception as notify_error:
+                logger.error(f"Ошибка при отправке уведомления об ошибке: {notify_error}")

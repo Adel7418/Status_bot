@@ -1075,7 +1075,7 @@ class ReportsService:
                         notes.append("Выезд за город")
                     if order_row["has_review"]:
                         notes.append("Есть отзыв")
-                    if order_row["scheduled_time"]:
+                    if order_row["scheduled_time"] and order_row["scheduled_time"] != 'None':
                         scheduled_time = (
                             str(order_row["scheduled_time"] or "")
                             .encode("utf-8", errors="ignore")

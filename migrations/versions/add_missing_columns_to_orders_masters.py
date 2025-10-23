@@ -35,18 +35,18 @@ def upgrade() -> None:
             conn.execute(sa.text("SELECT deleted_at FROM orders LIMIT 1"))
         except Exception:
             op.add_column('orders', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
-            print("✅ Добавлена колонка deleted_at в orders")
+            print("[OK] Добавлена колонка deleted_at в orders")
         
         # Проверяем и добавляем колонку version в orders
         try:
             conn.execute(sa.text("SELECT version FROM orders LIMIT 1"))
         except Exception:
             op.add_column('orders', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
-            print("✅ Добавлена колонка version в orders")
+            print("[OK] Добавлена колонка version в orders")
         
         # Обновляем существующие записи
         conn.execute(sa.text("UPDATE orders SET version = 1 WHERE version IS NULL"))
-        print("✅ Обновлены существующие записи в orders")
+        print("[OK] Обновлены существующие записи в orders")
     
     # Проверяем и добавляем недостающие колонки в таблицу masters
     try:
@@ -61,18 +61,18 @@ def upgrade() -> None:
             conn.execute(sa.text("SELECT deleted_at FROM masters LIMIT 1"))
         except Exception:
             op.add_column('masters', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
-            print("✅ Добавлена колонка deleted_at в masters")
+            print("[OK] Добавлена колонка deleted_at в masters")
         
         # Проверяем и добавляем колонку version в masters
         try:
             conn.execute(sa.text("SELECT version FROM masters LIMIT 1"))
         except Exception:
             op.add_column('masters', sa.Column('version', sa.INTEGER(), server_default=sa.text('1'), nullable=False))
-            print("✅ Добавлена колонка version в masters")
+            print("[OK] Добавлена колонка version в masters")
         
         # Обновляем существующие записи
         conn.execute(sa.text("UPDATE masters SET version = 1 WHERE version IS NULL"))
-        print("✅ Обновлены существующие записи в masters")
+        print("[OK] Обновлены существующие записи в masters")
 
 
 def downgrade() -> None:

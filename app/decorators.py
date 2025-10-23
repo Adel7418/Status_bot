@@ -53,8 +53,12 @@ def handle_errors(func: Callable) -> Callable:
 
             # Для сетевых ошибок Telegram не пытаемся отправить сообщение
             # (т.к. это приведет к новой ошибке)
-            if "TelegramNetworkError" in error_type or "ClientConnectorError" in error_type:
-                logger.error("Network error, cannot send error message to user")
+            if ("TelegramNetworkError" in error_type or 
+                "ClientConnectorError" in error_type or
+                "query is too old" in str(e) or
+                "response timeout expired" in str(e) or
+                "query ID is invalid" in str(e)):
+                logger.error("Telegram API error, cannot send error message to user: %s", e)
                 return None
 
             # Для других ошибок показываем сообщение

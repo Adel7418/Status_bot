@@ -251,6 +251,20 @@ class ExcelExportService:
                     left_alignment,
                     right_alignment,
                 )
+                
+                # ✨ Добавляем отдельные листы для каждого мастера
+                await self._add_individual_master_sheets(
+                    wb,
+                    master_reports,
+                    thin_border,
+                    header_font,
+                    header_fill,
+                    subheader_font,
+                    subheader_fill,
+                    center_alignment,
+                    left_alignment,
+                    right_alignment,
+                )
 
             # Создаем директорию для отчетов
             reports_dir = Path("reports")
@@ -399,7 +413,7 @@ class ExcelExportService:
                     notes.append("Выезд")
                 if order["has_review"]:
                     notes.append("Отзыв")
-                if order["scheduled_time"]:
+                if order["scheduled_time"] and order["scheduled_time"] != 'None':
                     notes.append(f"Время: {order['scheduled_time']}")
 
                 data = [
@@ -502,6 +516,270 @@ class ExcelExportService:
         }
         for col, width in widths.items():
             ws.column_dimensions[col].width = width
+
+    async def _add_individual_master_sheets(
+        self,
+        wb,
+        master_reports,
+        thin_border,
+        header_font,
+        header_fill,
+        subheader_font,
+        subheader_fill,
+        center_alignment,
+        left_alignment,
+        right_alignment,
+    ):
+        """Добавляет отдельные листы для каждого мастера"""
+        for master_report in master_reports:
+            master_id = master_report.master_id
+            master_name = master_report.master_name
+
+            if not master_id:
+                continue
+
+            # Создаем безопасное имя листа (максимум 31 символ)
+            safe_sheet_name = master_name[:31].replace("/", "_").replace("\\", "_").replace("*", "_").replace("?", "_").replace("[", "_").replace("]", "_").replace(":", "_")
+            ws = wb.create_sheet(title=safe_sheet_name)
+
+            # Заголовок
+            row = 1
+            # A1: "ЗАКАЗЫ МАСТЕРА:"
+            cell_a1 = ws.cell(row=row, column=1)
+            cell_a1.value = "ЗАКАЗЫ МАСТЕРА:"
+            cell_a1.font = header_font
+            cell_a1.fill = header_fill
+            cell_a1.alignment = center_alignment
+            
+            # B1: имя мастера
+            cell_b1 = ws.cell(row=row, column=2)
+            cell_b1.value = master_name
+            cell_b1.font = header_font
+            cell_b1.fill = header_fill
+            cell_b1.alignment = center_alignment
+            
+            # Растягиваем заголовок на остальные столбцы
+            for col in range(3, 14):  # C1:M1
+                ws.cell(row=row, column=col).fill = header_fill
+            
+            ws.row_dimensions[row].height = 25
+
+            row += 1
+
+            # Заголовки колонок
+            headers = [
+                "ID",
+                "Статус",
+                "Тип техники",
+                "Клиент",
+                "Адрес",
+                "Телефон",
+                "Создана",
+                "Обновлена",
+                "Сумма",
+                "Материалы",
+                "Прибыль мастера",
+                "Сдача в кассу",
+                "Примечания",
+            ]
+
+            for col_idx, header in enumerate(headers, start=1):
+                cell = ws.cell(row=row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = subheader_fill
+                cell.alignment = center_alignment
+                cell.border = thin_border
+
+            row += 1
+
+            # Получаем все заявки мастера
+            cursor = await self.db.connection.execute(
+                """
+                SELECT
+                    o.id, o.status, o.equipment_type, o.client_name,
+                    o.client_address, o.client_phone, o.created_at, o.updated_at,
+                    o.total_amount, o.materials_cost, o.master_profit, o.company_profit,
+                    o.notes, o.scheduled_time, o.out_of_city, o.has_review
+                FROM orders o
+                WHERE o.assigned_master_id = ?
+                    AND o.status IN ('ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'REFUSED')
+                    AND o.deleted_at IS NULL
+                ORDER BY
+                    CASE o.status
+                        WHEN 'IN_PROGRESS' THEN 1
+                        WHEN 'ACCEPTED' THEN 2
+                        WHEN 'ASSIGNED' THEN 3
+                        WHEN 'COMPLETED' THEN 4
+                        WHEN 'CLOSED' THEN 5
+                        WHEN 'REFUSED' THEN 6
+                        ELSE 7
+                    END,
+                    o.created_at DESC
+                """,
+                (master_id,),
+            )
+
+            orders = await cursor.fetchall()
+
+            if not orders:
+                # Если заказов нет, добавляем сообщение
+                cell = ws[f"A{row}"]
+                cell.value = "Заказов не найдено"
+                cell.font = Font(italic=True)
+                cell.alignment = center_alignment
+                ws.merge_cells(f"A{row}:M{row}")
+                row += 1
+            else:
+                # Заявки мастера
+                for order in orders:
+                    status_emoji = {
+                        "ASSIGNED": "🆕",
+                        "ACCEPTED": "✅",
+                        "IN_PROGRESS": "⚙️",
+                        "COMPLETED": "✔️",
+                        "CLOSED": "🔒",
+                        "REFUSED": "❌",
+                    }.get(order["status"], "❓")
+
+                    notes = []
+                    if order["out_of_city"]:
+                        notes.append("Выезд")
+                    if order["has_review"]:
+                        notes.append("Отзыв")
+                    if order["scheduled_time"] and order["scheduled_time"] != 'None':
+                        notes.append(f"Время: {order['scheduled_time']}")
+                    if order["notes"]:
+                        notes.append(order["notes"][:50])  # Ограничиваем длину
+
+                    data = [
+                        order["id"],
+                        f"{status_emoji} {order['status']}",
+                        order["equipment_type"],
+                        order["client_name"],
+                        order["client_address"][:30] + "..."
+                        if len(order["client_address"]) > 30
+                        else order["client_address"],
+                        order["client_phone"],
+                        order["created_at"][:16] if order["created_at"] else "",
+                        order["updated_at"][:16] if order["updated_at"] else "",
+                        float(order["total_amount"] or 0),
+                        float(order["materials_cost"] or 0),
+                        float(order["master_profit"] or 0),
+                        float(order["company_profit"] or 0),
+                        "; ".join(notes) if notes else "-",
+                    ]
+
+                    for col_idx, value in enumerate(data, start=1):
+                        cell = ws.cell(row=row, column=col_idx, value=value)
+                        cell.border = thin_border
+
+                        if col_idx == 1:  # ID
+                            cell.alignment = center_alignment
+                            cell.font = Font(bold=True)
+                        elif col_idx == 2:  # Статус
+                            cell.alignment = center_alignment
+                            if order["status"] == "IN_PROGRESS":
+                                cell.fill = PatternFill(
+                                    start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
+                                )
+                            elif order["status"] == "CLOSED":
+                                cell.fill = PatternFill(
+                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                                )
+                            elif order["status"] == "REFUSED":
+                                cell.fill = PatternFill(
+                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
+                                )
+                        elif col_idx in [3, 4, 5, 6, 7, 13]:  # Текстовые поля
+                            cell.alignment = left_alignment
+                        else:  # Числовые поля
+                            cell.alignment = right_alignment
+                            if col_idx >= 9 and col_idx <= 12:
+                                cell.number_format = "#,##0.00 ₽"
+
+                    row += 1
+
+                # Итоги по мастеру
+                cursor = await self.db.connection.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total_orders,
+                        SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed_orders,
+                        SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as sum_total,
+                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as sum_materials,
+                        SUM(CASE WHEN status = 'CLOSED' THEN master_profit ELSE 0 END) as sum_master,
+                        SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as sum_company
+                    FROM orders WHERE assigned_master_id = ? AND deleted_at IS NULL
+                    """,
+                    (master_id,),
+                )
+                totals = await cursor.fetchone()
+
+                # Добавляем пустую строку
+                row += 1
+
+                # Итоги
+                summary_data = [
+                    "ИТОГО:",
+                    f"Всего: {totals['total_orders']}",
+                    f"Закрыто: {totals['closed_orders']}",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    float(totals["sum_total"] or 0),
+                    float(totals["sum_materials"] or 0),
+                    float(totals["sum_master"] or 0),
+                    float(totals["sum_company"] or 0),
+                    "",
+                ]
+
+                for col_idx, value in enumerate(summary_data, start=1):
+                    cell = ws.cell(row=row, column=col_idx, value=value)
+                    cell.border = thin_border
+                    cell.font = Font(bold=True)
+                    
+                    if col_idx == 1:  # "ИТОГО:"
+                        cell.alignment = left_alignment
+                        cell.fill = PatternFill(
+                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                        )
+                    elif col_idx == 2:  # "Всего:"
+                        cell.alignment = center_alignment
+                        cell.fill = PatternFill(
+                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                        )
+                    elif col_idx == 3:  # "Закрыто:"
+                        cell.alignment = center_alignment
+                        cell.fill = PatternFill(
+                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                        )
+                    elif col_idx >= 9 and col_idx <= 12:  # Числовые поля
+                        cell.alignment = right_alignment
+                        cell.number_format = "#,##0.00 ₽"
+                        cell.fill = PatternFill(
+                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
+                        )
+
+            # Ширина столбцов для листа мастера
+            widths = {
+                "A": 8,   # ID
+                "B": 15,  # Статус
+                "C": 20,  # Тип техники
+                "D": 20,  # Клиент
+                "E": 30,  # Адрес
+                "F": 15,  # Телефон
+                "G": 16,  # Создана
+                "H": 16,  # Обновлена
+                "I": 15,  # Сумма
+                "J": 15,  # Материалы
+                "K": 18,  # Прибыль мастера
+                "L": 18,  # Сдача в кассу
+                "M": 35,  # Примечания
+            }
+            for col, width in widths.items():
+                ws.column_dimensions[col].width = width
 
     async def export_closed_orders_to_excel(self, period_days: int = 30) -> str | None:
         """
@@ -1046,12 +1324,24 @@ class ExcelExportService:
 
             # Заголовок
             row = 1
-            ws.merge_cells(f"A{row}:N{row}")
-            cell = ws[f"A{row}"]
-            cell.value = f"ОТЧЕТ ПО МАСТЕРУ: {master_name}"
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = center_alignment
+            # A1: "ОТЧЕТ ПО МАСТЕРУ:"
+            cell_a1 = ws.cell(row=row, column=1)
+            cell_a1.value = "ОТЧЕТ ПО МАСТЕРУ:"
+            cell_a1.font = header_font
+            cell_a1.fill = header_fill
+            cell_a1.alignment = center_alignment
+            
+            # B1: имя мастера
+            cell_b1 = ws.cell(row=row, column=2)
+            cell_b1.value = master_name
+            cell_b1.font = header_font
+            cell_b1.fill = header_fill
+            cell_b1.alignment = center_alignment
+            
+            # Растягиваем заголовок на остальные столбцы
+            for col in range(3, 15):  # C1:N1
+                ws.cell(row=row, column=col).fill = header_fill
+            
             ws.row_dimensions[row].height = 25
 
             row += 1
