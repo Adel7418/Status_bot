@@ -307,7 +307,7 @@ class TaskScheduler:
                 updated_at = order.updated_at
                 if updated_at.tzinfo is None:
                     updated_at = updated_at.replace(tzinfo=MOSCOW_TZ)
-                
+
                 time_in_status = now - updated_at
 
                 # SLA правила
@@ -489,7 +489,11 @@ class TaskScheduler:
                             )
 
                             # Упоминаем мастера в группе (ORM: через master.user)
-                            master_username = master.user.username if hasattr(master, "user") and master.user else None
+                            master_username = (
+                                master.user.username
+                                if hasattr(master, "user") and master.user
+                                else None
+                            )
                             if master_username:
                                 reminder_text += f"Мастер: @{master_username}\n\n"
                             else:
@@ -693,11 +697,13 @@ class TaskScheduler:
                         master_id=master.id,
                         save_to_archive=True,
                         period_start=period_start,
-                        period_end=period_end
+                        period_end=period_end,
                     )
 
                     archived_count += 1
-                    logger.info(f"Отчет для мастера {master.id} ({master.get_display_name()}) архивирован")
+                    logger.info(
+                        f"Отчет для мастера {master.id} ({master.get_display_name()}) архивирован"
+                    )
 
                     # Отправляем уведомление мастеру
                     notification = (
@@ -716,7 +722,7 @@ class TaskScheduler:
                                 master.telegram_id,
                                 notification,
                                 parse_mode="HTML",
-                                max_attempts=2
+                                max_attempts=2,
                             )
                         except Exception as notify_error:
                             logger.warning(
@@ -725,7 +731,9 @@ class TaskScheduler:
 
                 except Exception as master_error:
                     failed_count += 1
-                    logger.error(f"Ошибка архивирования отчета для мастера {master.id}: {master_error}")
+                    logger.error(
+                        f"Ошибка архивирования отчета для мастера {master.id}: {master_error}"
+                    )
 
             logger.info(
                 f"Архивирование отчетов завершено. "
@@ -750,7 +758,7 @@ class TaskScheduler:
                             admin.telegram_id,
                             admin_notification,
                             parse_mode="HTML",
-                            max_attempts=2
+                            max_attempts=2,
                         )
 
             except Exception as admin_notify_error:
@@ -784,9 +792,7 @@ class TaskScheduler:
                 shutil.copy2(db_path, backup_file)
                 file_size = backup_file.stat().st_size / 1024  # KB
 
-                logger.info(
-                    f"Бэкап создан: {backup_file.name} ({file_size:.2f} KB)"
-                )
+                logger.info(f"Бэкап создан: {backup_file.name} ({file_size:.2f} KB)")
 
                 # Удаление старых бэкапов (храним последние 30 дней)
                 cutoff_date = datetime.now(MOSCOW_TZ) - timedelta(days=30)
@@ -823,7 +829,7 @@ class TaskScheduler:
                                 admin.telegram_id,
                                 notification,
                                 parse_mode="HTML",
-                                max_attempts=1
+                                max_attempts=1,
                             )
 
                 except Exception as notify_error:
@@ -840,7 +846,7 @@ class TaskScheduler:
                 admins = await self.db.get_users_by_role("ADMIN")
                 error_notification = (
                     f"❌ <b>Ошибка автоматического бэкапа БД</b>\n\n"
-                    f"Ошибка: {str(e)}\n\n"
+                    f"Ошибка: {e!s}\n\n"
                     f"WARNING: Необходимо проверить систему!"
                 )
 
@@ -851,7 +857,7 @@ class TaskScheduler:
                             admin.telegram_id,
                             error_notification,
                             parse_mode="HTML",
-                            max_attempts=1
+                            max_attempts=1,
                         )
 
             except Exception:
@@ -861,12 +867,14 @@ class TaskScheduler:
         """Автоматическое обновление отчетов"""
         try:
             from app.services.auto_update_service import AutoUpdateService
-            
+
             auto_update_service = AutoUpdateService()
             results = await auto_update_service.update_all_reports()
-            
-            logger.info(f"Автоматическое обновление отчетов завершено: {results['total_updated']} отчетов обновлено")
-            
+
+            logger.info(
+                f"Автоматическое обновление отчетов завершено: {results['total_updated']} отчетов обновлено"
+            )
+
             # Если есть ошибки, уведомляем админов
             if results["errors"]:
                 admins = await self.db.get_users_by_role("ADMIN")
@@ -884,7 +892,7 @@ class TaskScheduler:
                             admin.telegram_id,
                             error_notification,
                             parse_mode="HTML",
-                            max_attempts=1
+                            max_attempts=1,
                         )
 
         except Exception as e:
@@ -894,12 +902,14 @@ class TaskScheduler:
         """Очистка старых отчетов"""
         try:
             from app.services.auto_update_service import AutoUpdateService
-            
+
             auto_update_service = AutoUpdateService()
             results = await auto_update_service.cleanup_old_reports(max_age_hours=168)  # 7 дней
-            
-            logger.info(f"Очистка старых отчетов завершена: {results['total_deleted']} файлов удалено")
-            
+
+            logger.info(
+                f"Очистка старых отчетов завершена: {results['total_deleted']} файлов удалено"
+            )
+
             # Если удалено много файлов, уведомляем админов
             if results["total_deleted"] > 10:
                 admins = await self.db.get_users_by_role("ADMIN")
@@ -916,7 +926,7 @@ class TaskScheduler:
                             admin.telegram_id,
                             cleanup_notification,
                             parse_mode="HTML",
-                            max_attempts=1
+                            max_attempts=1,
                         )
 
         except Exception as e:
@@ -928,26 +938,26 @@ class TaskScheduler:
         """
         try:
             from app.services.realtime_daily_table import realtime_table_service
-            
+
             logger.info("Сохранение текущей таблицы и создание новой в 00:00")
-            
+
             # Сохраняем текущую таблицу и создаем новую
             await realtime_table_service.save_and_create_new_table()
-            
+
             # Уведомления отключены по запросу пользователя
-            
+
         except Exception as e:
             logger.error(f"Ошибка при создании ежедневной таблицы: {e}")
-            
+
             # Уведомляем администраторов об ошибке
             try:
                 admins = await self.db.get_users_by_role("ADMIN")
                 error_text = (
                     f"❌ <b>Ошибка создания ежедневной таблицы</b>\n\n"
                     f"📅 Дата: {yesterday.strftime('%d.%m.%Y')}\n"
-                    f"🔍 Ошибка: {str(e)}"
+                    f"🔍 Ошибка: {e!s}"
                 )
-                
+
                 for admin in admins:
                     with contextlib.suppress(Exception):
                         await safe_send_message(
@@ -955,7 +965,7 @@ class TaskScheduler:
                             admin.telegram_id,
                             error_text,
                             parse_mode="HTML",
-                            max_attempts=1
+                            max_attempts=1,
                         )
             except Exception as notify_error:
                 logger.error(f"Ошибка при отправке уведомления об ошибке: {notify_error}")

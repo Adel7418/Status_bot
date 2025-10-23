@@ -193,7 +193,9 @@ class MasterReportsService:
             ws.cell(row=row_num, column=4, value=order.client_name or "").border = border
             ws.cell(row=row_num, column=5, value=order.client_phone or "").border = border
             ws.cell(row=row_num, column=6, value=order.client_address or "").border = border
-            ws.cell(row=row_num, column=7, value=order.scheduled_time if order.scheduled_time else "").border = border
+            ws.cell(
+                row=row_num, column=7, value=order.scheduled_time if order.scheduled_time else ""
+            ).border = border
             ws.cell(
                 row=row_num,
                 column=8,

@@ -973,7 +973,8 @@ class Database:
                     notes=row["notes"],
                     scheduled_time=(
                         row["scheduled_time"]
-                        if row["scheduled_time"] is not None and str(row["scheduled_time"]).strip() != 'None'
+                        if row["scheduled_time"] is not None
+                        and str(row["scheduled_time"]).strip() != "None"
                         else None
                     ),
                     total_amount=(
@@ -1352,7 +1353,8 @@ class Database:
                     notes=row["notes"],
                     scheduled_time=(
                         row["scheduled_time"]
-                        if row["scheduled_time"] is not None and str(row["scheduled_time"]).strip() != 'None'
+                        if row["scheduled_time"] is not None
+                        and str(row["scheduled_time"]).strip() != "None"
                         else None
                     ),
                     total_amount=(
@@ -1950,10 +1952,10 @@ class Database:
     async def delete_master(self, telegram_id: int) -> bool:
         """
         Удаление мастера из системы
-        
+
         Args:
             telegram_id: Telegram ID мастера
-            
+
         Returns:
             True если успешно
         """
@@ -1963,22 +1965,22 @@ class Database:
                 "SELECT id FROM masters WHERE telegram_id = ?", (telegram_id,)
             )
             row = await cursor.fetchone()
-            
+
             if not row:
                 logger.warning(f"Master with telegram_id {telegram_id} not found")
                 return False
-                
+
             master_id = row["id"]
-            
+
             # Удаляем мастера (каскадное удаление удалит связанные записи)
             await self.connection.execute(
                 "DELETE FROM masters WHERE telegram_id = ?", (telegram_id,)
             )
             await self.connection.commit()
-            
+
             logger.info(f"Master {telegram_id} (ID: {master_id}) deleted from system")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error deleting master {telegram_id}: {e}")
             await self.connection.rollback()

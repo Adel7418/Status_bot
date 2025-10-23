@@ -4,7 +4,6 @@
 
 import logging
 import re
-from typing import Optional
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -50,23 +49,22 @@ EDITABLE_FIELDS = {
 async def show_edit_order_menu(message: Message, order, user_role: str, allow_closed: bool = False):
     """
     Показать меню редактирования заявки
-    
+
     Args:
         message: Сообщение
         order: Заявка
         user_role: Роль пользователя
         allow_closed: Разрешить редактирование закрытых заявок
     """
-    from aiogram.fsm.context import FSMContext
     from aiogram.types import InlineKeyboardButton
     from aiogram.utils.keyboard import InlineKeyboardBuilder
-    
+
     # Проверка прав
     can_edit, error_msg = can_edit_order(order, user_role, allow_closed)
     if not can_edit:
         await message.reply(f"❌ {error_msg}")
         return
-    
+
     # Формируем информацию о заявке
     status_names = {
         OrderStatus.NEW: "🆕 Новая",
@@ -77,7 +75,7 @@ async def show_edit_order_menu(message: Message, order, user_role: str, allow_cl
         OrderStatus.CLOSED: "✅ Закрыта",
         OrderStatus.REFUSED: "❌ Отклонена",
     }
-    
+
     order_text = (
         f"📋 <b>Заявка #{order.id}</b>\n"
         f"📱 <b>Тип техники:</b> {order.equipment_type}\n"
@@ -87,44 +85,39 @@ async def show_edit_order_menu(message: Message, order, user_role: str, allow_cl
         f"📞 <b>Телефон:</b> {order.client_phone}\n"
         f"📊 <b>Статус:</b> {status_names.get(order.status, order.status.value)}\n"
     )
-    
+
     if order.notes:
         order_text += f"📋 <b>Заметки:</b> {order.notes}\n"
-    
+
     if order.scheduled_time:
         order_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
-    
+
     if order.estimated_completion_date:
         order_text += f"📅 <b>Срок окончания (DR):</b> {order.estimated_completion_date}\n"
-    
+
     if order.prepayment_amount:
         order_text += f"💰 <b>Предоплата (DR):</b> {order.prepayment_amount} ₽\n"
-    
-    order_text += f"\n✏️ <b>Выберите поле для редактирования:</b>"
-    
+
+    order_text += "\n✏️ <b>Выберите поле для редактирования:</b>"
+
     # Создаем клавиатуру с полями для редактирования
     builder = InlineKeyboardBuilder()
-    
+
     for field_key, field_name in EDITABLE_FIELDS.items():
         # Показываем поля DR только для заявок в статусе DR
         if field_key in ["estimated_completion_date", "prepayment_amount"]:
             if order.status != OrderStatus.DR:
                 continue  # Пропускаем DR поля для других статусов
-        
+
         builder.row(
             InlineKeyboardButton(
                 text=field_name,
                 callback_data=f"edit_field:{field_key}",
             )
         )
-    
-    builder.row(
-        InlineKeyboardButton(
-            text="❌ Отмена",
-            callback_data="cancel_edit"
-        )
-    )
-    
+
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit"))
+
     await message.reply(order_text, parse_mode="HTML", reply_markup=builder.as_markup())
 
 
@@ -201,7 +194,7 @@ async def callback_edit_order(callback: CallbackQuery, state: FSMContext, user_r
             if field_key in ["estimated_completion_date", "prepayment_amount"]:
                 if order.status != OrderStatus.DR:
                     continue  # Пропускаем DR поля для других статусов
-            
+
             builder.row(
                 InlineKeyboardButton(
                     text=field_name,
@@ -311,9 +304,7 @@ async def callback_select_field(callback: CallbackQuery, state: FSMContext, user
             )
 
         elif field == "scheduled_time":
-            prompt += (
-                "<i>Для очистки введите '-'</i>"
-            )
+            prompt += "<i>Для очистки введите '-'</i>"
 
         await callback.message.edit_text(
             prompt,

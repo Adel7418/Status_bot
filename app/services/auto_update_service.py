@@ -10,6 +10,7 @@ from typing import Any
 from app.database import Database
 from app.services.excel_export import ExcelExportService
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +24,7 @@ class AutoUpdateService:
     async def update_all_reports(self) -> dict[str, Any]:
         """
         Обновляет все отчеты автоматически
-        
+
         Returns:
             Словарь с результатами обновления
         """
@@ -31,7 +32,7 @@ class AutoUpdateService:
             "timestamp": datetime.now().isoformat(),
             "updated_reports": [],
             "errors": [],
-            "total_updated": 0
+            "total_updated": 0,
         }
 
         try:
@@ -50,7 +51,9 @@ class AutoUpdateService:
             results["updated_reports"].append("masters_detailed")
             results["total_updated"] += 1
 
-            logger.info(f"Автоматическое обновление завершено. Обновлено отчетов: {results['total_updated']}")
+            logger.info(
+                f"Автоматическое обновление завершено. Обновлено отчетов: {results['total_updated']}"
+            )
 
         except Exception as e:
             error_msg = f"Ошибка при автоматическом обновлении: {e}"
@@ -82,15 +85,17 @@ class AutoUpdateService:
         try:
             # Создаем временный отчет для детализации
             await self.db.connect()
-            
+
             # Получаем всех мастеров
             masters = await self.db.get_all_masters(only_approved=True)
-            
+
             if masters:
                 # Создаем детализированный отчет
-                await self.excel_service.export_master_orders_to_excel(master_id=None)  # Все мастера
+                await self.excel_service.export_master_orders_to_excel(
+                    master_id=None
+                )  # Все мастера
                 logger.info("Детализированный отчет по мастерам обновлен")
-            
+
         except Exception as e:
             logger.error(f"Ошибка обновления детализированного отчета: {e}")
             raise
@@ -100,21 +105,18 @@ class AutoUpdateService:
     async def get_report_status(self) -> dict[str, Any]:
         """
         Получает статус всех отчетов
-        
+
         Returns:
             Словарь со статусом отчетов
         """
         reports_dir = Path("reports")
-        status = {
-            "timestamp": datetime.now().isoformat(),
-            "reports": {}
-        }
+        status = {"timestamp": datetime.now().isoformat(), "reports": {}}
 
         # Проверяем существование файлов отчетов
         report_files = {
             "closed_orders": "closed_orders.xlsx",
             "masters_statistics": "masters_statistics.xlsx",
-            "masters_detailed": "masters_detailed.xlsx"
+            "masters_detailed": "masters_detailed.xlsx",
         }
 
         for report_name, filename in report_files.items():
@@ -125,14 +127,17 @@ class AutoUpdateService:
                     "exists": True,
                     "size": stat.st_size,
                     "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "age_hours": (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).total_seconds() / 3600
+                    "age_hours": (
+                        datetime.now() - datetime.fromtimestamp(stat.st_mtime)
+                    ).total_seconds()
+                    / 3600,
                 }
             else:
                 status["reports"][report_name] = {
                     "exists": False,
                     "size": 0,
                     "last_modified": None,
-                    "age_hours": None
+                    "age_hours": None,
                 }
 
         return status
@@ -140,10 +145,10 @@ class AutoUpdateService:
     async def cleanup_old_reports(self, max_age_hours: int = 168) -> dict[str, Any]:
         """
         Очищает старые отчеты
-        
+
         Args:
             max_age_hours: Максимальный возраст файла в часах (по умолчанию 7 дней)
-            
+
         Returns:
             Словарь с результатами очистки
         """
@@ -151,7 +156,7 @@ class AutoUpdateService:
             "timestamp": datetime.now().isoformat(),
             "deleted_files": [],
             "errors": [],
-            "total_deleted": 0
+            "total_deleted": 0,
         }
 
         try:
@@ -165,13 +170,13 @@ class AutoUpdateService:
             for file_path in reports_dir.glob("*.xlsx"):
                 try:
                     file_age = current_time - datetime.fromtimestamp(file_path.stat().st_mtime)
-                    
+
                     if file_age > max_age:
                         file_path.unlink()
                         results["deleted_files"].append(str(file_path))
                         results["total_deleted"] += 1
                         logger.info(f"Удален старый отчет: {file_path}")
-                        
+
                 except Exception as e:
                     error_msg = f"Ошибка удаления файла {file_path}: {e}"
                     logger.error(error_msg)

@@ -482,10 +482,10 @@ class ORMDatabase:
     async def delete_master(self, telegram_id: int) -> bool:
         """
         Удаление мастера из системы
-        
+
         Args:
             telegram_id: Telegram ID мастера
-            
+
         Returns:
             True если успешно
         """
@@ -495,20 +495,20 @@ class ORMDatabase:
                 stmt = select(Master).where(Master.telegram_id == telegram_id)
                 result = await session.execute(stmt)
                 master = result.scalar_one_or_none()
-                
+
                 if not master:
                     logger.warning(f"Master with telegram_id {telegram_id} not found")
                     return False
-                    
+
                 master_id = master.id
-                
+
                 # Удаляем мастера (каскадное удаление удалит связанные записи)
                 await session.delete(master)
                 await session.commit()
-                
+
                 logger.info(f"Master {telegram_id} (ID: {master_id}) deleted from system")
                 return True
-                
+
             except Exception as e:
                 logger.error(f"Error deleting master {telegram_id}: {e}")
                 await session.rollback()
@@ -1160,29 +1160,29 @@ class ORMDatabase:
     async def sync_master_roles(self) -> int:
         """
         Синхронизация ролей мастера - создание записей в таблице masters для пользователей с ролью MASTER
-        
+
         Returns:
             Количество созданных записей мастера
         """
         created_count = 0
-        
+
         async with self.get_session() as session:
             # Получаем всех пользователей с ролью MASTER
             # Используем LIKE для поиска роли в строке ролей
             users_stmt = select(User).where(User.role.like("%MASTER%"))
             users_result = await session.execute(users_stmt)
             users = list(users_result.scalars().all())
-            
+
             logger.info(f"[SYNC] Found {len(users)} users with MASTER role")
             for user in users:
                 logger.info(f"[SYNC] User: {user.telegram_id}, roles: {user.role}")
-            
+
             for user in users:
                 # Проверяем, есть ли уже запись в таблице masters
                 master_stmt = select(Master).where(Master.telegram_id == user.telegram_id)
                 master_result = await session.execute(master_stmt)
                 existing_master = master_result.scalar_one_or_none()
-                
+
                 if not existing_master:
                     logger.info(f"[SYNC] Creating master record for user {user.telegram_id}")
                     # Создаем запись мастера
@@ -1193,13 +1193,13 @@ class ORMDatabase:
                         is_active=True,
                         is_approved=True,  # Автоматически одобряем, так как роль уже есть
                         work_chat_id=None,
-                        version=1
+                        version=1,
                     )
                     session.add(master)
                     created_count += 1
                 else:
                     logger.info(f"[SYNC] Master record already exists for user {user.telegram_id}")
-                    
+
             await session.commit()
-            
+
         return created_count

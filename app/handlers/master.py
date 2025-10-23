@@ -13,12 +13,12 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.decorators import handle_errors
+from app.handlers.common import get_menu_with_counter
 from app.keyboards.inline import (
     get_order_actions_keyboard,
     get_order_list_keyboard,
     get_yes_no_keyboard,
 )
-from app.handlers.common import get_menu_with_counter
 from app.states import (
     CompleteOrderStates,
     LongRepairStates,
@@ -48,7 +48,7 @@ async def btn_my_orders(message: Message, state: FSMContext, user_role: str):
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-    
+
     # Проверяем, что это не личное сообщение (только для чистых мастеров)
     if message.chat.type == "private" and user_role == UserRole.MASTER:
         await message.answer(
@@ -150,7 +150,7 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
         if not master:
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -265,7 +265,7 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
         if not master:
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -296,7 +296,9 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
                 parse_mode="HTML",
             )
             if not result:
-                logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток")
+                logger.error(
+                    f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток"
+                )
 
         # Формируем текст с деталями заявки
         acceptance_text = (
@@ -363,7 +365,9 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
         order = await db.get_order_by_id(order_id)
         master = await db.get_master_by_telegram_id(callback.from_user.id)
 
-        logger.info(f"[REFUSE] Order found: {order is not None}, Master found: {master is not None}")
+        logger.info(
+            f"[REFUSE] Order found: {order is not None}, Master found: {master is not None}"
+        )
         if order:
             logger.info(f"[REFUSE] Order assigned_master_id: {order.assigned_master_id}")
         if master:
@@ -374,9 +378,11 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
             logger.warning(f"[REFUSE] User {callback.from_user.id} is not registered as master")
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
-            logger.warning(f"[REFUSE] Access denied - Master ID: {master.id}, Assigned: {order.assigned_master_id}")
+            logger.warning(
+                f"[REFUSE] Access denied - Master ID: {master.id}, Assigned: {order.assigned_master_id}"
+            )
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
@@ -437,7 +443,9 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
                 parse_mode="HTML",
             )
             if not result:
-                logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток")
+                logger.error(
+                    f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток"
+                )
 
         log_action(callback.from_user.id, "REFUSE_ORDER_MASTER", f"Order #{order_id}")
 
@@ -472,7 +480,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         if not master:
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -503,7 +511,9 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
                 parse_mode="HTML",
             )
             if not result:
-                logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток")
+                logger.error(
+                    f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток"
+                )
 
         # Обновляем сообщение с кнопками завершения
         from aiogram.types import InlineKeyboardButton
@@ -553,7 +563,7 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
         if not master:
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -606,7 +616,7 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
         if not master:
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
-            
+
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -734,12 +744,14 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
     # Парсим введенный текст
     text = message.text.strip()
     logger.debug(f"[DR] Input text: '{text}'")
-    
+
     # Проверяем на отмену
     if text.lower() in ["отмена", "отменить", "❌ отмена", "cancel"]:
-        await message.answer("❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove())
+        await message.answer(
+            "❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove()
+        )
         await state.clear()
-        
+
         # Показываем главное меню
         db = Database()
         await db.connect()
@@ -748,7 +760,9 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             if user:
                 user_roles = user.get_roles()
                 menu_keyboard = await get_menu_with_counter(user_roles)
-                await message.answer("🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard)
+                await message.answer(
+                    "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
+                )
         finally:
             await db.disconnect()
         return
@@ -780,7 +794,9 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
                 )
                 break
             except ValueError as e:
-                logger.warning(f"[DR] Не удалось распарсить сумму предоплаты '{prepayment_str}': {e}")
+                logger.warning(
+                    f"[DR] Не удалось распарсить сумму предоплаты '{prepayment_str}': {e}"
+                )
 
     # ВАЛИДАЦИЯ ПРЕДОПЛАТЫ
     if prepayment_amount is not None:
@@ -931,8 +947,6 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         logger.debug(f"[DR] DB disconnected for order #{order_id}")
 
 
-
-
 @router.message(F.text == "📊 Моя статистика")
 @handle_errors
 async def btn_my_stats(message: Message, user_role: str):
@@ -946,7 +960,7 @@ async def btn_my_stats(message: Message, user_role: str):
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-    
+
     # Проверяем, что это не личное сообщение (только для чистых мастеров)
     if message.chat.type == "private" and user_role == UserRole.MASTER:
         await message.answer(
@@ -1145,36 +1159,39 @@ async def debug_confirm_materials_callback(callback_query: CallbackQuery, state:
     """
     ОТЛАДОЧНЫЙ обработчик для всех callback'ов с confirm_materials
     """
-    logger.info(f"[DEBUG_MATERIALS] ===== CALLBACK INTERCEPTED =====")
+    logger.info("[DEBUG_MATERIALS] ===== CALLBACK INTERCEPTED =====")
     logger.info(f"[DEBUG_MATERIALS] Data: {callback_query.data}")
     logger.info(f"[DEBUG_MATERIALS] From user: {callback_query.from_user.id}")
     logger.info(f"[DEBUG_MATERIALS] Message ID: {callback_query.message.message_id}")
     logger.info(f"[DEBUG_MATERIALS] Chat ID: {callback_query.message.chat.id}")
-    
+
     # Получаем текущее состояние FSM
     current_state = await state.get_state()
     logger.info(f"[DEBUG_MATERIALS] Current FSM state: {current_state}")
-    
+
     # Получаем данные из FSM
     fsm_data = await state.get_data()
     logger.info(f"[DEBUG_MATERIALS] FSM data: {fsm_data}")
-    
+
     # Парсим callback data
     from app.utils import parse_callback_data
+
     try:
         parsed_data = parse_callback_data(callback_query.data)
         action = parsed_data.get("action")
         params = parsed_data.get("params", [])
         order_id = params[0] if len(params) > 0 else None
-        logger.info(f"[DEBUG_MATERIALS] Parsed - action: {action}, order_id: {order_id}, params: {params}")
+        logger.info(
+            f"[DEBUG_MATERIALS] Parsed - action: {action}, order_id: {order_id}, params: {params}"
+        )
     except Exception as e:
         logger.error(f"[DEBUG_MATERIALS] Error parsing callback data: {e}")
         await callback_query.answer("❌ Ошибка обработки callback", show_alert=True)
         return
-    
+
     # Отвечаем на callback
     await callback_query.answer()
-    
+
     # Передаем управление основному обработчику
     await process_materials_confirmation_callback(callback_query, state)
 
@@ -1185,45 +1202,51 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
     Обработка подтверждения суммы материалов
     """
     logger.info(f"[MATERIALS_CONFIRM] Handler called with data: {callback_query.data}")
-    
+
     from app.utils import parse_callback_data
-    
+
     parsed_data = parse_callback_data(callback_query.data)
     action = parsed_data.get("action")
     params = parsed_data.get("params", [])
     answer = params[0] if len(params) > 0 else None  # yes/no
     order_id = params[1] if len(params) > 1 else None  # order_id
-    logger.info(f"[MATERIALS_CONFIRM] Processing action: {action}, answer: {answer}, order_id: {order_id}")
-    
+    logger.info(
+        f"[MATERIALS_CONFIRM] Processing action: {action}, answer: {answer}, order_id: {order_id}"
+    )
+
     if answer == "yes":
         # Подтверждаем сумму материалов и переходим к отзыву
         await state.set_state(CompleteOrderStates.confirm_review)
         logger.info(f"[MATERIALS_CONFIRM] State changed to confirm_review for order {order_id}")
-        
+
         from app.keyboards.inline import get_yes_no_keyboard
-        
+
         try:
             keyboard = get_yes_no_keyboard("confirm_review", order_id)
             logger.info(f"[MATERIALS_CONFIRM] Created keyboard: {keyboard}")
-            
+
             await callback_query.message.edit_text(
-                f"✅ Сумма расходного материала подтверждена\n\n"
-                f"❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
-                f"(За отзыв вы получите дополнительно +10% к прибыли)",
+                "✅ Сумма расходного материала подтверждена\n\n"
+                "❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
+                "(За отзыв вы получите дополнительно +10% к прибыли)",
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
             logger.info(f"[MATERIALS_CONFIRM] Message updated successfully for order {order_id}")
         except Exception as e:
-            logger.exception(f"[MATERIALS_CONFIRM] Error updating message for order {order_id}: {e}")
+            logger.exception(
+                f"[MATERIALS_CONFIRM] Error updating message for order {order_id}: {e}"
+            )
             await callback_query.answer("❌ Ошибка при обновлении сообщения", show_alert=True)
             return
-            
+
     elif answer == "no":
         # Возвращаемся к вводу суммы материалов
         await state.set_state(CompleteOrderStates.enter_materials_cost)
-        logger.info(f"[MATERIALS_CONFIRM] State changed to enter_materials_cost for order {order_id}")
-        
+        logger.info(
+            f"[MATERIALS_CONFIRM] State changed to enter_materials_cost for order {order_id}"
+        )
+
         try:
             await callback_query.message.edit_text(
                 "💰 <b>Введите сумму расходного материала:</b>\n\n"
@@ -1231,12 +1254,16 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
                 parse_mode="HTML",
                 reply_markup=None,
             )
-            logger.info(f"[MATERIALS_CONFIRM] Message updated for re-enter materials for order {order_id}")
+            logger.info(
+                f"[MATERIALS_CONFIRM] Message updated for re-enter materials for order {order_id}"
+            )
         except Exception as e:
-            logger.exception(f"[MATERIALS_CONFIRM] Error updating message for re-enter materials for order {order_id}: {e}")
+            logger.exception(
+                f"[MATERIALS_CONFIRM] Error updating message for re-enter materials for order {order_id}: {e}"
+            )
             await callback_query.answer("❌ Ошибка при обновлении сообщения", show_alert=True)
             return
-    
+
     await callback_query.answer()
 
 
@@ -1272,7 +1299,7 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
-    
+
     await callback_query.message.edit_text(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
@@ -1336,7 +1363,7 @@ async def process_out_of_city_confirmation_callback(
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
-    
+
     try:
         order = await db.get_order_by_id(order_id_from_state)
 
@@ -1515,7 +1542,7 @@ async def btn_settings_master(message: Message, user_role: str):
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-    
+
     db = Database()
     await db.connect()
 
@@ -1732,7 +1759,7 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
     if not message.text:
         await message.reply(
             "❌ Пожалуйста, отправьте текстовое сообщение с причиной переноса.\n"
-            "Или отправьте \"-\" если причины нет."
+            'Или отправьте "-" если причины нет.'
         )
         return
 
@@ -1750,7 +1777,7 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
     order_id = data.get("order_id")
     new_time = data.get("new_scheduled_time")
     initiated_by = data.get("reschedule_initiated_by")
-    
+
     # Показываем подтверждение переноса
     await show_reschedule_confirmation(message, state)
 
@@ -1763,19 +1790,19 @@ async def show_reschedule_confirmation(message: Message, state: FSMContext):
     order_id = data.get("order_id")
     new_time = data.get("new_scheduled_time")
     reason = data.get("reschedule_reason")
-    
+
     # Получаем информацию о заявке
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
-            
+
         old_time = order.scheduled_time or "не указано"
-        
+
         # Формируем текст подтверждения
         text = (
             f"📅 <b>Подтверждение переноса заявки #{order_id}</b>\n\n"
@@ -1785,19 +1812,22 @@ async def show_reschedule_confirmation(message: Message, state: FSMContext):
             f"⏰ <b>Было:</b> {old_time}\n"
             f"⏰ <b>Стало:</b> {new_time}\n"
         )
-        
+
         if reason:
             text += f"\n📝 <b>Причина:</b> {reason}"
-        
+
         text += "\n\nПодтвердите перенос заявки:"
-        
+
         # Переходим к состоянию подтверждения
         await state.set_state(RescheduleOrderStates.confirm)
-        
+
         # Показываем подтверждение с клавиатурой
         from app.keyboards.reply import get_reschedule_confirm_keyboard
-        await message.answer(text, parse_mode="HTML", reply_markup=get_reschedule_confirm_keyboard())
-        
+
+        await message.answer(
+            text, parse_mode="HTML", reply_markup=get_reschedule_confirm_keyboard()
+        )
+
     finally:
         await db.disconnect()
 
@@ -1827,21 +1857,22 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
     new_time = data.get("new_scheduled_time")
     reason = data.get("reschedule_reason")
     initiated_by = data.get("reschedule_initiated_by")
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
-            
+
         old_time = order.scheduled_time or "не указано"
-        
+
         # Обновляем заявку
         async with db.get_session() as session:
             from sqlalchemy import text
+
             await session.execute(
                 text(
                     """
@@ -1862,33 +1893,33 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                     "order_id": order_id,
                 },
             )
-        
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="RESCHEDULE_ORDER",
             details=f"Order #{order_id} rescheduled from '{old_time}' to '{new_time}'. Reason: {reason or 'не указана'}",
         )
-        
+
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} перенесена</b>\n\n"
             f"Было: {old_time}\n"
             f"Стало: <b>{new_time}</b>\n"
         )
-        
+
         if reason:
             result_text += f"\n📝 {reason}"
-        
+
         result_text += "\n\n<i>Диспетчер уведомлен</i>"
-        
+
         await message.reply(result_text, parse_mode="HTML")
-        
+
         # Уведомляем диспетчера
         if order.dispatcher_id:
             master = await db.get_master_by_telegram_id(initiated_by)
             master_name = master.get_display_name() if master else f"ID: {initiated_by}"
-            
+
             notification = (
                 f"📅 <b>Заявка #{order_id} перенесена</b>\n\n"
                 f"👨‍🔧 {master_name}\n"
@@ -1897,21 +1928,21 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                 f"Было: {old_time}\n"
                 f"<b>Стало: {new_time}</b>\n"
             )
-            
+
             if reason:
                 notification += f"\n📝 {reason}"
-            
+
             notification += "\n\n💡 Свяжитесь с клиентом для подтверждения"
-            
+
             try:
                 await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
                 logger.info(f"Reschedule notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
-        
+
         log_action(message.from_user.id, "RESCHEDULE_ORDER", f"Order #{order_id}")
         logger.info(f"✅ Order #{order_id} successfully rescheduled to '{new_time}'")
-        
+
     except Exception as e:
         logger.exception(f"❌ Error rescheduling order #{order_id}: {e}")
         await message.reply(
@@ -1931,17 +1962,17 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
     order_id = data.get("order_id")
     completion_date = data.get("completion_date")
     prepayment_amount = data.get("prepayment_amount")
-    
+
     # Получаем информацию о заявке
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
-            
+
         # Формируем текст подтверждения
         text = (
             f"📋 <b>Подтверждение перевода в длительный ремонт</b>\n\n"
@@ -1950,25 +1981,26 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
             f"📍 <b>Адрес:</b> {order.client_address}\n\n"
             f"⏰ <b>Примерный срок завершения:</b> {completion_date}\n"
         )
-        
+
         if prepayment_amount:
             text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
         else:
             text += "💰 <b>Предоплата:</b> не указана\n"
-        
+
         text += (
             "\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
             "'Длительный ремонт' и диспетчер получит уведомление.\n\n"
             "Подтвердите перевод в длительный ремонт:"
         )
-        
+
         # Переходим к состоянию подтверждения
         await state.set_state(LongRepairStates.confirm_dr)
-        
+
         # Показываем подтверждение с клавиатурой
         from app.keyboards.reply import get_dr_confirm_keyboard
+
         await message.answer(text, parse_mode="HTML", reply_markup=get_dr_confirm_keyboard())
-        
+
     finally:
         await db.disconnect()
 
@@ -1981,9 +2013,11 @@ async def handle_dr_confirm(message: Message, state: FSMContext):
     if message.text == "✅ Подтвердить перевод":
         await confirm_dr_translation(message, state)
     elif message.text == "❌ Отмена":
-        await message.answer("❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove())
+        await message.answer(
+            "❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove()
+        )
         await state.clear()
-        
+
         # Показываем главное меню
         db = Database()
         await db.connect()
@@ -1992,7 +2026,9 @@ async def handle_dr_confirm(message: Message, state: FSMContext):
             if user:
                 user_roles = user.get_roles()
                 menu_keyboard = await get_menu_with_counter(user_roles)
-                await message.answer("🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard)
+                await message.answer(
+                    "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
+                )
         finally:
             await db.disconnect()
     else:
@@ -2009,19 +2045,20 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
     order_id = data.get("order_id")
     completion_date = data.get("completion_date")
     prepayment_amount = data.get("prepayment_amount")
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
-            
+
         # Обновляем заявку
         async with db.get_session() as session:
             from sqlalchemy import text
+
             await session.execute(
                 text(
                     """
@@ -2040,43 +2077,45 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                     "order_id": order_id,
                 },
             )
-        
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="LONG_REPAIR_ORDER",
             details=f"Order #{order_id} translated to long repair. Completion: {completion_date}, Prepayment: {prepayment_amount or 'none'}",
         )
-        
+
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
             f"⏰ <b>Срок завершения:</b> {completion_date}\n"
         )
-        
+
         if prepayment_amount:
             result_text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
-        
+
         result_text += "\n<i>Диспетчер уведомлен</i>"
-        
+
         # Отправляем результат и удаляем клавиатуру
         await message.reply(result_text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
-        
+
         # Очищаем состояние FSM
         await state.clear()
-        
+
         # Получаем роли пользователя и показываем главное меню
         user = await db.get_user_by_telegram_id(message.from_user.id)
         if user:
             user_roles = user.get_roles()
             menu_keyboard = await get_menu_with_counter(user_roles)
-            await message.answer("🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard)
-        
+            await message.answer(
+                "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
+            )
+
         # Уведомляем диспетчера
         if order.dispatcher_id:
             master = await db.get_master_by_telegram_id(message.from_user.id)
             master_name = master.get_display_name() if master else f"ID: {message.from_user.id}"
-            
+
             notification = (
                 f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
                 f"👨‍🔧 {master_name}\n"
@@ -2084,21 +2123,21 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 f"🔧 {order.equipment_type}\n\n"
                 f"⏰ <b>Срок завершения:</b> {completion_date}\n"
             )
-            
+
             if prepayment_amount:
                 notification += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
-            
+
             notification += "\n💡 Свяжитесь с клиентом для подтверждения"
-            
+
             try:
                 await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
                 logger.info(f"DR notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
-        
+
         log_action(message.from_user.id, "LONG_REPAIR_ORDER", f"Order #{order_id}")
         logger.info(f"✅ Order #{order_id} successfully translated to long repair")
-        
+
     except Exception as e:
         logger.exception(f"❌ Error translating order #{order_id} to long repair: {e}")
         await message.reply(
@@ -2316,7 +2355,9 @@ async def complete_order_as_refusal(
 
     try:
         logger.info(f"[REFUSE] Database type: {type(db).__name__}")
-        logger.info(f"[REFUSE] Looking for order_id: {order_id}, user_telegram_id: {user_telegram_id}")
+        logger.info(
+            f"[REFUSE] Looking for order_id: {order_id}, user_telegram_id: {user_telegram_id}"
+        )
         order = await db.get_order_by_id(order_id)
         logger.info(f"[REFUSE] Found order: {order}")
 
@@ -2327,31 +2368,37 @@ async def complete_order_as_refusal(
         # Используем переданный ID пользователя
         telegram_id = user_telegram_id or message.from_user.id
         logger.info(f"[REFUSE] Looking for master with telegram_id: {telegram_id}")
-        
+
         master = await db.get_master_by_telegram_id(telegram_id)
         logger.info(f"[REFUSE] Found master: {master}")
-        
+
         if not master:
             # Дополнительная диагностика - проверим, есть ли пользователь в системе
             try:
                 user = await db.get_user_by_telegram_id(telegram_id)
                 logger.info(f"[REFUSE] User in system: {user}")
-                
+
                 all_masters = await db.get_all_masters()
                 logger.info(f"[REFUSE] Total masters in DB: {len(all_masters)}")
                 for m in all_masters:
                     logger.info(f"[REFUSE] Master: id={m.id}, telegram_id={m.telegram_id}")
             except Exception as e:
                 logger.error(f"[REFUSE] Ошибка получения пользователя/мастеров: {e}")
-            
+
             if not user:
-                await message.reply("❌ Ошибка: вы не зарегистрированы в системе. Обратитесь к администратору.")
+                await message.reply(
+                    "❌ Ошибка: вы не зарегистрированы в системе. Обратитесь к администратору."
+                )
             else:
-                await message.reply("❌ Ошибка: вы не зарегистрированы как мастер. Обратитесь к администратору для регистрации.")
+                await message.reply(
+                    "❌ Ошибка: вы не зарегистрированы как мастер. Обратитесь к администратору для регистрации."
+                )
             return
-            
+
         # Проверяем, что заявка назначена на этого мастера
-        logger.info(f"[REFUSE] Order assigned_master_id: {order.assigned_master_id}, master.id: {master.id}")
+        logger.info(
+            f"[REFUSE] Order assigned_master_id: {order.assigned_master_id}, master.id: {master.id}"
+        )
         if order.assigned_master_id != master.id:
             await message.reply("❌ Ошибка: заявка не назначена на этого мастера.")
             return
@@ -2442,8 +2489,10 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
     parts = callback_query.data.split(":")
     action = parts[1]  # "yes" или "no"
     order_id = int(parts[2])
-    
-    logger.info(f"[REFUSE] Callback data: {callback_query.data}, action: {action}, order_id: {order_id}")
+
+    logger.info(
+        f"[REFUSE] Callback data: {callback_query.data}, action: {action}, order_id: {order_id}"
+    )
 
     if action == "yes":
         # Подтверждаем отказ
@@ -2453,7 +2502,9 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
         logger.info(f"[REFUSE] Final order_id: {order_id}")
 
         # Завершаем заказ как отказ
-        await complete_order_as_refusal(callback_query.message, state, order_id, callback_query.from_user.id)
+        await complete_order_as_refusal(
+            callback_query.message, state, order_id, callback_query.from_user.id
+        )
 
         # Очищаем состояние
         await state.clear()

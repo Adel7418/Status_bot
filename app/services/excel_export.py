@@ -251,7 +251,7 @@ class ExcelExportService:
                     left_alignment,
                     right_alignment,
                 )
-                
+
                 # ✨ Добавляем отдельные листы для каждого мастера
                 await self._add_individual_master_sheets(
                     wb,
@@ -413,7 +413,7 @@ class ExcelExportService:
                     notes.append("Выезд")
                 if order["has_review"]:
                     notes.append("Отзыв")
-                if order["scheduled_time"] and order["scheduled_time"] != 'None':
+                if order["scheduled_time"] and order["scheduled_time"] != "None":
                     notes.append(f"Время: {order['scheduled_time']}")
 
                 data = [
@@ -539,7 +539,16 @@ class ExcelExportService:
                 continue
 
             # Создаем безопасное имя листа (максимум 31 символ)
-            safe_sheet_name = master_name[:31].replace("/", "_").replace("\\", "_").replace("*", "_").replace("?", "_").replace("[", "_").replace("]", "_").replace(":", "_")
+            safe_sheet_name = (
+                master_name[:31]
+                .replace("/", "_")
+                .replace("\\", "_")
+                .replace("*", "_")
+                .replace("?", "_")
+                .replace("[", "_")
+                .replace("]", "_")
+                .replace(":", "_")
+            )
             ws = wb.create_sheet(title=safe_sheet_name)
 
             # Заголовок
@@ -550,18 +559,18 @@ class ExcelExportService:
             cell_a1.font = header_font
             cell_a1.fill = header_fill
             cell_a1.alignment = center_alignment
-            
+
             # B1: имя мастера
             cell_b1 = ws.cell(row=row, column=2)
             cell_b1.value = master_name
             cell_b1.font = header_font
             cell_b1.fill = header_fill
             cell_b1.alignment = center_alignment
-            
+
             # Растягиваем заголовок на остальные столбцы
             for col in range(3, 14):  # C1:M1
                 ws.cell(row=row, column=col).fill = header_fill
-            
+
             ws.row_dimensions[row].height = 25
 
             row += 1
@@ -646,7 +655,7 @@ class ExcelExportService:
                         notes.append("Выезд")
                     if order["has_review"]:
                         notes.append("Отзыв")
-                    if order["scheduled_time"] and order["scheduled_time"] != 'None':
+                    if order["scheduled_time"] and order["scheduled_time"] != "None":
                         notes.append(f"Время: {order['scheduled_time']}")
                     if order["notes"]:
                         notes.append(order["notes"][:50])  # Ограничиваем длину
@@ -739,7 +748,7 @@ class ExcelExportService:
                     cell = ws.cell(row=row, column=col_idx, value=value)
                     cell.border = thin_border
                     cell.font = Font(bold=True)
-                    
+
                     if col_idx == 1:  # "ИТОГО:"
                         cell.alignment = left_alignment
                         cell.fill = PatternFill(
@@ -764,7 +773,7 @@ class ExcelExportService:
 
             # Ширина столбцов для листа мастера
             widths = {
-                "A": 8,   # ID
+                "A": 8,  # ID
                 "B": 15,  # Статус
                 "C": 20,  # Тип техники
                 "D": 20,  # Клиент
@@ -1330,18 +1339,18 @@ class ExcelExportService:
             cell_a1.font = header_font
             cell_a1.fill = header_fill
             cell_a1.alignment = center_alignment
-            
+
             # B1: имя мастера
             cell_b1 = ws.cell(row=row, column=2)
             cell_b1.value = master_name
             cell_b1.font = header_font
             cell_b1.fill = header_fill
             cell_b1.alignment = center_alignment
-            
+
             # Растягиваем заголовок на остальные столбцы
             for col in range(3, 15):  # C1:N1
                 ws.cell(row=row, column=col).fill = header_fill
-            
+
             ws.row_dimensions[row].height = 25
 
             row += 1

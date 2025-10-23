@@ -106,7 +106,9 @@ def get_weekly_master_report_keyboard() -> InlineKeyboardMarkup:
             ),
         ],
         [
-            InlineKeyboardButton(text="📅 Выбрать неделю", callback_data="select_weekly_master_date"),
+            InlineKeyboardButton(
+                text="📅 Выбрать неделю", callback_data="select_weekly_master_date"
+            ),
         ],
         [
             InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu"),
@@ -135,7 +137,9 @@ def get_monthly_master_report_keyboard() -> InlineKeyboardMarkup:
             ),
         ],
         [
-            InlineKeyboardButton(text="📅 Выбрать месяц", callback_data="select_monthly_master_date"),
+            InlineKeyboardButton(
+                text="📅 Выбрать месяц", callback_data="select_monthly_master_date"
+            ),
         ],
         [
             InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu"),
@@ -499,7 +503,7 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
 
         # Обновляем таблицу активных заказов
         await realtime_active_orders_service.update_table()
-        
+
         # Получаем путь к текущей таблице
         filepath = await realtime_active_orders_service.get_current_table_path()
 
@@ -529,8 +533,6 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
     except Exception as e:
         logger.error(f"Error generating active orders report: {e}")
         await callback.answer("❌ Ошибка при создании отчета", show_alert=True)
-
-
 
 
 @router.callback_query(F.data == "back_to_main_menu")
@@ -756,6 +758,7 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
 
 # ==================== НОВЫЕ ОТЧЕТЫ ПО МАСТЕРАМ ====================
 
+
 @router.callback_query(F.data == "report_daily_master_summary")
 @require_role([UserRole.ADMIN, UserRole.DISPATCHER])
 @handle_errors
@@ -845,11 +848,12 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
 
     # Отправляем файл
     from aiogram.types import BufferedInputFile
+
     with open(filepath, "rb") as f:
         file_data = f.read()
-    
+
     file_input = BufferedInputFile(file_data, filename=f"daily_master_summary_{date_str}.xlsx")
-    
+
     try:
         await callback.message.answer_document(
             document=file_input,
@@ -861,7 +865,7 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
                 ]
             ),
         )
-        
+
         await callback.message.delete()
     except Exception as e:
         logger.warning(f"Could not send document or delete message: {e}")
@@ -879,7 +883,7 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
             )
         except Exception as e2:
             logger.error(f"Could not send fallback message: {e2}")
-    
+
     await callback.answer()
 
 
@@ -916,22 +920,21 @@ async def callback_generate_weekly_master_report(callback: CallbackQuery, user_r
 
     # Отправляем файл
     from aiogram.types import BufferedInputFile
+
     with open(filepath, "rb") as f:
         file_data = f.read()
-    
+
     file_input = BufferedInputFile(file_data, filename=f"weekly_master_summary_{date_str}.xlsx")
-    
+
     await callback.message.answer_document(
         document=file_input,
         caption=f"📈 <b>Еженедельная сводка по мастерам за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
-            ]
+            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
         ),
     )
-    
+
     await callback.message.delete()
     await callback.answer()
 
@@ -969,22 +972,21 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
 
     # Отправляем файл
     from aiogram.types import BufferedInputFile
+
     with open(filepath, "rb") as f:
         file_data = f.read()
-    
+
     file_input = BufferedInputFile(file_data, filename=f"monthly_master_summary_{date_str}.xlsx")
-    
+
     await callback.message.answer_document(
         document=file_input,
         caption=f"📊 <b>Ежемесячная сводка по мастерам за {month_start.strftime('%B %Y')}</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
-            ]
+            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
         ),
     )
-    
+
     await callback.message.delete()
     await callback.answer()
 

@@ -47,24 +47,23 @@ class ActiveOrdersExportService:
 
             # Создаем Excel файл
             wb = Workbook()
-            
+
             # Удаляем стандартный лист
             wb.remove(wb.active)
-            
+
             # Создаем сводный лист
             summary_sheet = wb.create_sheet("Сводка")
             await self._create_summary_sheet(summary_sheet, active_orders)
-            
+
             # Получаем всех активных и одобренных мастеров
             masters = await self.db.get_all_masters(only_approved=True, only_active=True)
-            
+
             # Создаем листы для каждого мастера (только если есть активные заказы)
             for master in masters:
                 master_orders = [o for o in active_orders if o.assigned_master_id == master.id]
                 if master_orders:  # Создаем лист только если есть активные заказы
                     master_sheet = wb.create_sheet(master.get_display_name())
                     await self._create_master_sheet(master_sheet, master, master_orders)
-
 
             # Создаем директорию для отчетов
             reports_dir = Path("reports")
@@ -94,10 +93,10 @@ class ActiveOrdersExportService:
         header_font = Font(bold=True, size=12, color="FFFFFF")
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         data_font = Font(size=10)
-        
+
         center_alignment = Alignment(horizontal="center", vertical="center")
         left_alignment = Alignment(horizontal="left", vertical="center")
-        
+
         thin_border = Border(
             left=Side(style="thin"),
             right=Side(style="thin"),
@@ -169,9 +168,7 @@ class ActiveOrdersExportService:
             if order.created_at:
                 if isinstance(order.created_at, str):
                     try:
-                        created_dt = datetime.fromisoformat(
-                            order.created_at.replace("Z", "+00:00")
-                        )
+                        created_dt = datetime.fromisoformat(order.created_at.replace("Z", "+00:00"))
                         created_str = created_dt.strftime("%d.%m.%Y %H:%M")
                     except:
                         created_str = order.created_at
@@ -223,10 +220,10 @@ class ActiveOrdersExportService:
         header_font = Font(bold=True, size=12, color="FFFFFF")
         header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
         data_font = Font(size=10)
-        
+
         center_alignment = Alignment(horizontal="center", vertical="center")
         left_alignment = Alignment(horizontal="left", vertical="center")
-        
+
         thin_border = Border(
             left=Side(style="thin"),
             right=Side(style="thin"),
@@ -241,21 +238,29 @@ class ActiveOrdersExportService:
         cell_a1.font = header_font
         cell_a1.fill = header_fill
         cell_a1.alignment = center_alignment
-        
+
         # B1: имя мастера
         cell_b1 = ws.cell(row=1, column=2)
         cell_b1.value = master.get_display_name()
         cell_b1.font = header_font
         cell_b1.fill = header_fill
         cell_b1.alignment = center_alignment
-        
+
         ws.row_dimensions[1].height = 25
         # Растягиваем заголовок на остальные столбцы
         for col in range(3, 8):  # C1:G1
             ws.cell(row=1, column=col).fill = header_fill
 
         # Заголовки столбцов (упрощенная структура для мастера)
-        headers = ["№ Заказа", "Статус", "Оборудование", "Клиент", "Адрес", "Время прибытия", "Создана"]
+        headers = [
+            "№ Заказа",
+            "Статус",
+            "Оборудование",
+            "Клиент",
+            "Адрес",
+            "Время прибытия",
+            "Создана",
+        ]
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=3, column=col_idx, value=header)
             cell.font = header_font
@@ -274,9 +279,7 @@ class ActiveOrdersExportService:
             if order.created_at:
                 if isinstance(order.created_at, str):
                     try:
-                        created_dt = datetime.fromisoformat(
-                            order.created_at.replace("Z", "+00:00")
-                        )
+                        created_dt = datetime.fromisoformat(order.created_at.replace("Z", "+00:00"))
                         created_str = created_dt.strftime("%d.%m.%Y %H:%M")
                     except:
                         created_str = order.created_at
@@ -292,13 +295,13 @@ class ActiveOrdersExportService:
                 order.scheduled_time if order.scheduled_time else "",
                 created_str,
             ]
-            
+
             for col_idx, value in enumerate(data, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=value)
                 cell.font = data_font
                 cell.border = thin_border
                 cell.alignment = left_alignment if col_idx not in [1, 2] else center_alignment
-            
+
             row += 1
 
         # Устанавливаем ширину столбцов

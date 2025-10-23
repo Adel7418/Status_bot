@@ -259,7 +259,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
         user_role: Роль пользователя
     """
     logger.info(f"[CLIENT_ADDRESS] Processing client address: '{message.text}'")
-    
+
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
@@ -554,9 +554,9 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
 
                 # Сохраняем отформатированное время и переходим к подтверждению
                 await state.update_data(scheduled_time=formatted_time)
-                logger.info(f"[SCHEDULED_TIME] Setting state to confirm after date recognition")
+                logger.info("[SCHEDULED_TIME] Setting state to confirm after date recognition")
                 await state.set_state(CreateOrderStates.confirm)
-                logger.info(f"[SCHEDULED_TIME] Calling show_order_confirmation")
+                logger.info("[SCHEDULED_TIME] Calling show_order_confirmation")
                 await show_order_confirmation(message, state)
                 logger.info(f"Автоопределение даты: '{message.text}' -> '{formatted_time}'")
                 return
@@ -658,7 +658,7 @@ async def show_order_confirmation(message: Message, state: FSMContext):
         message: Сообщение
         state: FSMContext контекст
     """
-    logger.info(f"[SHOW_CONFIRMATION] Starting order confirmation")
+    logger.info("[SHOW_CONFIRMATION] Starting order confirmation")
     data = await state.get_data()
     logger.info(f"[SHOW_CONFIRMATION] Got data: {list(data.keys())}")
 
@@ -677,9 +677,9 @@ async def show_order_confirmation(message: Message, state: FSMContext):
     if data.get("scheduled_time"):
         text += f"⏰ <b>Время прибытия:</b> {escape_html(data['scheduled_time'])}\n"
 
-    logger.info(f"[SHOW_CONFIRMATION] Sending confirmation message")
+    logger.info("[SHOW_CONFIRMATION] Sending confirmation message")
     await message.answer(text, parse_mode="HTML", reply_markup=get_confirm_keyboard())
-    logger.info(f"[SHOW_CONFIRMATION] Confirmation message sent")
+    logger.info("[SHOW_CONFIRMATION] Confirmation message sent")
 
 
 # Отладочный обработчик удален - он перехватывал все сообщения
@@ -691,20 +691,22 @@ async def debug_confirm_state(message: Message, state: FSMContext, user_role: st
     """
     Отладочный обработчик для состояния подтверждения
     """
-    logger.info(f"[DEBUG_CONFIRM] Received message in confirm state: '{message.text}' (type: {type(message.text)})")
-    
+    logger.info(
+        f"[DEBUG_CONFIRM] Received message in confirm state: '{message.text}' (type: {type(message.text)})"
+    )
+
     # Если это кнопка подтверждения, передаем в основной обработчик
     if message.text == "✅ Подтвердить":
         await confirm_create_order(message, state, user_role)
         return
-    
+
     # Если это кнопка отмены, передаем в обработчик отмены
     if message.text == "❌ Отмена":
         # Здесь должен быть обработчик отмены
         await message.answer("❌ Создание заявки отменено.")
         await state.clear()
         return
-    
+
     # Если это что-то другое, обрабатываем как изменение времени
     await handle_time_change_in_confirm(message, state, user_role)
 
@@ -712,7 +714,7 @@ async def debug_confirm_state(message: Message, state: FSMContext, user_role: st
 async def handle_time_change_in_confirm(message: Message, state: FSMContext, user_role: str):
     """
     Обработка изменения времени прибытия в состоянии подтверждения
-    
+
     Args:
         message: Сообщение
         state: FSM контекст
@@ -720,22 +722,22 @@ async def handle_time_change_in_confirm(message: Message, state: FSMContext, use
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-    
+
     # Проверяем, что это текстовое сообщение
     if not message.text:
         await message.reply("❌ Пожалуйста, отправьте текстовое сообщение с временем прибытия.")
         return
-    
+
     # Проверяем, что это не кнопка подтверждения
     if message.text.strip() == "✅ Подтвердить":
         return
-    
+
     scheduled_time = message.text.strip()
     logger.info(f"[CONFIRM_TIME_CHANGE] User wants to change time to: '{scheduled_time}'")
-    
+
     # Возвращаемся к состоянию ввода времени
     await state.set_state(CreateOrderStates.scheduled_time)
-    
+
     # Обрабатываем новое время
     await process_scheduled_time(message, state, user_role)
 
@@ -1273,7 +1275,9 @@ async def callback_select_master_for_order(
                         message_id=result.message_id,
                     )
             except Exception as e:
-                logger.warning(f"Не удалось сохранить групповое сообщение для заявки {order_id}: {e}")
+                logger.warning(
+                    f"Не удалось сохранить групповое сообщение для заявки {order_id}: {e}"
+                )
         else:
             logger.error(f"КРИТИЧНО: Не удалось уведомить мастера в группе {target_chat_id}")
 
@@ -1492,7 +1496,9 @@ async def callback_select_new_master_for_order(
                     f"Не удалось сохранить групповое сообщение для переназначенной заявки {order_id}: {e}"
                 )
         else:
-            logger.warning(f"Не удалось отправить уведомление новому мастеру в группе {target_chat_id}")
+            logger.warning(
+                f"Не удалось отправить уведомление новому мастеру в группе {target_chat_id}"
+            )
 
         old_master_name = old_master.get_display_name() if old_master else "Неизвестен"
 
@@ -2319,7 +2325,7 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
     # Проверка роли
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-    
+
     from app.database import Database
 
     db = Database()
@@ -2472,42 +2478,43 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("admin_confirm_materials"))
-async def admin_process_materials_confirmation_callback(callback_query: CallbackQuery, state: FSMContext):
+async def admin_process_materials_confirmation_callback(
+    callback_query: CallbackQuery, state: FSMContext
+):
     """
     Обработка подтверждения суммы материалов админом/диспетчером
     """
     from app.utils import parse_callback_data
-    
+
     parsed_data = parse_callback_data(callback_query.data)
     action = parsed_data.get("action")
     params = parsed_data.get("params", [])
     answer = params[0] if len(params) > 0 else None  # yes/no
     order_id = params[1] if len(params) > 1 else None  # order_id
-    
+
     if answer == "yes":
         # Подтверждаем сумму материалов и переходим к отзыву
         await state.set_state(AdminCloseOrderStates.confirm_review)
-        
+
         from app.keyboards.inline import get_yes_no_keyboard
-        
+
         await callback_query.message.edit_text(
-            f"✅ Сумма расходного материала подтверждена\n\n"
-            f"❓ <b>Взял ли мастер отзыв у клиента?</b>\n"
-            f"(За отзыв мастер получит дополнительно +10% к прибыли)",
+            "✅ Сумма расходного материала подтверждена\n\n"
+            "❓ <b>Взял ли мастер отзыв у клиента?</b>\n"
+            "(За отзыв мастер получит дополнительно +10% к прибыли)",
             parse_mode="HTML",
             reply_markup=get_yes_no_keyboard("admin_confirm_review", order_id),
         )
     elif answer == "no":
         # Возвращаемся к вводу суммы материалов
         await state.set_state(AdminCloseOrderStates.enter_materials_cost)
-        
+
         await callback_query.message.edit_text(
-            "💰 <b>Введите сумму расходного материала:</b>\n\n"
-            "Введите число (например: 500, 0):",
+            "💰 <b>Введите сумму расходного материала:</b>\n\n" "Введите число (например: 500, 0):",
             parse_mode="HTML",
             reply_markup=None,
         )
-    
+
     await callback_query.answer()
 
 
@@ -2545,7 +2552,7 @@ async def admin_process_review_confirmation_callback(
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
-    
+
     await callback_query.message.edit_text(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
@@ -2606,7 +2613,7 @@ async def admin_process_out_of_city_confirmation_callback(
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
-    
+
     try:
         order = await db.get_order_by_id(order_id_from_state)
 
