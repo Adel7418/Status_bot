@@ -32,14 +32,22 @@ def upgrade() -> None:
         print(f"[SKIP] Ошибка при проверке таблицы audit_log: {e} - пропускаем миграцию")
         return
     
-    # Проверяем, существует ли уже колонка
+    # Проверяем, существует ли уже колонка deleted_at
     try:
-        conn.execute(sa.text("SELECT deleted_at FROM audit_log LIMIT 1"))
-        print("[OK] Колонка deleted_at уже существует в audit_log")
-    except Exception:
-        # Колонка не существует, добавляем её
-        op.add_column('audit_log', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
-        print("[OK] Добавлена колонка deleted_at в audit_log")
+        # Получаем информацию о колонках таблицы
+        columns_result = conn.execute(sa.text("PRAGMA table_info(audit_log)")).fetchall()
+        column_names = [row[1] for row in columns_result]  # row[1] - это имя колонки
+        
+        if 'deleted_at' in column_names:
+            print("[OK] Колонка deleted_at уже существует в audit_log")
+            return
+        else:
+            # Колонка не существует, добавляем её
+            op.add_column('audit_log', sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True))
+            print("[OK] Добавлена колонка deleted_at в audit_log")
+            
+    except Exception as e:
+        print(f"[SKIP] Ошибка при проверке/добавлении колонки: {e} - пропускаем миграцию")
 
 
 def downgrade() -> None:
