@@ -215,7 +215,7 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -294,7 +294,7 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
         return
 
     # Проверяем, существует ли пользователь
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -423,7 +423,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
 
     data = await state.get_data()
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -500,7 +500,7 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
 
     telegram_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -555,7 +555,7 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
 
     telegram_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -612,7 +612,7 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
 
     telegram_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -715,7 +715,7 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
 
     telegram_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -775,7 +775,7 @@ async def cmd_closed_order_edit(message: Message, user_role: str):
 
     order_id = int(match.group(1))
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -814,7 +814,7 @@ async def btn_users(message: Message, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -995,7 +995,7 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
             return
 
         # Сохраняем work_chat_id для мастера
-        db = Database()
+        db = ORMDatabase()
         await db.connect()
 
         try:
@@ -1098,7 +1098,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -1206,7 +1206,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -1315,7 +1315,7 @@ async def callback_admin_refuse_order_complete(
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -1369,7 +1369,7 @@ async def callback_admin_complete_order(callback: CallbackQuery, state: FSMConte
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -1434,7 +1434,7 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
 
     logger.debug(f"[DR] Admin starting DR process for order #{order_id}")
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
@@ -1519,7 +1519,7 @@ async def process_admin_refuse_confirmation_callback(
         await callback_query.answer("Заявка отклонена")
     else:
         # Отменяем отказ - получаем заказ для клавиатуры
-        db = Database()
+        db = ORMDatabase()
         await db.connect()
         try:
             order = await db.get_order_by_id(order_id)
