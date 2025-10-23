@@ -787,13 +787,11 @@ async def cmd_closed_order_edit(message: Message, user_role: str):
 
         # Проверяем, что заявка закрыта
         if order.status != OrderStatus.CLOSED:
-            await message.reply(f"❌ Заявка #{order_id} не закрыта (статус: {order.status.value}).")
+            await message.reply(f"❌ Заявка #{order_id} не закрыта (статус: {order.status}).")
             return
 
-        # Показываем информацию о заявке и предлагаем редактирование
-        from app.handlers.order_edit import show_edit_order_menu
-
-        await show_edit_order_menu(message, order, user_role, allow_closed=True)
+        # Показываем финансовую информацию заявки
+        await show_closed_order_financial_info(message, order, user_role)
 
     except Exception as e:
         logger.exception(f"Ошибка при редактировании закрытой заявки #{order_id}: {e}")
@@ -1534,3 +1532,219 @@ async def process_admin_refuse_confirmation_callback(
             await db.disconnect()
         await state.clear()
         await callback_query.answer("Отказ отменен")
+
+
+async def show_closed_order_financial_info(message: Message, order, user_role: str):
+    """
+    Показать финансовую информацию закрытой заявки с кнопками редактирования
+    
+    Args:
+        message: Сообщение
+        order: Объект заявки
+        user_role: Роль пользователя
+    """
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    # Формируем текст с финансовой информацией
+    text = (
+        f"💰 <b>Финансовая информация - Заявка #{order.id}</b>\n\n"
+        f"📱 <b>Тип техники:</b> {order.equipment_type}\n"
+        f"👤 <b>Клиент:</b> {order.client_name}\n"
+        f"📍 <b>Адрес:</b> {order.client_address}\n"
+        f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+        f"💵 <b>Общая сумма:</b> {order.total_amount or 0:.2f} ₽\n"
+        f"🔧 <b>Расходы на материалы:</b> {order.materials_cost or 0:.2f} ₽\n"
+        f"👨‍🔧 <b>Доход мастера:</b> {order.master_profit or 0:.2f} ₽\n"
+        f"🏢 <b>Доход компании:</b> {order.company_profit or 0:.2f} ₽\n"
+    )
+    
+    # Добавляем информацию о предоплате, если есть
+    if order.prepayment_amount and order.prepayment_amount > 0:
+        text += f"💳 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
+    
+    # Создаем клавиатуру с кнопками редактирования
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text="💵 Редактировать общую сумму",
+                callback_data=f"edit_total_amount:{order.id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔧 Редактировать расходы",
+                callback_data=f"edit_materials_cost:{order.id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👨‍🔧 Редактировать доход мастера",
+                callback_data=f"edit_master_profit:{order.id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🏢 Редактировать доход компании",
+                callback_data=f"edit_company_profit:{order.id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💳 Редактировать предоплату",
+                callback_data=f"edit_prepayment:{order.id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Закрыть",
+                callback_data="close_financial_info"
+            )
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    await message.reply(text, parse_mode="HTML", reply_markup=reply_markup)
+
+
+# ==================== ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ ФИНАНСОВОЙ ИНФОРМАЦИИ ====================
+
+@router.callback_query(F.data.startswith("edit_total_amount:"))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """Редактирование общей суммы заявки"""
+    order_id = int(callback.data.split(":")[1])
+    
+    await state.update_data(order_id=order_id, field="total_amount")
+    await callback.message.edit_text(
+        f"💵 <b>Редактирование общей суммы</b>\n\n"
+        f"Введите новую общую сумму для заявки #{order_id}:\n\n"
+        f"<i>Например: 1500.50</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("edit_materials_cost:"))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """Редактирование расходов на материалы"""
+    order_id = int(callback.data.split(":")[1])
+    
+    await state.update_data(order_id=order_id, field="materials_cost")
+    await callback.message.edit_text(
+        f"🔧 <b>Редактирование расходов на материалы</b>\n\n"
+        f"Введите новые расходы на материалы для заявки #{order_id}:\n\n"
+        f"<i>Например: 300.00</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("edit_master_profit:"))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """Редактирование дохода мастера"""
+    order_id = int(callback.data.split(":")[1])
+    
+    await state.update_data(order_id=order_id, field="master_profit")
+    await callback.message.edit_text(
+        f"👨‍🔧 <b>Редактирование дохода мастера</b>\n\n"
+        f"Введите новый доход мастера для заявки #{order_id}:\n\n"
+        f"<i>Например: 800.00</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("edit_company_profit:"))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """Редактирование дохода компании"""
+    order_id = int(callback.data.split(":")[1])
+    
+    await state.update_data(order_id=order_id, field="company_profit")
+    await callback.message.edit_text(
+        f"🏢 <b>Редактирование дохода компании</b>\n\n"
+        f"Введите новый доход компании для заявки #{order_id}:\n\n"
+        f"<i>Например: 400.00</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("edit_prepayment:"))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def callback_edit_prepayment(callback: CallbackQuery, state: FSMContext, user_role: str):
+    """Редактирование предоплаты"""
+    order_id = int(callback.data.split(":")[1])
+    
+    await state.update_data(order_id=order_id, field="prepayment_amount")
+    await callback.message.edit_text(
+        f"💳 <b>Редактирование предоплаты</b>\n\n"
+        f"Введите новую предоплату для заявки #{order_id}:\n\n"
+        f"<i>Например: 500.00 или 0 если предоплаты не было</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "close_financial_info")
+@handle_errors
+async def callback_close_financial_info(callback: CallbackQuery):
+    """Закрытие финансовой информации"""
+    await callback.message.delete()
+    await callback.answer("Финансовая информация закрыта")
+
+
+# Обработчик ввода новых значений
+@router.message(F.text.regexp(r'^\d+(\.\d{1,2})?$'))
+@require_role([UserRole.ADMIN])
+@handle_errors
+async def process_financial_value(message: Message, state: FSMContext, user_role: str):
+    """Обработка ввода финансового значения"""
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    field = data.get("field")
+    
+    if not order_id or not field:
+        await message.reply("❌ Ошибка: данные не найдены. Попробуйте снова.")
+        return
+    
+    try:
+        value = float(message.text)
+        
+        # Обновляем значение в базе данных
+        db = ORMDatabase()
+        await db.connect()
+        
+        try:
+            # Обновляем поле в заявке
+            update_data = {field: value}
+            success = await db.update_order(order_id, update_data)
+            
+            if success:
+                # Получаем обновленную заявку
+                order = await db.get_order_by_id(order_id)
+                if order:
+                    # Показываем обновленную финансовую информацию
+                    await show_closed_order_financial_info(message, order, user_role)
+                    await message.reply(f"✅ {field} успешно обновлен на {value:.2f} ₽")
+                else:
+                    await message.reply("✅ Значение обновлено, но не удалось загрузить заявку")
+            else:
+                await message.reply("❌ Ошибка при обновлении значения")
+                
+        finally:
+            await db.disconnect()
+            
+    except ValueError:
+        await message.reply("❌ Неверный формат числа. Введите число (например: 1500.50)")
+        return
+    
+    await state.clear()
