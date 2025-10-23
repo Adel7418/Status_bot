@@ -1,4 +1,4 @@
-# Быстрое развертывание ORMDatabase в Docker
+# Быстрое развертывание ORMDatabase в Docker (Production)
 
 ## 🚀 Быстрая миграция (5 минут)
 
@@ -13,32 +13,32 @@ cd /path/to/telegram_repair_bot
 # Сделать скрипт исполняемым
 chmod +x docker_migrate.sh
 
-# Запустить миграцию
+# Запустить миграцию (использует docker-compose.prod.yml)
 ./docker_migrate.sh
 ```
 
 ### 3. Обновление кода (если нужно)
 ```bash
 # Остановить бота
-docker-compose stop bot
+docker-compose -f docker/docker-compose.prod.yml stop bot
 
 # Обновить код
 git pull origin main
 
 # Пересобрать образ (если нужно)
-docker-compose build bot
+docker-compose -f docker/docker-compose.prod.yml build bot
 
 # Запустить бота
-docker-compose up -d bot
+docker-compose -f docker/docker-compose.prod.yml up -d bot
 ```
 
 ### 4. Проверка
 ```bash
 # Проверить статус
-docker-compose ps
+docker-compose -f docker/docker-compose.prod.yml ps
 
 # Посмотреть логи
-docker-compose logs -f bot
+docker-compose -f docker/docker-compose.prod.yml logs -f bot
 ```
 
 ## 📋 Ручная миграция (если автоматическая не работает)
@@ -46,26 +46,26 @@ docker-compose logs -f bot
 ### 1. Бэкап
 ```bash
 # Создать бэкап
-docker-compose exec bot cp /app/data/bot_database.db /app/data/bot_database_backup_$(date +%Y%m%d_%H%M%S).db
+docker-compose -f docker/docker-compose.prod.yml exec bot cp /app/data/bot_database.db /app/data/bot_database_backup_$(date +%Y%m%d_%H%M%S).db
 ```
 
 ### 2. Миграции
 ```bash
 # Остановить бота
-docker-compose stop bot
+docker-compose -f docker/docker-compose.prod.yml stop bot
 
 # Применить миграции
-docker-compose run --rm bot alembic upgrade head
+docker-compose -f docker/docker-compose.prod.yml run --rm bot alembic upgrade head
 
 # Запустить бота
-docker-compose up -d bot
+docker-compose -f docker/docker-compose.prod.yml up -d bot
 ```
 
 ### 3. Проверка
 ```bash
 # Проверить таблицы
-docker-compose exec bot sqlite3 /app/data/bot_database.db ".schema orders"
-docker-compose exec bot sqlite3 /app/data/bot_database.db ".schema masters"
+docker-compose -f docker/docker-compose.prod.yml exec bot sqlite3 /app/data/bot_database.db ".schema orders"
+docker-compose -f docker/docker-compose.prod.yml exec bot sqlite3 /app/data/bot_database.db ".schema masters"
 ```
 
 ## 🔧 Файлы для обновления
@@ -82,17 +82,17 @@ docker-compose exec bot sqlite3 /app/data/bot_database.db ".schema masters"
 
 ```bash
 # Остановить все
-docker-compose down
+docker-compose -f docker/docker-compose.prod.yml down
 
 # Восстановить бэкап
-docker-compose run --rm bot cp /app/data/bot_database_backup_YYYYMMDD_HHMMSS.db /app/data/bot_database.db
+docker-compose -f docker/docker-compose.prod.yml run --rm bot cp /app/data/bot_database_backup_YYYYMMDD_HHMMSS.db /app/data/bot_database.db
 
 # Откатить код
 git checkout HEAD~1
 
 # Пересобрать и запустить
-docker-compose build bot
-docker-compose up -d
+docker-compose -f docker/docker-compose.prod.yml build bot
+docker-compose -f docker/docker-compose.prod.yml up -d
 ```
 
 ## ✅ Проверочный список
@@ -115,14 +115,14 @@ docker-compose up -d
 
 ```bash
 # Логи в реальном времени
-docker-compose logs -f bot
+docker-compose -f docker/docker-compose.prod.yml logs -f bot
 
 # Статус контейнеров
-docker-compose ps
+docker-compose -f docker/docker-compose.prod.yml ps
 
 # Использование ресурсов
 docker stats
 
 # Информация о контейнере
-docker inspect $(docker-compose ps -q bot)
+docker inspect $(docker-compose -f docker/docker-compose.prod.yml ps -q bot)
 ```

@@ -34,20 +34,23 @@ if ! command -v docker-compose &> /dev/null; then
     exit 1
 fi
 
-# Проверка наличия docker-compose.yml
-if [ ! -f "docker-compose.yml" ]; then
-    log_error "Файл docker-compose.yml не найден в текущей директории."
+# Проверка наличия docker-compose.prod.yml
+if [ ! -f "docker/docker-compose.prod.yml" ]; then
+    log_error "Файл docker/docker-compose.prod.yml не найден в текущей директории."
     exit 1
 fi
+
+# Устанавливаем путь к docker-compose для production
+COMPOSE_FILE="docker/docker-compose.prod.yml"
 
 # 1. Создание бэкапа
 log_info "Создание бэкапа базы данных..."
 BACKUP_NAME="bot_database_backup_$(date +%Y%m%d_%H%M%S).db"
 
 # Проверяем, запущен ли контейнер
-if docker-compose ps bot | grep -q "Up"; then
+if docker-compose -f $COMPOSE_FILE ps bot | grep -q "Up"; then
     # Контейнер запущен, создаем бэкап внутри
-    if docker-compose exec bot cp /app/data/bot_database.db /app/data/$BACKUP_NAME; then
+    if docker-compose -f $COMPOSE_FILE exec bot cp /app/data/bot_database.db /app/data/$BACKUP_NAME; then
         log_success "Бэкап создан внутри контейнера: $BACKUP_NAME"
     else
         log_error "Не удалось создать бэкап внутри контейнера"
@@ -65,7 +68,7 @@ fi
 
 # 2. Остановка бота
 log_info "Остановка бота..."
-if docker-compose stop bot; then
+if docker-compose -f $COMPOSE_FILE stop bot; then
     log_success "Бот остановлен"
 else
     log_warning "Не удалось остановить бота (возможно, уже остановлен)"
@@ -73,7 +76,7 @@ fi
 
 # 3. Проверка миграций
 log_info "Проверка текущего состояния миграций..."
-if docker-compose run --rm bot alembic current; then
+if docker-compose -f $COMPOSE_FILE run --rm bot alembic current; then
     log_success "Статус миграций получен"
 else
     log_error "Не удалось получить статус миграций"
@@ -82,7 +85,7 @@ fi
 
 # 4. Применение миграций
 log_info "Применение миграций..."
-if docker-compose run --rm bot alembic upgrade head; then
+if docker-compose -f $COMPOSE_FILE run --rm bot alembic upgrade head; then
     log_success "Миграции применены успешно"
 else
     log_error "Ошибка при применении миграций"
@@ -91,7 +94,7 @@ fi
 
 # 5. Проверка базы данных
 log_info "Проверка базы данных..."
-if docker-compose run --rm bot sqlite3 /app/data/bot_database.db "SELECT COUNT(*) FROM orders;" > /dev/null 2>&1; then
+if docker-compose -f $COMPOSE_FILE run --rm bot sqlite3 /app/data/bot_database.db "SELECT COUNT(*) FROM orders;" > /dev/null 2>&1; then
     log_success "База данных доступна"
 else
     log_error "Проблемы с базой данных"
@@ -100,7 +103,7 @@ fi
 
 # 6. Запуск бота
 log_info "Запуск бота..."
-if docker-compose up -d bot; then
+if docker-compose -f $COMPOSE_FILE up -d bot; then
     log_success "Бот запущен"
 else
     log_error "Не удалось запустить бота"
@@ -113,29 +116,29 @@ sleep 10
 
 # 8. Проверка работы
 log_info "Проверка работы бота..."
-if docker-compose ps bot | grep -q "Up"; then
+if docker-compose -f $COMPOSE_FILE ps bot | grep -q "Up"; then
     log_success "Бот работает"
 else
     log_error "Бот не запустился"
     echo "Логи бота:"
-    docker-compose logs --tail=20 bot
+    docker-compose -f $COMPOSE_FILE logs --tail=20 bot
     exit 1
 fi
 
 # 9. Показ логов
 log_info "Последние логи бота:"
-docker-compose logs --tail=10 bot
+docker-compose -f $COMPOSE_FILE logs --tail=10 bot
 
 echo ""
 echo "🎉 Миграция завершена успешно!"
 echo "📁 Бэкап: $BACKUP_NAME"
 echo ""
 echo "📋 Следующие шаги:"
-echo "1. Проверьте логи: docker-compose logs -f bot"
+echo "1. Проверьте логи: docker-compose -f docker/docker-compose.prod.yml logs -f bot"
 echo "2. Протестируйте функции бота"
 echo "3. Убедитесь, что все работает корректно"
 echo ""
 echo "🔍 Команды для мониторинга:"
-echo "- Логи: docker-compose logs -f bot"
-echo "- Статус: docker-compose ps"
+echo "- Логи: docker-compose -f docker/docker-compose.prod.yml logs -f bot"
+echo "- Статус: docker-compose -f docker/docker-compose.prod.yml ps"
 echo "- Ресурсы: docker stats"
