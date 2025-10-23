@@ -92,3 +92,9 @@ class RescheduleOrderStates(StatesGroup):
 
     enter_new_time = State()  # Ввод нового времени прибытия
     enter_reason = State()  # Ввод причины переноса (опционально)
+
+
+class RefuseOrderStates(StatesGroup):
+    """Состояния для отказа от заявки"""
+
+    confirm_refusal = State()  # Подтверждение отказа

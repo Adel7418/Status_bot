@@ -14,6 +14,8 @@ from app.decorators import handle_errors
 from app.keyboards.inline import (
     get_master_management_keyboard,
     get_masters_list_keyboard,
+    get_order_actions_keyboard,
+    get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
 from app.states import AddMasterStates, SetWorkChatStates
@@ -1195,21 +1197,31 @@ async def callback_admin_refuse_order_complete(
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
-        # Завершаем заказ как отказ от имени мастера
-        from app.handlers.master import complete_order_as_refusal
+        # Сохраняем данные в состоянии
+        await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)
 
-        await complete_order_as_refusal(callback.message, state, order_id, master.telegram_id)
+        # Переходим к подтверждению отказа
+        from app.states import RefuseOrderStates
 
-        log_action(
-            callback.from_user.id,
-            "ADMIN_REFUSE_ORDER_COMPLETE",
-            f"Order #{order_id} for master {master.get_display_name()}",
+        await state.set_state(RefuseOrderStates.confirm_refusal)
+
+        # Показываем подтверждение
+        await callback.message.edit_text(
+            f"⚠️ <b>Подтверждение отказа (от имени мастера)</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"🔧 Тип техники: {order.equipment_type}\n"
+            f"👤 Клиент: {order.client_name}\n"
+            f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
+            f"<b>Вы уверены, что хотите закрыть заявку как отказ?</b>\n\n"
+            f"<i>Заявка будет помечена как отказ с суммой 0 рублей.</i>",
+            parse_mode="HTML",
+            reply_markup=get_yes_no_keyboard("admin_confirm_refuse", order_id),
         )
 
     finally:
         await db.disconnect()
 
-    await callback.answer("Заявка завершена как отказ")
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("admin_complete_order:"))
@@ -1337,3 +1349,59 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
 
     finally:
         await db.disconnect()
+
+
+@router.callback_query(lambda c: c.data.startswith("admin_confirm_refuse"))
+async def process_admin_refuse_confirmation_callback(
+    callback_query: CallbackQuery, state: FSMContext, user_role: str
+):
+    """
+    Обработка подтверждения отказа от заявки админом
+
+    Args:
+        callback_query: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    # Извлекаем данные из callback_data
+    parts = callback_query.data.split(":")
+    action = parts[1]  # "yes" или "no"
+    order_id = int(parts[2])
+
+    if action == "yes":
+        # Подтверждаем отказ
+        data = await state.get_data()
+        order_id = data.get("order_id", order_id)
+        acting_as_master_id = data.get("acting_as_master_id")
+
+        # Завершаем заказ как отказ от имени мастера
+        from app.handlers.master import complete_order_as_refusal
+
+        await complete_order_as_refusal(
+            callback_query.message, state, order_id, acting_as_master_id
+        )
+
+        # Очищаем состояние
+        await state.clear()
+
+        await callback_query.answer("Заявка отклонена")
+    else:
+        # Отменяем отказ - получаем заказ для клавиатуры
+        db = Database()
+        await db.connect()
+        try:
+            order = await db.get_order_by_id(order_id)
+            if order:
+                await callback_query.message.edit_text(
+                    "❌ Отказ отменен.\n\nЗаявка остается активной.",
+                    reply_markup=get_order_actions_keyboard(order, callback_query.from_user.id),
+                )
+            else:
+                await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
+        finally:
+            await db.disconnect()
+        await state.clear()
+        await callback_query.answer("Отказ отменен")

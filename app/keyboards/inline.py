@@ -182,14 +182,14 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_complete_order", order.id),
                     ),
                     InlineKeyboardButton(
-                        text="⏳ DR (за мастера)",
-                        callback_data=create_callback_data("admin_dr_order", order.id),
+                        text="❌ Отказ (за мастера)",
+                        callback_data=create_callback_data("admin_refuse_order_complete", order.id),
                     ),
                 )
                 builder.row(
                     InlineKeyboardButton(
-                        text="❌ Отказ (0 ₽) (за мастера)",
-                        callback_data=create_callback_data("admin_refuse_order_complete", order.id),
+                        text="⏳ DR (за мастера)",
+                        callback_data=create_callback_data("admin_dr_order", order.id),
                     )
                 )
             elif order.status == OrderStatus.DR:
@@ -252,27 +252,20 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 )
             )
         elif order.status == OrderStatus.ONSITE:
-            # Кнопка показа телефона во всплывающем окне (не сохраняется в чате)
-            builder.row(
-                InlineKeyboardButton(
-                    text="📞 Показать телефон",
-                    callback_data=create_callback_data("show_phone", order.id),
-                )
-            )
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Завершить",
                     callback_data=create_callback_data("complete_order", order.id),
                 ),
                 InlineKeyboardButton(
-                    text="⏳ Длительный ремонт",
-                    callback_data=create_callback_data("dr_order", order.id),
+                    text="❌ Отказ",
+                    callback_data=create_callback_data("refuse_order_complete", order.id),
                 ),
             )
             builder.row(
                 InlineKeyboardButton(
-                    text="❌ Отказ (0 ₽)",
-                    callback_data=create_callback_data("refuse_order_complete", order.id),
+                    text="⏳ Длительный ремонт",
+                    callback_data=create_callback_data("dr_order", order.id),
                 )
             )
         elif order.status == OrderStatus.DR:
@@ -283,7 +276,6 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("complete_order", order.id),
                 )
             )
-
 
     # Кнопка "Назад" для всех
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_orders"))

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus, UserRole
 from app.database import Database
-from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard
+from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard, get_yes_no_keyboard
 from app.states import (
     CompleteOrderStates,
     LongRepairStates,
@@ -367,9 +367,12 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
             # Legacy: прямой SQL
             async with db.get_session() as session:
                 from sqlalchemy import text
+
                 await session.execute(
-                    text("UPDATE orders SET status = :status, assigned_master_id = NULL WHERE id = :order_id"),
-                    {"status": OrderStatus.NEW, "order_id": order_id}
+                    text(
+                        "UPDATE orders SET status = :status, assigned_master_id = NULL WHERE id = :order_id"
+                    ),
+                    {"status": OrderStatus.NEW, "order_id": order_id},
                 )
 
         # Добавляем в лог
@@ -470,10 +473,6 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         from aiogram.utils.keyboard import InlineKeyboardBuilder
 
         keyboard_builder = InlineKeyboardBuilder()
-        # Кнопка показа телефона (эпhemeral)
-        keyboard_builder.row(
-            InlineKeyboardButton(text="📞 Показать телефон", callback_data=f"show_phone:{order_id}")
-        )
         keyboard_builder.row(
             InlineKeyboardButton(text="💰 Завершить", callback_data=f"complete_order:{order_id}")
         )
@@ -482,9 +481,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         )
 
         await callback.message.edit_text(
-            f"🏠 <b>Статус обновлен!</b>\n\n"
-            f"Заявка #{order_id} - вы на объекте.\n\n"
-            f"Контактный телефон не сохраняется в чате. Нажмите кнопку ниже, чтобы посмотреть номер во всплывающем окне.",
+            f"🏠 <b>Статус обновлен!</b>\n\n" f"Заявка #{order_id} - вы на объекте.",
             parse_mode="HTML",
             reply_markup=keyboard_builder.as_markup(),
         )
@@ -495,39 +492,6 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
         await db.disconnect()
 
     await callback.answer("Статус обновлен!")
-
-
-@router.callback_query(F.data.startswith("show_phone:"))
-async def callback_show_phone(callback: CallbackQuery, user_roles: list):
-    """
-    Показ телефона клиента мастеру во всплывающем окне (не сохраняется в чате)
-
-    Args:
-        callback: Callback query
-        user_roles: Роли пользователя (из middleware)
-    """
-    order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
-
-    try:
-        order = await db.get_order_by_id(order_id)
-        master = await db.get_master_by_telegram_id(callback.from_user.id)
-
-        if not order or not master or order.assigned_master_id != master.id:
-            await callback.answer("❌ Нет доступа", show_alert=True)
-            return
-
-        # Телефон доступен после прибытия (ONSITE) и в DR/закрытых
-        if order.status not in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
-            await callback.answer("📵 Телефон доступен после прибытия на объект", show_alert=True)
-            return
-
-        await callback.answer(f"📞 Телефон клиента: {order.client_phone}", show_alert=True)
-
-    finally:
-        await db.disconnect()
 
 
 @router.callback_query(F.data.startswith("refuse_order_complete:"))
@@ -553,15 +517,30 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Завершаем заказ как отказ
-        await complete_order_as_refusal(callback.message, state, order_id)
+        # Сохраняем order_id в состоянии
+        await state.update_data(order_id=order_id)
 
-        log_action(callback.from_user.id, "REFUSE_ORDER_COMPLETE", f"Order #{order_id}")
+        # Переходим к подтверждению отказа
+        from app.states import RefuseOrderStates
+
+        await state.set_state(RefuseOrderStates.confirm_refusal)
+
+        # Показываем подтверждение
+        await callback.message.edit_text(
+            f"⚠️ <b>Подтверждение отказа</b>\n\n"
+            f"📋 Заявка #{order_id}\n"
+            f"🔧 Тип техники: {order.equipment_type}\n"
+            f"👤 Клиент: {order.client_name}\n\n"
+            f"<b>Вы уверены, что хотите закрыть заявку как отказ?</b>\n\n"
+            f"<i>Заявка будет помечена как отказ с суммой 0 рублей.</i>",
+            parse_mode="HTML",
+            reply_markup=get_yes_no_keyboard("confirm_refuse", order_id),
+        )
 
     finally:
         await db.disconnect()
 
-    await callback.answer("Заявка завершена как отказ")
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("complete_order:"))
@@ -748,7 +727,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
                 f"❌ <b>Ошибка валидации предоплаты:</b>\n\n"
                 f"{prepayment_validation['error']}\n\n"
                 f"Пожалуйста, введите корректную сумму предоплаты.",
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
             return
 
@@ -770,13 +749,13 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
 
             # СТРОГАЯ ВАЛИДАЦИЯ ДЛЯ ДЛИТЕЛЬНОГО РЕМОНТА
             dr_validation = validate_dr_completion_date(parsed_dt, completion_date)
-            
+
             if not dr_validation["valid"]:
                 await message.reply(
                     f"❌ <b>Ошибка валидации даты:</b>\n\n"
                     f"{dr_validation['error']}\n\n"
                     f"Пожалуйста, введите корректную дату завершения ремонта.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
                 return
 
@@ -796,7 +775,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
 
             if validation.get("warning"):
                 confirmation_text += f"\n\n⚠️ <i>{validation['warning']}</i>"
-            
+
             if dr_validation.get("warning"):
                 confirmation_text += f"\n\n⚠️ <i>{dr_validation['warning']}</i>"
 
@@ -839,13 +818,12 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
 
         # Сохраняем данные в состоянии для подтверждения
         await state.update_data(
-            completion_date=completion_date,
-            prepayment_amount=prepayment_amount
+            completion_date=completion_date, prepayment_amount=prepayment_amount
         )
-        
+
         # Переходим к подтверждению
         await state.set_state(LongRepairStates.confirm_dr)
-        
+
         # Формируем сообщение с подтверждением
         confirmation_text = (
             f"📋 <b>Подтверждение перевода в длительный ремонт</b>\n\n"
@@ -859,13 +837,14 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             confirmation_text += "💰 <b>Предоплата:</b> не было\n"
 
         confirmation_text += (
-            f"\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
-            f"'Длительный ремонт' и диспетчер получит уведомление.\n\n"
-            f"Подтвердить перевод в длительный ремонт?"
+            "\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
+            "'Длительный ремонт' и диспетчер получит уведомление.\n\n"
+            "Подтвердить перевод в длительный ремонт?"
         )
 
         # Создаем клавиатуру подтверждения
         from app.keyboards.inline import get_yes_no_keyboard
+
         keyboard = get_yes_no_keyboard("confirm_dr", order_id)
 
         await message.reply(confirmation_text, parse_mode="HTML", reply_markup=keyboard)
@@ -883,65 +862,71 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
 
 
 @router.callback_query(lambda c: c.data.startswith("confirm_dr"))
-async def process_dr_confirmation_callback(callback_query: CallbackQuery, state: FSMContext, user_roles: list):
+async def process_dr_confirmation_callback(
+    callback_query: CallbackQuery, state: FSMContext, user_roles: list
+):
     """
     Обработка подтверждения перевода в длительный ремонт
-    
+
     Args:
         callback_query: Callback запрос
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
     from app.utils import parse_callback_data
-    
+
     # Извлекаем данные из callback
     callback_data = parse_callback_data(callback_query.data)
     order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
-    
+
     # Определяем ответ
     confirmed = answer == "yes"
-    
+
     if not confirmed:
         await callback_query.message.edit_text(
-            "❌ Перевод в длительный ремонт отменен.\n\n"
-            "Заявка остается в текущем статусе."
+            "❌ Перевод в длительный ремонт отменен.\n\n" "Заявка остается в текущем статусе."
         )
         await state.clear()
         await callback_query.answer("Операция отменена")
         return
-    
+
     # Получаем данные из состояния
     data = await state.get_data()
     completion_date = data.get("completion_date")
     prepayment_amount = data.get("prepayment_amount")
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(int(order_id))
         master = await db.get_master_by_telegram_id(callback_query.from_user.id)
-        
+
         if not order or not master or order.assigned_master_id != master.id:
-            await callback_query.message.edit_text("❌ Ошибка: заявка не найдена или не принадлежит вам.")
+            await callback_query.message.edit_text(
+                "❌ Ошибка: заявка не найдена или не принадлежит вам."
+            )
             return
-        
+
         # Обновляем поля DR
         async with db.get_session() as session:
             from sqlalchemy import text
+
             await session.execute(
-                text("""
+                text(
+                    """
                 UPDATE orders
                 SET estimated_completion_date = :completion_date,
                     prepayment_amount = :prepayment_amount
                 WHERE id = :order_id
-                """),
+                """
+                ),
                 {
                     "completion_date": completion_date,
                     "prepayment_amount": prepayment_amount,
-                    "order_id": order_id
-                }
+                    "order_id": order_id,
+                },
             )
 
         # Обновляем статус с валидацией через State Machine
@@ -990,6 +975,7 @@ async def process_dr_confirmation_callback(callback_query: CallbackQuery, state:
                 notification += f"💰 Предоплата: {prepayment_amount:.2f} ₽"
 
             from app.utils import safe_send_message
+
             result = await safe_send_message(
                 callback_query.bot,
                 order.dispatcher_id,
@@ -1512,8 +1498,6 @@ async def btn_settings_master(message: Message):
         await db.disconnect()
 
 
-
-
 # ==================== ПЕРЕНОС ЗАЯВКИ ====================
 
 
@@ -1579,21 +1563,25 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
     new_time = message.text.strip()
 
     # Попытка автоопределения даты
-    from app.utils import should_parse_as_date, parse_natural_datetime, format_datetime_user_friendly
-    
+    from app.utils import (
+        format_datetime_user_friendly,
+        parse_natural_datetime,
+        should_parse_as_date,
+    )
+
     if should_parse_as_date(new_time):
         parsed_dt, _ = parse_natural_datetime(new_time, validate=True)
-        
+
         if parsed_dt:
             # Успешно распознали дату
             user_friendly = format_datetime_user_friendly(parsed_dt, new_time)
-            
+
             # Сохраняем распознанную дату
             await state.update_data(new_scheduled_time=user_friendly)
-            
+
             # Переходим к запросу причины
             await state.set_state(RescheduleOrderStates.enter_reason)
-            
+
             await message.reply(
                 f"✅ <b>Дата распознана:</b> {user_friendly}\n\n"
                 f"Укажите причину переноса:\n"
@@ -1675,21 +1663,24 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
 
         async with db.get_session() as session:
             from sqlalchemy import text
+
             await session.execute(
-                text("""
+                text(
+                    """
                 UPDATE orders
                 SET scheduled_time = :new_time,
                     rescheduled_count = rescheduled_count + 1,
                     last_rescheduled_at = :last_rescheduled_at,
                     reschedule_reason = :reason
                 WHERE id = :order_id
-                """),
+                """
+                ),
                 {
                     "new_time": new_time,
                     "last_rescheduled_at": get_now(),
                     "reason": reason,
-                    "order_id": order_id
-                }
+                    "order_id": order_id,
+                },
             )
 
         # Добавляем в лог
@@ -2044,96 +2035,127 @@ async def complete_order_as_refusal(
         await db.disconnect()
 
 
+@router.callback_query(lambda c: c.data.startswith("confirm_refuse"))
+async def process_refuse_confirmation_callback(callback_query: CallbackQuery, state: FSMContext):
+    """
+    Обработка подтверждения отказа от заявки
+
+    Args:
+        callback_query: Callback query
+        state: FSM контекст
+    """
+    # Извлекаем данные из callback_data
+    parts = callback_query.data.split(":")
+    action = parts[1]  # "yes" или "no"
+    order_id = int(parts[2])
+
+    if action == "yes":
+        # Подтверждаем отказ
+        data = await state.get_data()
+        order_id = data.get("order_id", order_id)
+
+        # Завершаем заказ как отказ
+        await complete_order_as_refusal(callback_query.message, state, order_id)
+
+        # Очищаем состояние
+        await state.clear()
+
+        await callback_query.answer("Заявка отклонена")
+    else:
+        # Отменяем отказ - получаем заказ для клавиатуры
+        db = Database()
+        await db.connect()
+        try:
+            order = await db.get_order_by_id(order_id)
+            if order:
+                await callback_query.message.edit_text(
+                    "❌ Отказ отменен.\n\nЗаявка остается активной.",
+                    reply_markup=get_order_actions_keyboard(order, callback_query.from_user.id),
+                )
+            else:
+                await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
+        finally:
+            await db.disconnect()
+        await state.clear()
+        await callback_query.answer("Отказ отменен")
+
+
 def validate_dr_completion_date(parsed_dt, original_text: str) -> dict:
     """
     Строгая валидация даты завершения длительного ремонта
-    
+
     Args:
         parsed_dt: Распознанная дата
         original_text: Исходный текст
-        
+
     Returns:
         dict: {"valid": bool, "error": str, "warning": str}
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+
     from app.utils import get_now
-    
+
     now = get_now()
     tomorrow = now + timedelta(days=1)
     max_date = now + timedelta(days=180)  # 6 месяцев
-    
+
     # Проверяем, что дата не в прошлом
     if parsed_dt.date() < tomorrow.date():
         return {
             "valid": False,
-            "error": f"Дата завершения ремонта не может быть раньше завтра ({tomorrow.strftime('%d.%m.%Y')})"
+            "error": f"Дата завершения ремонта не может быть раньше завтра ({tomorrow.strftime('%d.%m.%Y')})",
         }
-    
+
     # Проверяем, что дата не слишком далеко в будущем
     if parsed_dt.date() > max_date.date():
         return {
             "valid": False,
-            "error": f"Дата завершения ремонта не может быть позже чем через 6 месяцев ({max_date.strftime('%d.%m.%Y')})"
+            "error": f"Дата завершения ремонта не может быть позже чем через 6 месяцев ({max_date.strftime('%d.%m.%Y')})",
         }
-    
+
     # Проверяем разумность срока (не менее 1 дня, не более 6 месяцев)
     days_difference = (parsed_dt.date() - now.date()).days
-    
+
     warnings = []
-    
+
     # Предупреждения для необычных сроков
     if days_difference < 3:
         warnings.append("Очень короткий срок для длительного ремонта")
     elif days_difference > 90:
         warnings.append("Очень длительный срок ремонта - убедитесь в корректности")
-    
+
     # Проверяем на выходные дни
     if parsed_dt.weekday() >= 5:  # Суббота или воскресенье
         warnings.append("Дата завершения выпадает на выходной день")
-    
-    return {
-        "valid": True,
-        "warning": "; ".join(warnings) if warnings else None
-    }
+
+    return {"valid": True, "warning": "; ".join(warnings) if warnings else None}
 
 
 def validate_dr_prepayment(amount: float) -> dict:
     """
     Валидация предоплаты для длительного ремонта
-    
+
     Args:
         amount: Сумма предоплаты
-        
+
     Returns:
         dict: {"valid": bool, "error": str, "warning": str}
     """
     # Проверяем, что сумма положительная
     if amount <= 0:
-        return {
-            "valid": False,
-            "error": "Сумма предоплаты должна быть больше 0"
-        }
-    
+        return {"valid": False, "error": "Сумма предоплаты должна быть больше 0"}
+
     # Проверяем разумность суммы
     if amount < 100:
-        return {
-            "valid": False,
-            "error": "Сумма предоплаты слишком мала (минимум 100 ₽)"
-        }
-    
+        return {"valid": False, "error": "Сумма предоплаты слишком мала (минимум 100 ₽)"}
+
     if amount > 100000:
-        return {
-            "valid": False,
-            "error": "Сумма предоплаты слишком велика (максимум 100,000 ₽)"
-        }
-    
+        return {"valid": False, "error": "Сумма предоплаты слишком велика (максимум 100,000 ₽)"}
+
     warnings = []
-    
+
     # Предупреждения для необычных сумм
     if amount > 50000:
         warnings.append("Очень большая сумма предоплаты - убедитесь в корректности")
-    
-    return {
-        "valid": True,
-        "warning": "; ".join(warnings) if warnings else None
-    }
+
+    return {"valid": True, "warning": "; ".join(warnings) if warnings else None}
