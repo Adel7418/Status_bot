@@ -639,10 +639,10 @@ def get_yes_no_keyboard(callback_prefix: str, order_id: int) -> InlineKeyboardMa
 
     builder.row(
         InlineKeyboardButton(
-            text="✅ Да", callback_data=create_callback_data(callback_prefix, order_id, "yes")
+            text="✅ Да", callback_data=create_callback_data(callback_prefix, "yes", order_id)
         ),
         InlineKeyboardButton(
-            text="❌ Нет", callback_data=create_callback_data(callback_prefix, order_id, "no")
+            text="❌ Нет", callback_data=create_callback_data(callback_prefix, "no", order_id)
         ),
     )
 
