@@ -83,7 +83,7 @@ async def show_edit_order_menu(message: Message, order, user_role: str, allow_cl
         f"👤 <b>Клиент:</b> {order.client_name}\n"
         f"📍 <b>Адрес:</b> {order.client_address}\n"
         f"📞 <b>Телефон:</b> {order.client_phone}\n"
-        f"📊 <b>Статус:</b> {status_names.get(order.status, order.status.value)}\n"
+        f"📊 <b>Статус:</b> {status_names.get(order.status, order.status)}\n"
     )
 
     if order.notes:
