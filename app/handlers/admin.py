@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from app.config import OrderStatus, UserRole
 from app.database import Database
 from app.database.orm_database import ORMDatabase
-from app.decorators import handle_errors
+from app.decorators import handle_errors, require_role
 from app.keyboards.inline import (
     get_master_management_keyboard,
     get_masters_list_keyboard,
