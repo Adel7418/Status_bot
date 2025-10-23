@@ -2031,6 +2031,7 @@ async def complete_order_as_refusal(
     await db.connect()
 
     try:
+        logger.info(f"[REFUSE] Database type: {type(db).__name__}")
         logger.info(f"[REFUSE] Looking for order_id: {order_id}, acting_as_master_id: {acting_as_master_id}")
         order = await db.get_order_by_id(order_id)
         logger.info(f"[REFUSE] Found order: {order}")
@@ -2041,20 +2042,38 @@ async def complete_order_as_refusal(
 
         # Если админ действует от имени мастера
         if acting_as_master_id:
+            logger.info(f"[REFUSE] Looking for master with telegram_id: {acting_as_master_id}")
             master = await db.get_master_by_telegram_id(acting_as_master_id)
+            logger.info(f"[REFUSE] Found master: {master}")
             if not master:
                 await message.reply("❌ Ошибка: мастер не найден.")
                 return
             # Проверяем, что заявка назначена на этого мастера
+            logger.info(f"[REFUSE] Order assigned_master_id: {order.assigned_master_id}, master.id: {master.id}")
             if order.assigned_master_id != master.id:
                 await message.reply("❌ Ошибка: заявка не назначена на этого мастера.")
                 return
         else:
+            logger.info(f"[REFUSE] Looking for master with telegram_id: {message.from_user.id}")
+            
+            # Дополнительная проверка - прямой SQL запрос
+            try:
+                cursor = await db.connection.execute(
+                    "SELECT * FROM masters WHERE telegram_id = ?",
+                    (message.from_user.id,)
+                )
+                master_row = await cursor.fetchone()
+                logger.info(f"[REFUSE] Direct SQL query result: {master_row}")
+            except Exception as e:
+                logger.error(f"[REFUSE] Direct SQL query failed: {e}")
+            
             master = await db.get_master_by_telegram_id(message.from_user.id)
+            logger.info(f"[REFUSE] Found master: {master}")
             if not master:
                 await message.reply("❌ Ошибка: мастер не найден.")
                 return
             # Проверяем, что заявка назначена на этого мастера
+            logger.info(f"[REFUSE] Order assigned_master_id: {order.assigned_master_id}, master.id: {master.id}")
             if order.assigned_master_id != master.id:
                 await message.reply("❌ Ошибка: заявка не принадлежит вам.")
                 return
