@@ -2031,17 +2031,33 @@ async def complete_order_as_refusal(
     await db.connect()
 
     try:
+        logger.info(f"[REFUSE] Looking for order_id: {order_id}, acting_as_master_id: {acting_as_master_id}")
         order = await db.get_order_by_id(order_id)
+        logger.info(f"[REFUSE] Found order: {order}")
+
+        if not order:
+            await message.reply("❌ Ошибка: заявка не найдена.")
+            return
 
         # Если админ действует от имени мастера
         if acting_as_master_id:
             master = await db.get_master_by_telegram_id(acting_as_master_id)
+            if not master:
+                await message.reply("❌ Ошибка: мастер не найден.")
+                return
+            # Проверяем, что заявка назначена на этого мастера
+            if order.assigned_master_id != master.id:
+                await message.reply("❌ Ошибка: заявка не назначена на этого мастера.")
+                return
         else:
             master = await db.get_master_by_telegram_id(message.from_user.id)
-
-        if not master or not order or order.assigned_master_id != master.id:
-            await message.reply("❌ Ошибка: заявка не найдена или не принадлежит вам.")
-            return
+            if not master:
+                await message.reply("❌ Ошибка: мастер не найден.")
+                return
+            # Проверяем, что заявка назначена на этого мастера
+            if order.assigned_master_id != master.id:
+                await message.reply("❌ Ошибка: заявка не принадлежит вам.")
+                return
 
         # Устанавливаем все суммы в 0
         total_amount = 0.0
@@ -2129,11 +2145,15 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
     parts = callback_query.data.split(":")
     action = parts[1]  # "yes" или "no"
     order_id = int(parts[2])
+    
+    logger.info(f"[REFUSE] Callback data: {callback_query.data}, action: {action}, order_id: {order_id}")
 
     if action == "yes":
         # Подтверждаем отказ
         data = await state.get_data()
+        logger.info(f"[REFUSE] FSM data: {data}")
         order_id = data.get("order_id", order_id)
+        logger.info(f"[REFUSE] Final order_id: {order_id}")
 
         # Завершаем заказ как отказ
         await complete_order_as_refusal(callback_query.message, state, order_id)
