@@ -2058,12 +2058,15 @@ async def complete_order_as_refusal(
             
             # Дополнительная проверка - прямой SQL запрос
             try:
-                cursor = await db.connection.execute(
-                    "SELECT * FROM masters WHERE telegram_id = ?",
-                    (message.from_user.id,)
-                )
-                master_row = await cursor.fetchone()
-                logger.info(f"[REFUSE] Direct SQL query result: {master_row}")
+                if hasattr(db, 'connection') and db.connection:
+                    cursor = await db.connection.execute(
+                        "SELECT * FROM masters WHERE telegram_id = ?",
+                        (message.from_user.id,)
+                    )
+                    master_row = await cursor.fetchone()
+                    logger.info(f"[REFUSE] Direct SQL query result: {master_row}")
+                else:
+                    logger.info(f"[REFUSE] Database doesn't have connection attribute or connection is None")
             except Exception as e:
                 logger.error(f"[REFUSE] Direct SQL query failed: {e}")
             
