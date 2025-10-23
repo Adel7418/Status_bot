@@ -62,6 +62,7 @@ class OrderStateMachine:
         OrderStatus.ONSITE: {
             OrderStatus.CLOSED,  # Завершение работы
             OrderStatus.DR,  # Переход в длительный ремонт
+            OrderStatus.REFUSED,  # Отказ после прибытия на объект
         },
         OrderStatus.DR: {
             OrderStatus.CLOSED,  # Завершение после DR
@@ -115,6 +116,10 @@ class OrderStateMachine:
         (OrderStatus.ONSITE, OrderStatus.DR): {
             UserRole.MASTER,
             UserRole.ADMIN,  # Админ может переводить в DR
+        },
+        (OrderStatus.ONSITE, OrderStatus.REFUSED): {
+            UserRole.MASTER,  # Мастер может отказаться
+            UserRole.ADMIN,  # Админ может отказаться за мастера
         },
         (OrderStatus.DR, OrderStatus.CLOSED): {
             UserRole.MASTER,
@@ -295,6 +300,7 @@ class OrderStateMachine:
             (OrderStatus.ACCEPTED, OrderStatus.REFUSED): "Отмена принятой заявки",
             (OrderStatus.ONSITE, OrderStatus.CLOSED): "Завершение работы",
             (OrderStatus.ONSITE, OrderStatus.DR): "Переход в длительный ремонт",
+            (OrderStatus.ONSITE, OrderStatus.REFUSED): "Отказ после прибытия на объект",
             (OrderStatus.DR, OrderStatus.CLOSED): "Завершение длительного ремонта",
             (OrderStatus.DR, OrderStatus.ONSITE): "Возврат из DR на объект",
             (OrderStatus.REFUSED, OrderStatus.NEW): "Переоткрытие отменённой заявки",
