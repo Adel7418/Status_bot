@@ -2056,9 +2056,9 @@ async def complete_order_as_refusal(
         else:
             logger.info(f"[REFUSE] Looking for master with telegram_id: {message.from_user.id}")
             
-            # Дополнительная проверка - прямой SQL запрос
+            # Дополнительная проверка - прямой SQL запрос (только для старой версии Database)
             try:
-                if hasattr(db, 'connection') and db.connection:
+                if hasattr(db, 'connection') and db.connection and not hasattr(db, 'get_session'):
                     cursor = await db.connection.execute(
                         "SELECT * FROM masters WHERE telegram_id = ?",
                         (message.from_user.id,)
@@ -2066,13 +2066,22 @@ async def complete_order_as_refusal(
                     master_row = await cursor.fetchone()
                     logger.info(f"[REFUSE] Direct SQL query result: {master_row}")
                 else:
-                    logger.info(f"[REFUSE] Database doesn't have connection attribute or connection is None")
+                    logger.info(f"[REFUSE] Using ORM Database, skipping direct SQL query")
             except Exception as e:
                 logger.error(f"[REFUSE] Direct SQL query failed: {e}")
             
             master = await db.get_master_by_telegram_id(message.from_user.id)
             logger.info(f"[REFUSE] Found master: {master}")
             if not master:
+                # Дополнительная диагностика - проверим, есть ли вообще мастера в базе
+                try:
+                    all_masters = await db.get_all_masters()
+                    logger.info(f"[REFUSE] Total masters in DB: {len(all_masters)}")
+                    for m in all_masters:
+                        logger.info(f"[REFUSE] Master: id={m.id}, telegram_id={m.telegram_id}")
+                except Exception as e:
+                    logger.error(f"[REFUSE] Error getting all masters: {e}")
+                
                 await message.reply("❌ Ошибка: мастер не найден.")
                 return
             # Проверяем, что заявка назначена на этого мастера
