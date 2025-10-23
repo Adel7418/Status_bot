@@ -14,7 +14,7 @@ from sqlalchemy.sql import func
 
 # revision identifiers, used by Alembic.
 revision: str = 'd0a601a63b16'
-down_revision: Union[str, None] = 'create_audit_log_table'
+down_revision: Union[str, None] = 'add_missing_columns_to_orders_masters'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
