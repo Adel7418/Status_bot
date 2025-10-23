@@ -20,7 +20,12 @@ from app.keyboards.inline import (
     get_order_list_keyboard,
     get_orders_filter_keyboard,
 )
-from app.keyboards.reply import get_cancel_keyboard, get_confirm_keyboard, get_skip_cancel_keyboard
+from app.keyboards.reply import (
+    get_cancel_keyboard,
+    get_client_data_confirm_keyboard,
+    get_confirm_keyboard,
+    get_skip_cancel_keyboard,
+)
 from app.schemas import OrderCreateSchema
 from app.states import AdminCloseOrderStates, CreateOrderStates
 from app.utils import (
@@ -377,6 +382,60 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         )
         return
 
+    # Ищем существующие данные клиента по номеру телефона
+    try:
+        from app.database import Database
+
+        db = Database()
+        await db.connect()
+
+        # Ищем заявки с таким номером телефона
+        existing_orders = await db.get_orders_by_client_phone(phone)
+        await db.disconnect()
+
+        if existing_orders:
+            # Найдены существующие заявки - показываем данные клиента
+            latest_order = existing_orders[0]  # Берем самую последнюю заявку
+
+            await message.answer(
+                f"🔍 <b>Найдены данные клиента:</b>\n\n"
+                f"👤 <b>Имя:</b> {escape_html(latest_order.client_name)}\n"
+                f"📞 <b>Телефон:</b> {escape_html(latest_order.client_phone)}\n"
+                f"🏠 <b>Адрес:</b> {escape_html(latest_order.client_address)}\n\n"
+                f"📊 <b>Всего заявок:</b> {len(existing_orders)}\n"
+                f"📋 <b>Последняя заявка:</b> #{latest_order.id} ({latest_order.status})\n\n"
+                f"<i>Используем эти данные для новой заявки?</i>",
+                parse_mode="HTML",
+                reply_markup=get_client_data_confirm_keyboard(),
+            )
+
+            # Сохраняем найденные данные и переходим к состоянию подтверждения
+            await state.update_data(
+                client_phone=phone,
+                found_client_name=latest_order.client_name,
+                found_client_address=latest_order.client_address,
+                existing_orders_count=len(existing_orders),
+            )
+            await state.set_state(CreateOrderStates.confirm_client_data)
+            return
+        else:
+            # Данные не найдены - продолжаем обычный процесс
+            await message.answer(
+                "🔍 <b>Данные не найдены</b>\n\n"
+                "Клиент с таким номером телефона не найден в базе данных.\n"
+                "Продолжаем создание новой заявки.",
+                parse_mode="HTML",
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка при поиске клиента по телефону {phone}: {e}")
+        await message.answer(
+            "⚠️ <b>Ошибка поиска</b>\n\n"
+            "Не удалось проверить существующие данные клиента.\n"
+            "Продолжаем создание новой заявки.",
+            parse_mode="HTML",
+        )
+
     await state.update_data(client_phone=phone)
     await state.set_state(CreateOrderStates.notes)
 
@@ -386,6 +445,66 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         "Или нажмите 'Пропустить'.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
+    )
+
+
+@router.message(CreateOrderStates.confirm_client_data, F.text == "✅ Да, использовать")
+@handle_errors
+async def confirm_client_data(message: Message, state: FSMContext, user_role: str):
+    """
+    Подтверждение использования найденных данных клиента
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    # Получаем данные из состояния
+    data = await state.get_data()
+
+    # Используем найденные данные клиента
+    await state.update_data(
+        client_name=data["found_client_name"], client_address=data["found_client_address"]
+    )
+
+    await state.set_state(CreateOrderStates.notes)
+
+    await message.answer(
+        "✅ <b>Данные клиента сохранены</b>\n\n"
+        f"👤 <b>Имя:</b> {escape_html(data['found_client_name'])}\n"
+        f"🏠 <b>Адрес:</b> {escape_html(data['found_client_address'])}\n"
+        f"📞 <b>Телефон:</b> {escape_html(data['client_phone'])}\n\n"
+        "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
+        f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
+        "Или нажмите 'Пропустить'.",
+        parse_mode="HTML",
+        reply_markup=get_skip_cancel_keyboard(),
+    )
+
+
+@router.message(CreateOrderStates.confirm_client_data, F.text == "❌ Нет, ввести заново")
+@handle_errors
+async def reject_client_data(message: Message, state: FSMContext, user_role: str):
+    """
+    Отклонение найденных данных клиента - переход к вводу имени
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    await state.set_state(CreateOrderStates.client_name)
+
+    await message.answer(
+        "👤 Шаг 3/7: Введите ФИО клиента:\n" "<i>(минимум 4 символа, максимум 200 символов)</i>",
+        parse_mode="HTML",
+        reply_markup=get_cancel_keyboard(),
     )
 
 

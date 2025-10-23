@@ -1203,3 +1203,24 @@ class ORMDatabase:
             await session.commit()
 
         return created_count
+
+    async def get_orders_by_client_phone(self, phone: str) -> list[Order]:
+        """
+        Поиск заявок по номеру телефона клиента
+
+        Args:
+            phone: Номер телефона клиента
+
+        Returns:
+            Список заявок клиента, отсортированный по дате создания (новые первые)
+        """
+        async with self.get_session() as session:
+            stmt = (
+                select(Order)
+                .where(Order.client_phone == phone)
+                .where(Order.deleted_at.is_(None))
+                .order_by(Order.created_at.desc())
+            )
+            result = await session.execute(stmt)
+            orders = result.scalars().all()
+            return list(orders)

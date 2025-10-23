@@ -103,6 +103,20 @@ def get_confirm_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
+def get_client_data_confirm_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура подтверждения данных клиента
+
+    Returns:
+        ReplyKeyboardMarkup
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(
+        KeyboardButton(text="✅ Да, использовать"), KeyboardButton(text="❌ Нет, ввести заново")
+    )
+    return builder.as_markup(resize_keyboard=True)
+
+
 def get_reschedule_confirm_keyboard() -> ReplyKeyboardMarkup:
     """
     Клавиатура подтверждения переноса

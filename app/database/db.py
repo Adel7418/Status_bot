@@ -1985,3 +1985,80 @@ class Database:
             logger.error(f"Error deleting master {telegram_id}: {e}")
             await self.connection.rollback()
             return False
+
+    async def get_orders_by_client_phone(self, phone: str) -> list[Order]:
+        """
+        Поиск заявок по номеру телефона клиента
+
+        Args:
+            phone: Номер телефона клиента
+
+        Returns:
+            Список заявок клиента, отсортированный по дате создания (новые первые)
+        """
+        if not self.connection:
+            await self.connect()
+
+        cursor = await self.connection.execute(
+            """
+            SELECT o.*,
+                   m.first_name as master_first_name, m.last_name as master_last_name, m.username as master_username,
+                   u.first_name as dispatcher_first_name, u.last_name as dispatcher_last_name, u.username as dispatcher_username
+            FROM orders o
+            LEFT JOIN masters m ON o.assigned_master_id = m.id
+            LEFT JOIN users u ON o.dispatcher_id = u.telegram_id
+            WHERE o.client_phone = ? AND o.deleted_at IS NULL
+            ORDER BY o.created_at DESC
+            """,
+            (phone,),
+        )
+        rows = await cursor.fetchall()
+
+        orders = []
+        for row in rows:
+            order = Order(
+                id=row["id"],
+                equipment_type=row["equipment_type"],
+                description=row["description"],
+                client_name=row["client_name"],
+                client_address=row["client_address"],
+                client_phone=row["client_phone"],
+                status=row["status"],
+                assigned_master_id=row["assigned_master_id"],
+                dispatcher_id=row["dispatcher_id"],
+                notes=row["notes"],
+                scheduled_time=row["scheduled_time"],
+                total_amount=row["total_amount"],
+                materials_cost=row["materials_cost"],
+                master_profit=row["master_profit"],
+                company_profit=row["company_profit"],
+                has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
+                out_of_city=bool(row["out_of_city"]) if row["out_of_city"] is not None else None,
+                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["created_at"]
+                else None,
+                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row["updated_at"]
+                else None,
+            )
+
+            # Добавляем имена мастеров и диспетчеров
+            if row["master_first_name"]:
+                master_name = row["master_first_name"]
+                if row["master_last_name"]:
+                    master_name += f" {row['master_last_name']}"
+                order.master_name = master_name
+            elif row["master_username"]:
+                order.master_name = f"@{row['master_username']}"
+
+            if row["dispatcher_first_name"]:
+                dispatcher_name = row["dispatcher_first_name"]
+                if row["dispatcher_last_name"]:
+                    dispatcher_name += f" {row['dispatcher_last_name']}"
+                order.dispatcher_name = dispatcher_name
+            elif row["dispatcher_username"]:
+                order.dispatcher_name = f"@{row['dispatcher_username']}"
+
+            orders.append(order)
+
+        return orders
