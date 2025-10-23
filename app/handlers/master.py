@@ -1661,7 +1661,7 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
             parse_mode="HTML",
         )
         return
-    
+
     # Если не цифра - сохраняем как есть (текстовая инструкция)
     await state.update_data(new_scheduled_time=new_time)
 
@@ -2119,7 +2119,7 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
             if order:
                 await callback_query.message.edit_text(
                     "❌ Отказ отменен.\n\nЗаявка остается активной.",
-                    reply_markup=get_order_actions_keyboard(order, callback_query.from_user.id),
+                    reply_markup=get_order_actions_keyboard(order, UserRole.MASTER),
                 )
             else:
                 await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")

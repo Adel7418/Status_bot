@@ -1397,7 +1397,7 @@ async def process_admin_refuse_confirmation_callback(
             if order:
                 await callback_query.message.edit_text(
                     "❌ Отказ отменен.\n\nЗаявка остается активной.",
-                    reply_markup=get_order_actions_keyboard(order, callback_query.from_user.id),
+                    reply_markup=get_order_actions_keyboard(order, UserRole.ADMIN),
                 )
             else:
                 await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
