@@ -24,8 +24,7 @@ def upgrade() -> None:
     
     # Сначала проверяем, существует ли таблица audit_log
     try:
-        conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"))
-        result = conn.fetchone()
+        result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")).fetchone()
         if not result:
             print("[SKIP] Таблица audit_log не существует - пропускаем миграцию")
             return
@@ -49,8 +48,7 @@ def downgrade() -> None:
     
     # Проверяем, существует ли таблица audit_log
     try:
-        conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"))
-        result = conn.fetchone()
+        result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")).fetchone()
         if not result:
             print("[SKIP] Таблица audit_log не существует - пропускаем откат")
             return
