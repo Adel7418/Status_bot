@@ -22,6 +22,17 @@ def upgrade() -> None:
     # Добавляем колонку deleted_at в таблицу audit_log
     conn = op.get_bind()
     
+    # Сначала проверяем, существует ли таблица audit_log
+    try:
+        conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"))
+        result = conn.fetchone()
+        if not result:
+            print("[SKIP] Таблица audit_log не существует - пропускаем миграцию")
+            return
+    except Exception as e:
+        print(f"[SKIP] Ошибка при проверке таблицы audit_log: {e} - пропускаем миграцию")
+        return
+    
     # Проверяем, существует ли уже колонка
     try:
         conn.execute(sa.text("SELECT deleted_at FROM audit_log LIMIT 1"))
@@ -34,5 +45,22 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Удаляем колонку deleted_at из таблицы audit_log
-    op.drop_column('audit_log', 'deleted_at')
-    print("[OK] Удалена колонка deleted_at из audit_log")
+    conn = op.get_bind()
+    
+    # Проверяем, существует ли таблица audit_log
+    try:
+        conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"))
+        result = conn.fetchone()
+        if not result:
+            print("[SKIP] Таблица audit_log не существует - пропускаем откат")
+            return
+    except Exception as e:
+        print(f"[SKIP] Ошибка при проверке таблицы audit_log: {e} - пропускаем откат")
+        return
+    
+    # Удаляем колонку
+    try:
+        op.drop_column('audit_log', 'deleted_at')
+        print("[OK] Удалена колонка deleted_at из audit_log")
+    except Exception as e:
+        print(f"[SKIP] Ошибка при удалении колонки: {e}")
