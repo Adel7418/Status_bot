@@ -3,6 +3,7 @@
 """
 
 import logging
+import re
 from datetime import UTC, datetime
 
 from aiogram import F, Router
@@ -11,7 +12,11 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus, UserRole
 from app.database import Database
-from app.keyboards.inline import get_order_actions_keyboard, get_order_list_keyboard, get_yes_no_keyboard
+from app.keyboards.inline import (
+    get_order_actions_keyboard,
+    get_order_list_keyboard,
+    get_yes_no_keyboard,
+)
 from app.states import (
     CompleteOrderStates,
     LongRepairStates,
@@ -1641,7 +1646,23 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
             )
             return
 
-    # Если не похоже на дату - сохраняем как есть (текстовая инструкция)
+    # Если не похоже на дату - проверяем, не является ли это простой цифрой
+    if re.match(r"^\d{1,2}$", new_time.strip()):
+        # Простая цифра - показываем примеры
+        await message.reply(
+            f"❌ <b>Введенный текст не похож на дату:</b> '{new_time}'\n\n"
+            f"<b>Примеры правильного ввода:</b>\n"
+            f"• завтра в 15:00\n"
+            f"• через 3 дня\n"
+            f"• через неделю\n"
+            f"• 25.12.2025\n"
+            f"• послезавтра в 15:00\n\n"
+            f"Пожалуйста, введите дату в одном из указанных форматов.",
+            parse_mode="HTML",
+        )
+        return
+    
+    # Если не цифра - сохраняем как есть (текстовая инструкция)
     await state.update_data(new_scheduled_time=new_time)
 
     # Переходим к запросу причины

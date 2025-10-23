@@ -526,6 +526,24 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                 )
                 return
 
+    # Если не похоже на дату - проверяем, не является ли это простой цифрой
+    import re
+    if re.match(r"^\d{1,2}$", scheduled_time.strip()):
+        # Простая цифра - показываем примеры
+        await message.answer(
+            f"❌ <b>Введенный текст не похож на дату:</b> '{scheduled_time}'\n\n"
+            f"<b>Примеры правильного ввода:</b>\n"
+            f"• завтра в 15:00\n"
+            f"• через 3 дня\n"
+            f"• через неделю\n"
+            f"• 25.12.2025\n"
+            f"• послезавтра в 15:00\n\n"
+            f"Пожалуйста, введите дату в одном из указанных форматов.",
+            parse_mode="HTML",
+            reply_markup=get_skip_cancel_keyboard(),
+        )
+        return
+
     await state.update_data(scheduled_time=scheduled_time)
     await show_order_confirmation(message, state)
 
