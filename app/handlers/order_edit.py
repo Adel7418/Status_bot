@@ -341,6 +341,25 @@ async def cancel_edit(message: Message, state: FSMContext):
         await message.answer("Редактирование отменено")
 
 
+@router.callback_query(F.data == "cancel_edit")
+@handle_errors
+async def callback_cancel_edit(callback: CallbackQuery, state: FSMContext):
+    """Отмена редактирования через callback"""
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    await state.clear()
+
+    if order_id:
+        await callback.message.edit_text(
+            "❌ Редактирование отменено",
+            reply_markup=None
+        )
+    else:
+        await callback.message.edit_text("Редактирование отменено")
+    
+    await callback.answer()
+
+
 @router.message(EditOrderStates.enter_value, F.text)
 @handle_errors
 async def process_new_value(message: Message, state: FSMContext, user_role: str):
