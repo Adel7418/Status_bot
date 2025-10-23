@@ -48,7 +48,27 @@ class ExcelExportService:
                 logger.error(f"Report {report_id} not found")
                 return None
 
-            master_reports = await self.db.get_master_reports_by_report_id(report_id)
+            # Для отчета "ДЕТАЛИЗАЦИЯ ЗАЯВОК ПО МАСТЕРАМ" получаем всех мастеров
+            if report.report_type == "masters_detailed":
+                all_masters = await self.db.get_all_masters(only_approved=True)
+                # Преобразуем в формат master_reports
+                master_reports = []
+                for master in all_masters:
+                    # Создаем объект с нужными атрибутами
+                    master_report = type(
+                        "MasterReport",
+                        (),
+                        {
+                            "master_id": master.id,
+                            "master_name": master.get_display_name(),
+                            "total_orders": 0,
+                            "total_amount": 0,
+                            "total_master_profit": 0,
+                        },
+                    )()
+                    master_reports.append(master_report)
+            else:
+                master_reports = await self.db.get_master_reports_by_report_id(report_id)
 
             # Создаем Excel файл
             wb = Workbook()

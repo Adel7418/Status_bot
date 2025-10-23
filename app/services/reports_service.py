@@ -45,6 +45,8 @@ class ReportsService:
                 "type": "daily",
                 "period": f"{yesterday.strftime('%d.%m.%Y')}",
                 "date_generated": get_now().isoformat(),
+                "start_date": yesterday,
+                "end_date": today,
                 "orders": orders_stats,
                 "masters": masters_stats,
                 "summary": await self._get_summary_stats(yesterday, today),
@@ -211,6 +213,50 @@ class ReportsService:
 
         return masters
 
+    async def _get_accepted_orders_details(self, start_date, end_date) -> list[dict[str, Any]]:
+        """Получает детальную информацию о принятых заказах за период"""
+        cursor = await self.db.connection.execute(
+            """
+            SELECT
+                o.id,
+                o.equipment_type,
+                o.client_name,
+                o.client_address,
+                o.client_phone,
+                o.created_at,
+                o.scheduled_time,
+                o.notes,
+                u.first_name || ' ' || COALESCE(u.last_name, '') as master_name
+            FROM orders o
+            LEFT JOIN masters m ON o.assigned_master_id = m.id
+            LEFT JOIN users u ON m.telegram_id = u.telegram_id
+            WHERE o.status = 'ACCEPTED'
+                AND DATE(o.created_at) >= ? AND DATE(o.created_at) <= ?
+            ORDER BY o.created_at DESC
+        """,
+            (start_date, end_date),
+        )
+
+        rows = await cursor.fetchall()
+
+        orders_list = []
+        for row in rows:
+            orders_list.append(
+                {
+                    "id": row["id"],
+                    "equipment_type": row["equipment_type"],
+                    "client_name": row["client_name"],
+                    "client_address": row["client_address"],
+                    "client_phone": row["client_phone"],
+                    "created_at": row["created_at"],
+                    "scheduled_time": row["scheduled_time"],
+                    "notes": row["notes"],
+                    "master_name": row["master_name"] or "Не назначен",
+                }
+            )
+
+        return orders_list
+
     async def _get_summary_stats(self, start_date, end_date) -> dict[str, Any]:
         """Получает общую статистику за период"""
         cursor = await self.db.connection.execute(
@@ -361,7 +407,7 @@ class ReportsService:
             logger.error(f"Ошибка получения истории для заявки #{order_id}: {e}")
             return "Ошибка получения истории"
 
-    def format_report_to_text(self, report: dict[str, Any]) -> str:
+    async def format_report_to_text(self, report: dict[str, Any]) -> str:
         """Форматирует отчет в текстовый вид"""
         report_type = report["type"]
         period = report["period"]
@@ -394,6 +440,19 @@ class ReportsService:
         text += f"• Отмененных: {orders['cancelled_orders']}\n"
         text += f"• С выездом за город: {orders['out_of_city_orders']}\n"
         text += f"• С отзывами: {orders['review_orders']}\n\n"
+
+        # Детальная информация о принятых заказах
+        if orders["accepted_orders"] > 0:
+            text += "✅ ПРИНЯТЫЕ ЗАКАЗЫ (детали в Excel):\n"
+            # Получаем детальную информацию о принятых заказах
+            accepted_orders_details = await self._get_accepted_orders_details(
+                report.get("start_date", ""), report.get("end_date", "")
+            )
+            for order in accepted_orders_details[:10]:  # Показываем первые 10
+                text += f"• #{order['id']} - {order['equipment_type']} | {order['client_name']} | {order['master_name']}\n"
+            if len(accepted_orders_details) > 10:
+                text += f"... и еще {len(accepted_orders_details) - 10} заказов\n"
+            text += "\n"
 
         # Финансовая информация
         if orders["closed_orders"] > 0:

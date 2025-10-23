@@ -29,7 +29,7 @@ class ReportsNotifier:
             report = await reports_service.generate_daily_report()
 
             # Отправляем текстовый отчет
-            text = reports_service.format_report_to_text(report)
+            text = await reports_service.format_report_to_text(report)
 
             # Сохраняем Excel файл с детализацией
             excel_path = await reports_service.save_report_to_excel(report)
@@ -71,7 +71,7 @@ class ReportsNotifier:
             report = await reports_service.generate_weekly_report()
 
             # Отправляем текстовый отчет
-            text = reports_service.format_report_to_text(report)
+            text = await reports_service.format_report_to_text(report)
 
             # Сохраняем Excel файл с детализацией
             excel_path = await reports_service.save_report_to_excel(report)
@@ -113,7 +113,7 @@ class ReportsNotifier:
             report = await reports_service.generate_monthly_report()
 
             # Отправляем текстовый отчет
-            text = reports_service.format_report_to_text(report)
+            text = await reports_service.format_report_to_text(report)
 
             # Сохраняем Excel файл с детализацией
             excel_path = await reports_service.save_report_to_excel(report)
@@ -182,7 +182,7 @@ class ReportsNotifier:
             report["period"] = f"{start_date} - {end_date}"
 
             # Отправляем текстовый отчет
-            text = reports_service.format_report_to_text(report)
+            text = await reports_service.format_report_to_text(report)
 
             # Сохраняем файл отчета
             file_path = await reports_service.save_report_to_file(
