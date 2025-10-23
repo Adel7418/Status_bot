@@ -365,11 +365,12 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
             await db.unassign_master_from_order(order_id)
         else:
             # Legacy: прямой SQL
-            await db.connection.execute(
-                "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-                (OrderStatus.NEW, order_id),
-            )
-            await db.connection.commit()
+            async with db.get_session() as session:
+                from sqlalchemy import text
+                await session.execute(
+                    text("UPDATE orders SET status = :status, assigned_master_id = NULL WHERE id = :order_id"),
+                    {"status": OrderStatus.NEW, "order_id": order_id}
+                )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -943,16 +944,21 @@ async def process_dr_confirmation_callback(callback_query: CallbackQuery, state:
             return
         
         # Обновляем поля DR
-        await db.connection.execute(
-            """
-            UPDATE orders
-            SET estimated_completion_date = ?,
-                prepayment_amount = ?
-            WHERE id = ?
-            """,
-            (completion_date, prepayment_amount, order_id),
-        )
-        await db.connection.commit()
+        async with db.get_session() as session:
+            from sqlalchemy import text
+            await session.execute(
+                text("""
+                UPDATE orders
+                SET estimated_completion_date = :completion_date,
+                    prepayment_amount = :prepayment_amount
+                WHERE id = :order_id
+                """),
+                {
+                    "completion_date": completion_date,
+                    "prepayment_amount": prepayment_amount,
+                    "order_id": order_id
+                }
+            )
 
         # Обновляем статус с валидацией через State Machine
         await db.update_order_status(
@@ -1522,29 +1528,6 @@ async def btn_settings_master(message: Message):
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("export_order:"))
-async def callback_export_order_master(callback: CallbackQuery):
-    """
-    Экспорт заявки в Excel (для мастера)
-
-    Args:
-        callback: Callback query
-    """
-    order_id = int(callback.data.split(":")[1])
-
-    await callback.answer("⏳ Генерирую Excel файл...")
-
-    from app.services.order_export import OrderExportService
-
-    excel_file = await OrderExportService.export_order_to_excel(order_id)
-
-    if excel_file:
-        await callback.message.answer_document(
-            document=excel_file, caption=f"📊 Детали заявки #{order_id}"
-        )
-        logger.info(f"Order #{order_id} exported to Excel by master {callback.from_user.id}")
-    else:
-        await callback.answer("❌ Заявка не найдена", show_alert=True)
 
 
 # ==================== ПЕРЕНОС ЗАЯВКИ ====================
@@ -1659,18 +1642,24 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
         # Обновляем заявку
         old_time = order.scheduled_time or "не указано"
 
-        await db.connection.execute(
-            """
-            UPDATE orders
-            SET scheduled_time = ?,
-                rescheduled_count = rescheduled_count + 1,
-                last_rescheduled_at = ?,
-                reschedule_reason = ?
-            WHERE id = ?
-            """,
-            (new_time, get_now(), reason, order_id),
-        )
-        await db.connection.commit()
+        async with db.get_session() as session:
+            from sqlalchemy import text
+            await session.execute(
+                text("""
+                UPDATE orders
+                SET scheduled_time = :new_time,
+                    rescheduled_count = rescheduled_count + 1,
+                    last_rescheduled_at = :last_rescheduled_at,
+                    reschedule_reason = :reason
+                WHERE id = :order_id
+                """),
+                {
+                    "new_time": new_time,
+                    "last_rescheduled_at": get_now(),
+                    "reason": reason,
+                    "order_id": order_id
+                }
+            )
 
         # Добавляем в лог
         await db.add_audit_log(

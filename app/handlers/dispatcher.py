@@ -1674,31 +1674,6 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("export_order:"))
-@handle_errors
-async def callback_export_order(callback: CallbackQuery, user_role: str):
-    """
-    Экспорт заявки в Excel
-
-    Args:
-        callback: Callback query
-        user_role: Роль пользователя
-    """
-    order_id = int(callback.data.split(":")[1])
-
-    await callback.answer("⏳ Генерирую Excel файл...")
-
-    from app.services.order_export import OrderExportService
-
-    excel_file = await OrderExportService.export_order_to_excel(order_id)
-
-    if excel_file:
-        await callback.message.answer_document(
-            document=excel_file, caption=f"📊 Детали заявки #{order_id}"
-        )
-        logger.info(f"Order #{order_id} exported to Excel by user {callback.from_user.id}")
-    else:
-        await callback.answer("❌ Заявка не найдена", show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_orders")

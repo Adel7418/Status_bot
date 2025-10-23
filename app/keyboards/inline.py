@@ -284,13 +284,6 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 )
             )
 
-    # Кнопка экспорта в Excel (для всех ролей)
-    builder.row(
-        InlineKeyboardButton(
-            text="📊 Экспорт в Excel",
-            callback_data=create_callback_data("export_order", order.id),
-        )
-    )
 
     # Кнопка "Назад" для всех
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_orders"))
