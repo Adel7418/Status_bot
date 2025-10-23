@@ -186,6 +186,12 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                         callback_data=create_callback_data("admin_dr_order", order.id),
                     ),
                 )
+                builder.row(
+                    InlineKeyboardButton(
+                        text="❌ Отказ (0 ₽) (за мастера)",
+                        callback_data=create_callback_data("admin_refuse_order_complete", order.id),
+                    )
+                )
             elif order.status == OrderStatus.DR:
                 builder.row(
                     InlineKeyboardButton(
@@ -262,6 +268,12 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     text="⏳ Длительный ремонт",
                     callback_data=create_callback_data("dr_order", order.id),
                 ),
+            )
+            builder.row(
+                InlineKeyboardButton(
+                    text="❌ Отказ (0 ₽)",
+                    callback_data=create_callback_data("refuse_order_complete", order.id),
+                )
             )
         elif order.status == OrderStatus.DR:
             # Для заявок в длительном ремонте - можно только завершить

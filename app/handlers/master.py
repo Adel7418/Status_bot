@@ -529,6 +529,40 @@ async def callback_show_phone(callback: CallbackQuery, user_roles: list):
         await db.disconnect()
 
 
+@router.callback_query(F.data.startswith("refuse_order_complete:"))
+async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMContext):
+    """
+    Быстрое завершение заявки как отказ (0 рублей)
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+    """
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+
+        # Проверяем права
+        if not master or order.assigned_master_id != master.id:
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
+
+        # Завершаем заказ как отказ
+        await complete_order_as_refusal(callback.message, state, order_id)
+
+        log_action(callback.from_user.id, "REFUSE_ORDER_COMPLETE", f"Order #{order_id}")
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer("Заявка завершена как отказ")
+
+
 @router.callback_query(F.data.startswith("complete_order:"))
 async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
     """
@@ -985,6 +1019,20 @@ async def process_total_amount(message: Message, state: FSMContext):
 
     # Сохраняем общую сумму
     await state.update_data(total_amount=total_amount)
+
+    # Если сумма 0 рублей, автоматически завершаем как отказ
+    if total_amount == 0:
+        # Устанавливаем значения по умолчанию для отказа
+        await state.update_data(materials_cost=0.0, has_review=False, out_of_city=False)
+
+        # Получаем данные из состояния
+        data = await state.get_data()
+        order_id = data.get("order_id")
+        acting_as_master_id = data.get("acting_as_master_id")
+
+        # Завершаем заказ как отказ
+        await complete_order_as_refusal(message, state, order_id, acting_as_master_id)
+        return
 
     # Переходим к запросу суммы расходного материала
     await state.set_state(CompleteOrderStates.enter_materials_cost)
@@ -1751,3 +1799,107 @@ async def callback_download_archive_report(callback: CallbackQuery):
         await db.disconnect()
 
     await callback.answer()
+
+
+async def complete_order_as_refusal(
+    message: Message, state: FSMContext, order_id: int, acting_as_master_id: int = None
+):
+    """
+    Завершение заказа как отказ (для заявок в 0 рублей)
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        order_id: ID заказа
+        acting_as_master_id: ID мастера, если админ действует от его имени
+    """
+    from app.config import OrderStatus
+    from app.utils.helpers import calculate_profit_split
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+
+        # Если админ действует от имени мастера
+        if acting_as_master_id:
+            master = await db.get_master_by_telegram_id(acting_as_master_id)
+        else:
+            master = await db.get_master_by_telegram_id(message.from_user.id)
+
+        if not master or not order or order.assigned_master_id != master.id:
+            await message.reply("❌ Ошибка: заявка не найдена или не принадлежит вам.")
+            return
+
+        # Устанавливаем все суммы в 0
+        total_amount = 0.0
+        materials_cost = 0.0
+        has_review = False
+        out_of_city = False
+
+        # Рассчитываем распределение прибыли (все будет 0)
+        master_profit, company_profit = calculate_profit_split(
+            total_amount, materials_cost, has_review, out_of_city
+        )
+
+        # Обновляем суммы в базе данных
+        await db.update_order_amounts(
+            order_id=order_id,
+            total_amount=total_amount,
+            materials_cost=materials_cost,
+            master_profit=master_profit,
+            company_profit=company_profit,
+            has_review=has_review,
+            out_of_city=out_of_city,
+        )
+
+        # Обновляем статус на REFUSED (отказ)
+        await db.update_order_status(
+            order_id=order_id,
+            status=OrderStatus.REFUSED,
+            changed_by=message.from_user.id,
+            user_roles=["MASTER"],  # Мастер завершает заказ
+        )
+
+        # Добавляем в лог
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="COMPLETE_ORDER_AS_REFUSAL",
+            details=f"Order #{order_id} completed as refusal (0 rubles)",
+        )
+
+        # Очищаем состояние FSM
+        await state.clear()
+
+        # Отправляем подтверждение
+        await message.reply(
+            f"❌ <b>Заявка #{order_id} завершена как отказ</b>\n\n"
+            f"💰 Сумма заказа: 0.00 ₽\n"
+            f"📋 Статус: Отказ\n\n"
+            f"Заявка автоматически помечена как отказ, так как сумма составляет 0 рублей.",
+            parse_mode="HTML",
+        )
+
+        # Уведомляем диспетчера
+        if order.dispatcher_id:
+            from app.utils import safe_send_message
+
+            result = await safe_send_message(
+                message.bot,
+                order.dispatcher_id,
+                f"❌ Заявка #{order_id} завершена как отказ\n"
+                f"Мастер: {master.get_display_name()}\n"
+                f"Причина: Сумма заказа 0 рублей",
+                parse_mode="HTML",
+            )
+            if not result:
+                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} about refusal")
+
+        logger.info(f"Order #{order_id} completed as refusal by master {master.id}")
+
+    except Exception as e:
+        logger.exception(f"Error completing order #{order_id} as refusal: {e}")
+        await message.reply("❌ Ошибка при завершении заявки как отказ")
+    finally:
+        await db.disconnect()

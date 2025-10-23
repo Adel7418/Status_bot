@@ -2267,6 +2267,21 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
     # Сохраняем общую сумму
     await state.update_data(total_amount=total_amount)
 
+    # Если сумма 0 рублей, автоматически завершаем как отказ
+    if total_amount == 0:
+        # Устанавливаем значения по умолчанию для отказа
+        await state.update_data(materials_cost=0.0, has_review=False, out_of_city=False)
+
+        # Получаем данные из состояния
+        data = await state.get_data()
+        order_id = data.get("order_id")
+
+        # Завершаем заказ как отказ
+        from app.handlers.master import complete_order_as_refusal
+
+        await complete_order_as_refusal(message, state, order_id)
+        return
+
     # Переходим к запросу суммы расходного материала
     await state.set_state(AdminCloseOrderStates.enter_materials_cost)
 

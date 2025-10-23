@@ -1167,6 +1167,51 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         await db.disconnect()
 
 
+@router.callback_query(F.data.startswith("admin_refuse_order_complete:"))
+async def callback_admin_refuse_order_complete(
+    callback: CallbackQuery, state: FSMContext, user_role: str
+):
+    """
+    Быстрое завершение заявки как отказ админом от имени мастера (0 рублей)
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    order_id = int(callback.data.split(":")[1])
+
+    db = Database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_id(order.assigned_master_id)
+
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Завершаем заказ как отказ от имени мастера
+        from app.handlers.master import complete_order_as_refusal
+
+        await complete_order_as_refusal(callback.message, state, order_id, master.telegram_id)
+
+        log_action(
+            callback.from_user.id,
+            "ADMIN_REFUSE_ORDER_COMPLETE",
+            f"Order #{order_id} for master {master.get_display_name()}",
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer("Заявка завершена как отказ")
+
+
 @router.callback_query(F.data.startswith("admin_complete_order:"))
 async def callback_admin_complete_order(callback: CallbackQuery, state: FSMContext, user_role: str):
     """
