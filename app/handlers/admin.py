@@ -1802,6 +1802,17 @@ async def cmd_delete_order(message: Message, user_role: str):
             await message.reply(f"❌ Заявка #{order_id} уже удалена")
             return
 
+        # Получаем информацию о мастере, если заказ назначен
+        master_info = ""
+        if order.assigned_master_id:
+            master = await db.get_master_by_id(order.assigned_master_id)
+            if master:
+                master_info = f"👨‍🔧 Мастер: {master.get_display_name()}\n"
+            else:
+                master_info = f"👨‍🔧 Мастер: ID {order.assigned_master_id} (не найден)\n"
+        else:
+            master_info = "👨‍🔧 Мастер: не назначен\n"
+
         # Показываем информацию о заявке
         await message.reply(
             f"📋 <b>Заявка #{order_id}</b>\n\n"
@@ -1809,6 +1820,7 @@ async def cmd_delete_order(message: Message, user_role: str):
             f"📱 Техника: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
             f"📊 Статус: {order.status}\n"
+            f"{master_info}"
             f"📅 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"❓ Вы уверены, что хотите удалить эту заявку?",
             parse_mode="HTML",
