@@ -33,6 +33,20 @@ class OrderCreateSchema(BaseModel):
             raise ValueError(f"Недопустимый тип техники. Допустимые: {', '.join(valid_types)}")
         return v
 
+    @field_validator("client_name")
+    @classmethod
+    def validate_client_name(cls, v: str) -> str:
+        """Валидация имени клиента"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SCHEMA_DEBUG] Validating client_name: '{v}', length: {len(v)}")
+        
+        v = v.strip()
+        if len(v) < 2:
+            logger.error(f"[SCHEMA_DEBUG] client_name too short: '{v}', length: {len(v)}")
+            raise ValueError("Имя клиента слишком короткое (минимум 2 символа)")
+        return v
+
     @field_validator("description")
     @classmethod
     def validate_description(cls, v: str) -> str:
@@ -51,22 +65,6 @@ class OrderCreateSchema(BaseModel):
         for pattern in suspicious_patterns:
             if re.search(pattern, v, re.IGNORECASE):
                 raise ValueError("Описание содержит недопустимые символы")
-
-        return v
-
-    @field_validator("client_name")
-    @classmethod
-    def validate_client_name(cls, v: str) -> str:
-        """Валидация имени клиента"""
-        v = v.strip()
-
-        # Минимум 5 символов
-        if len(v) < 5:
-            raise ValueError("Имя клиента слишком короткое (минимум 5 символов)")
-
-        # Проверяем что содержит хотя бы одну букву
-        if not re.search(r"[А-Яа-яЁёA-Za-z]", v):
-            raise ValueError("Имя должно содержать буквы")
 
         return v
 

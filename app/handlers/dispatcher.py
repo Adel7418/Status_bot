@@ -896,6 +896,10 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
     try:
         # КРИТИЧНО: Финальная валидация всех данных через Pydantic перед сохранением в БД
         try:
+            # Детальное логирование данных перед валидацией
+            logger.info(f"[VALIDATION_DEBUG] client_name: '{data.get('client_name')}', length: {len(data.get('client_name', ''))}")
+            logger.info(f"[VALIDATION_DEBUG] All data: {data}")
+            
             order_data = OrderCreateSchema(
                 equipment_type=data["equipment_type"],
                 description=data["description"],

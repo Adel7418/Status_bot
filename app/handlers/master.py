@@ -1050,6 +1050,9 @@ async def process_total_amount(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Добавляем логирование для отладки
+    logger.info(f"[PROCESS_TOTAL_AMOUNT] Received message: '{message.text}' from user {message.from_user.id} in chat {message.chat.id}")
+    
     # Проверяем, что это текстовое сообщение
     if not message.text:
         await message.reply(
@@ -2614,48 +2617,50 @@ def validate_dr_prepayment(amount: float) -> dict:
 async def callback_complete_dr_order(callback: CallbackQuery, state: FSMContext):
     """
     Завершение заявки в статусе DR (длительный ремонт)
-    
+
     Args:
         callback: Callback query
         state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
-    
-    logger.info(f"[COMPLETE_DR] Starting completion process for DR order #{order_id} by user {callback.from_user.id}")
-    
+
+    logger.info(
+        f"[COMPLETE_DR] Starting completion process for DR order #{order_id} by user {callback.from_user.id}"
+    )
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-            
+
         # Проверяем, что заявка действительно в статусе DR
         if order.status != OrderStatus.DR:
             await callback.answer("Эта заявка не в статусе длительного ремонта", show_alert=True)
             return
-            
+
         # Сохраняем ID заказа в состоянии FSM
         await state.update_data(order_id=order_id)
-        
+
         # Переходим в состояние запроса общей суммы
         from app.states import CompleteOrderStates
-        
+
         await state.set_state(CompleteOrderStates.enter_total_amount)
-        
+
         await callback.message.edit_text(
             f"💰 <b>Завершение длительного ремонта #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
         )
-        
+
         log_action(callback.from_user.id, "START_COMPLETE_DR_ORDER", f"Order #{order_id}")
-        
+
     finally:
         await db.disconnect()
-    
+
     await callback.answer()

@@ -5,11 +5,11 @@
 import logging
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus, UserRole
-from app.database import Database
 from app.database.orm_database import ORMDatabase
 from app.decorators import handle_errors, require_role
 from app.keyboards.inline import (
@@ -19,7 +19,7 @@ from app.keyboards.inline import (
     get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
-from app.states import AddMasterStates, SetWorkChatStates, AdminCloseOrderStates
+from app.states import AddMasterStates, AdminCloseOrderStates, SetWorkChatStates
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -1537,14 +1537,14 @@ async def process_admin_refuse_confirmation_callback(
 async def show_closed_order_financial_info(message: Message, order, user_role: str):
     """
     Показать финансовую информацию закрытой заявки с кнопками редактирования
-    
+
     Args:
         message: Сообщение
         order: Объект заявки
         user_role: Роль пользователя
     """
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     # Формируем текст с финансовой информацией
     text = (
         f"💰 <b>Финансовая информация - Заявка #{order.id}</b>\n\n"
@@ -1557,57 +1557,50 @@ async def show_closed_order_financial_info(message: Message, order, user_role: s
         f"👨‍🔧 <b>Доход мастера:</b> {order.master_profit or 0:.2f} ₽\n"
         f"🏢 <b>Доход компании:</b> {order.company_profit or 0:.2f} ₽\n"
     )
-    
+
     # Добавляем информацию о предоплате, если есть
     if order.prepayment_amount and order.prepayment_amount > 0:
         text += f"💳 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
-    
+
     # Создаем клавиатуру с кнопками редактирования
     keyboard = [
         [
             InlineKeyboardButton(
-                text="💵 Редактировать общую сумму",
-                callback_data=f"edit_total_amount:{order.id}"
+                text="💵 Редактировать общую сумму", callback_data=f"edit_total_amount:{order.id}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🔧 Редактировать расходы",
-                callback_data=f"edit_materials_cost:{order.id}"
+                text="🔧 Редактировать расходы", callback_data=f"edit_materials_cost:{order.id}"
             )
         ],
         [
             InlineKeyboardButton(
                 text="👨‍🔧 Редактировать доход мастера",
-                callback_data=f"edit_master_profit:{order.id}"
+                callback_data=f"edit_master_profit:{order.id}",
             )
         ],
         [
             InlineKeyboardButton(
                 text="🏢 Редактировать доход компании",
-                callback_data=f"edit_company_profit:{order.id}"
+                callback_data=f"edit_company_profit:{order.id}",
             )
         ],
         [
             InlineKeyboardButton(
-                text="💳 Редактировать предоплату",
-                callback_data=f"edit_prepayment:{order.id}"
+                text="💳 Редактировать предоплату", callback_data=f"edit_prepayment:{order.id}"
             )
         ],
-        [
-            InlineKeyboardButton(
-                text="❌ Закрыть",
-                callback_data="close_financial_info"
-            )
-        ]
+        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close_financial_info")],
     ]
-    
+
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-    
+
     await message.reply(text, parse_mode="HTML", reply_markup=reply_markup)
 
 
 # ==================== ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ ФИНАНСОВОЙ ИНФОРМАЦИИ ====================
+
 
 @router.callback_query(F.data.startswith("edit_total_amount:"))
 @require_role([UserRole.ADMIN])
@@ -1615,15 +1608,16 @@ async def show_closed_order_financial_info(message: Message, order, user_role: s
 async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование общей суммы заявки"""
     order_id = int(callback.data.split(":")[1])
-    
+
     await state.update_data(order_id=order_id, field="total_amount")
     from app.states import AdminCloseOrderStates
+
     await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"💵 <b>Редактирование общей суммы</b>\n\n"
         f"Введите новую общую сумму для заявки #{order_id}:\n\n"
         f"<i>Например: 1500.50</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1634,15 +1628,16 @@ async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext,
 async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование расходов на материалы"""
     order_id = int(callback.data.split(":")[1])
-    
+
     await state.update_data(order_id=order_id, field="materials_cost")
     from app.states import AdminCloseOrderStates
+
     await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"🔧 <b>Редактирование расходов на материалы</b>\n\n"
         f"Введите новые расходы на материалы для заявки #{order_id}:\n\n"
         f"<i>Например: 300.00</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1653,15 +1648,16 @@ async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContex
 async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование дохода мастера"""
     order_id = int(callback.data.split(":")[1])
-    
+
     await state.update_data(order_id=order_id, field="master_profit")
     from app.states import AdminCloseOrderStates
+
     await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"👨‍🔧 <b>Редактирование дохода мастера</b>\n\n"
         f"Введите новый доход мастера для заявки #{order_id}:\n\n"
         f"<i>Например: 800.00</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1672,15 +1668,16 @@ async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext
 async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование дохода компании"""
     order_id = int(callback.data.split(":")[1])
-    
+
     await state.update_data(order_id=order_id, field="company_profit")
     from app.states import AdminCloseOrderStates
+
     await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"🏢 <b>Редактирование дохода компании</b>\n\n"
         f"Введите новый доход компании для заявки #{order_id}:\n\n"
         f"<i>Например: 400.00</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1691,15 +1688,16 @@ async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContex
 async def callback_edit_prepayment(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование предоплаты"""
     order_id = int(callback.data.split(":")[1])
-    
+
     await state.update_data(order_id=order_id, field="prepayment_amount")
     from app.states import AdminCloseOrderStates
+
     await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"💳 <b>Редактирование предоплаты</b>\n\n"
         f"Введите новую предоплату для заявки #{order_id}:\n\n"
         f"<i>Например: 500.00 или 0 если предоплаты не было</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1755,3 +1753,139 @@ async def process_financial_value(message: Message, state: FSMContext, user_role
         await db.disconnect()
 
     await state.clear()
+
+
+@router.message(Command("delete_order"))
+@handle_errors
+async def cmd_delete_order(message: Message, user_role: str):
+    """
+    Команда для удаления заявки
+    
+    Args:
+        message: Сообщение
+        user_role: Роль пользователя
+    """
+    # Проверяем права доступа
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        await message.reply("❌ У вас нет прав для удаления заявок")
+        return
+    
+    # Получаем ID заявки из сообщения
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.reply(
+            "❌ Неверный формат команды\n\n"
+            "Используйте: /delete_order <ID_заявки>\n"
+            "Пример: /delete_order 97"
+        )
+        return
+    
+    try:
+        order_id = int(command_parts[1])
+    except ValueError:
+        await message.reply("❌ ID заявки должен быть числом")
+        return
+    
+    db = ORMDatabase()
+    await db.connect()
+    
+    try:
+        # Получаем заявку
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await message.reply(f"❌ Заявка #{order_id} не найдена")
+            return
+        
+        # Проверяем, что заявка не удалена
+        if order.deleted_at:
+            await message.reply(f"❌ Заявка #{order_id} уже удалена")
+            return
+        
+        # Показываем информацию о заявке
+        await message.reply(
+            f"📋 <b>Заявка #{order_id}</b>\n\n"
+            f"👤 Клиент: {order.client_name}\n"
+            f"📱 Техника: {order.equipment_type}\n"
+            f"📝 Описание: {order.description}\n"
+            f"📊 Статус: {order.status}\n"
+            f"📅 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"❓ Вы уверены, что хотите удалить эту заявку?",
+            parse_mode="HTML",
+            reply_markup=get_yes_no_keyboard(f"confirm_delete_order:{order_id}")
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in delete_order command: {e}")
+        await message.reply("❌ Ошибка при получении информации о заявке")
+        
+    finally:
+        await db.disconnect()
+
+
+@router.callback_query(F.data.startswith("confirm_delete_order:"))
+@handle_errors
+async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str):
+    """
+    Подтверждение удаления заявки
+    
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    # Проверяем права доступа
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        await callback.answer("❌ У вас нет прав для удаления заявок", show_alert=True)
+        return
+    
+    # Получаем ID заявки и действие
+    parts = callback.data.split(":")
+    order_id = int(parts[1])
+    action = parts[2] if len(parts) > 2 else "no"
+    
+    if action == "no":
+        await callback.message.edit_text("❌ Удаление заявки отменено")
+        await callback.answer()
+        return
+    
+    db = ORMDatabase()
+    await db.connect()
+    
+    try:
+        # Получаем заявку
+        order = await db.get_order_by_id(order_id)
+        
+        if not order:
+            await callback.message.edit_text(f"❌ Заявка #{order_id} не найдена")
+            return
+        
+        # Мягкое удаление заявки
+        success = await db.soft_delete_order(order_id)
+        
+        if success:
+            # Добавляем в аудит
+            await db.add_audit_log(
+                user_id=callback.from_user.id,
+                action="DELETE_ORDER_COMMAND",
+                details=f"Order #{order_id} deleted via /delete_order command"
+            )
+            
+            await callback.message.edit_text(
+                f"✅ Заявка #{order_id} успешно удалена\n\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📱 Техника: {order.equipment_type}\n"
+                f"📊 Статус: {order.status}"
+            )
+            
+            logger.info(f"Order #{order_id} deleted by user {callback.from_user.id} via /delete_order command")
+        else:
+            await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
+            
+    except Exception as e:
+        logger.error(f"Error deleting order {order_id}: {e}")
+        await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
+        
+    finally:
+        await db.disconnect()
+    
+    await callback.answer()

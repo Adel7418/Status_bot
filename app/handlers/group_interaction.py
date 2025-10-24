@@ -451,6 +451,7 @@ async def callback_group_complete_order(
             from app.states import CompleteOrderStates
 
             await state.set_state(CompleteOrderStates.enter_total_amount)
+            logger.info(f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {callback.from_user.id} in chat {callback.message.chat.id}")
 
         # Запрашиваем сумму прямо в группе
         await callback.message.reply(

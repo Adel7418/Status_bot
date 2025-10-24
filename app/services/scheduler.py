@@ -337,14 +337,15 @@ class TaskScheduler:
             # Отправляем уведомления администраторам
             if alerts:
                 for admin_id in Config.ADMIN_IDS:
-                    text = f"<b>Превышение SLA</b> - {len(alerts)} заявок\n\n"
+                    text = f"<b>Мастер слишком долго на адресе</b> - {len(alerts)} заявок\n\n"
 
                     for alert in alerts[:5]:  # Показываем первые 5
                         order = alert["order"]
                         hours = int(alert["time"].total_seconds() / 3600)
 
                         status_name = OrderStatus.get_status_name(order.status)
-                        text += f"📋 #{order.id} - {status_name} ({hours}ч)\n"
+                        master_info = f" - {order.master_name}" if order.master_name else ""
+                        text += f"📋 #{order.id} - {status_name} ({hours}ч){master_info}\n"
 
                     if len(alerts) > 5:
                         text += f"<i>И еще {len(alerts) - 5} заявок...</i>"
