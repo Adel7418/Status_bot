@@ -309,6 +309,21 @@ async def btn_contact(message: Message):
     await message.answer(contact_text, parse_mode="HTML")
 
 
+@router.message()
+async def debug_unhandled_message(message: Message, state: FSMContext):
+    """
+    Обработчик для отладки необработанных сообщений
+    """
+    current_state = await state.get_state()
+    logger.info(f"[DEBUG] Необработанное сообщение: '{message.text}' от пользователя {message.from_user.id}")
+    logger.info(f"[DEBUG] Текущее состояние FSM: {current_state}")
+    logger.info(f"[DEBUG] Тип чата: {message.chat.type}")
+    
+    # Если это номер телефона и мы в состоянии client_phone, это проблема
+    if current_state == "CreateOrderStates:client_phone":
+        logger.error(f"[DEBUG] КРИТИЧЕСКАЯ ОШИБКА: Сообщение '{message.text}' не обработано в состоянии client_phone!")
+
+
 @router.callback_query(F.data == "cancel")
 async def callback_cancel(callback: CallbackQuery, state: FSMContext):
     """
