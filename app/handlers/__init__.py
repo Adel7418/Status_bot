@@ -11,6 +11,7 @@ from app.handlers.financial_reports import router as financial_reports_router
 from app.handlers.group_interaction import router as group_router
 from app.handlers.master import router as master_router
 from app.handlers.order_edit import router as order_edit_router
+from app.handlers.order_search import router as order_search_router
 
 
 # Список всех роутеров
@@ -25,6 +26,7 @@ routers = [
     admin_history_router,
     financial_reports_router,
     dispatcher_router,
+    order_search_router,  # Поиск заказов
     master_router,
     order_edit_router,  # Редактирование заявок
     group_router,

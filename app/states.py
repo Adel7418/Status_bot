@@ -104,3 +104,12 @@ class RefuseOrderStates(StatesGroup):
     """Состояния для отказа от заявки"""
 
     confirm_refusal = State()  # Подтверждение отказа
+
+
+class SearchOrderStates(StatesGroup):
+    """Состояния для поиска заказов"""
+
+    select_search_type = State()  # Выбор типа поиска
+    enter_phone = State()  # Ввод номера телефона
+    enter_address = State()  # Ввод адреса
+    enter_phone_and_address = State()  # Ввод телефона и адреса

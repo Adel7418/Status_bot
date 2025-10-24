@@ -409,9 +409,10 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
     # Длительные ремонты - всегда показываем счётчик для видимости
     dr_text = f"⏳ Длительные ремонты ({counts.get(OrderStatus.DR, 0)})"
     # Завершенные заказы
+    closed_count = counts.get(OrderStatus.CLOSED, 0)
     closed_text = (
-        f"✅ Завершенные ({counts.get(OrderStatus.CLOSED, 0)})"
-        if counts.get(OrderStatus.CLOSED, 0) > 0
+        f"✅ Завершенные ({closed_count})"
+        if closed_count > 0
         else "✅ Завершенные"
     )
 
@@ -664,5 +665,56 @@ def get_dev_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
     builder.row(InlineKeyboardButton(text="❌ Закрыть", callback_data="dev_close"))
+
+    return builder.as_markup()
+
+
+def get_search_type_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура для выбора типа поиска заказов
+
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+
+    builder.row(InlineKeyboardButton(text="📞 По телефону", callback_data="search_by_phone"))
+
+    builder.row(InlineKeyboardButton(text="🏠 По адресу", callback_data="search_by_address"))
+
+    builder.row(
+        InlineKeyboardButton(
+            text="📞🏠 По телефону и адресу", callback_data="search_by_phone_and_address"
+        )
+    )
+
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="search_cancel"))
+
+    return builder.as_markup()
+
+
+def get_search_results_keyboard(order_id: int) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для результатов поиска заказа
+
+    Args:
+        order_id: ID заказа
+
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+
+    builder.row(
+        InlineKeyboardButton(
+            text="👁️ Просмотреть заказ", callback_data=create_callback_data("view_order", order_id)
+        )
+    )
+
+    builder.row(
+        InlineKeyboardButton(
+            text="✏️ Редактировать", callback_data=create_callback_data("edit_order", order_id)
+        )
+    )
 
     return builder.as_markup()

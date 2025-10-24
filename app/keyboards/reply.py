@@ -34,8 +34,9 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
     if has_admin:
         # Администратор видит все
         builder.row(KeyboardButton(text=all_orders_text), KeyboardButton(text="➕ Создать заявку"))
-        builder.row(KeyboardButton(text="👥 Мастера"), KeyboardButton(text="📊 Отчеты"))
-        builder.row(KeyboardButton(text="👤 Пользователи"), KeyboardButton(text="⚙️ Настройки"))
+        builder.row(KeyboardButton(text="🔍 Поиск заказов"), KeyboardButton(text="👥 Мастера"))
+        builder.row(KeyboardButton(text="📊 Отчеты"), KeyboardButton(text="👤 Пользователи"))
+        builder.row(KeyboardButton(text="⚙️ Настройки"))
 
     elif has_dispatcher or has_master:
         # Комбинированное меню для диспетчера и/или мастера
@@ -46,6 +47,7 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
             builder.row(
                 KeyboardButton(text=all_orders_text), KeyboardButton(text="➕ Создать заявку")
             )
+            builder.row(KeyboardButton(text="🔍 Поиск заказов"))
             buttons_added.add("dispatcher_orders")
 
         # Кнопки мастера
