@@ -13,7 +13,7 @@ class OrderCreateSchema(BaseModel):
     description: str = Field(
         ..., min_length=10, max_length=MAX_DESCRIPTION_LENGTH, description="Описание проблемы"
     )
-    client_name: str = Field(..., min_length=5, max_length=200, description="ФИО клиента")
+    client_name: str = Field(..., min_length=2, max_length=200, description="ФИО клиента")
     client_address: str = Field(..., min_length=10, max_length=500, description="Адрес клиента")
     client_phone: str = Field(..., min_length=10, max_length=20, description="Телефон клиента")
     notes: str | None = Field(
