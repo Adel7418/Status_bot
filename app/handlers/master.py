@@ -1051,8 +1051,10 @@ async def process_total_amount(message: Message, state: FSMContext):
         state: FSM контекст
     """
     # Добавляем логирование для отладки
-    logger.info(f"[PROCESS_TOTAL_AMOUNT] Received message: '{message.text}' from user {message.from_user.id} in chat {message.chat.id}")
-    
+    logger.info(
+        f"[PROCESS_TOTAL_AMOUNT] Received message: '{message.text}' from user {message.from_user.id} in chat {message.chat.id}"
+    )
+
     # Проверяем, что это текстовое сообщение
     if not message.text:
         await message.reply(

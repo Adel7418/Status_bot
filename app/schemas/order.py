@@ -19,9 +19,7 @@ class OrderCreateSchema(BaseModel):
     notes: str | None = Field(
         None, max_length=MAX_NOTES_LENGTH, description="Дополнительные заметки"
     )
-    scheduled_time: str | None = Field(
-        None, max_length=100, description="Время прибытия к клиенту"
-    )
+    scheduled_time: str | None = Field(None, max_length=100, description="Время прибытия к клиенту")
     dispatcher_id: int = Field(..., gt=0, description="ID диспетчера создавшего заявку")
 
     @field_validator("equipment_type")
@@ -38,9 +36,10 @@ class OrderCreateSchema(BaseModel):
     def validate_client_name(cls, v: str) -> str:
         """Валидация имени клиента"""
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info(f"[SCHEMA_DEBUG] Validating client_name: '{v}', length: {len(v)}")
-        
+
         v = v.strip()
         if len(v) < 2:
             logger.error(f"[SCHEMA_DEBUG] client_name too short: '{v}', length: {len(v)}")

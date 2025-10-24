@@ -317,11 +317,11 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
             return
 
         # Сохраняем ID и переходим к вводу телефона
-        await state.update_data(telegram_id=telegram_id, user_name=user.get_full_name())
+        await state.update_data(telegram_id=telegram_id, user_name=user.get_display_name())
         await state.set_state(AddMasterStates.enter_phone)
 
         await message.answer(
-            f"✅ Пользователь найден: {user.get_full_name()}\n\n"
+            f"✅ Пользователь найден: {user.get_display_name()}\n\n"
             "Введите номер телефона мастера:\n"
             "<i>(в формате +7XXXXXXXXXX)</i>",
             parse_mode="HTML",
@@ -1839,12 +1839,31 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
         return
 
     # Получаем ID заявки и действие из callback_data
-    # Формат: confirm_delete_order_yes_97 или confirm_delete_order_no_97
-    parts = callback.data.split("_")
-    if len(parts) >= 4:
-        action = parts[-2]  # yes или no
-        order_id = int(parts[-1])  # ID заявки
-    else:
+    # Новый формат: confirm_delete_order:yes:97
+    # Старый формат (fallback): confirm_delete_order_yes_97
+    action = None
+    order_id = None
+
+    data = callback.data
+    logger.info(f"[DELETE] Raw callback data: {data}")
+
+    if ":" in data:
+        try:
+            _, action, order_id_str = data.split(":", maxsplit=2)
+            action = action.strip()
+            order_id = int(order_id_str)
+        except Exception as e:
+            logger.warning(f"[DELETE] Colon-parse failed: {e}")
+    if action is None or order_id is None:
+        parts = data.split("_")
+        if len(parts) >= 4:
+            action = parts[-2]
+            try:
+                order_id = int(parts[-1])
+            except ValueError:
+                order_id = None
+
+    if action not in {"yes", "no"} or order_id is None:
         await callback.answer("❌ Неверный формат команды", show_alert=True)
         return
 

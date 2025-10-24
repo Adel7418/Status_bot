@@ -2472,7 +2472,7 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
 
         settings_text = (
             f"⚙️ <b>Настройки профиля</b>\n\n"
-            f"👤 <b>Имя:</b> {user.get_full_name()}\n"
+            f"👤 <b>Имя:</b> {user.get_display_name()}\n"
             f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n"
             f"👔 <b>Роль:</b> {user.role}\n"
         )
