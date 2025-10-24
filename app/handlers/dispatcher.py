@@ -427,6 +427,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
                 "Продолжаем создание заявки.",
                 parse_mode="HTML",
             )
+            logger.info(f"Новый клиент с телефоном {phone} - продолжаем создание заявки")
 
     except Exception as e:
         logger.error(f"Ошибка при поиске клиента по телефону {phone}: {e}")
@@ -437,6 +438,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
             parse_mode="HTML",
         )
 
+    logger.info(f"Переходим к следующему шагу для телефона {phone}")
     await state.update_data(client_phone=phone)
     await state.set_state(CreateOrderStates.notes)
 
@@ -447,6 +449,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
+    logger.info("Отправлено сообщение с запросом заметок")
 
 
 @router.message(CreateOrderStates.confirm_client_data, F.text == "✅ Да, использовать")
