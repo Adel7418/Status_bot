@@ -198,7 +198,7 @@ class OrderUpdateSchema(BaseModel):
 
     equipment_type: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
-    client_name: str | None = Field(None, min_length=5, max_length=200)
+    client_name: str | None = Field(None, min_length=2, max_length=200)
     client_address: str | None = Field(None, min_length=10, max_length=500)
     client_phone: str | None = Field(None, min_length=10, max_length=20)
     notes: str | None = Field(None, max_length=MAX_NOTES_LENGTH)
