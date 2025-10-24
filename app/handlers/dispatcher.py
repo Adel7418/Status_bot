@@ -332,7 +332,10 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         state: FSM контекст
         user_role: Роль пользователя
     """
+    logger.info(f"[CLIENT_PHONE] Начало обработки телефона: {message.text}, роль: {user_role}")
+    
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        logger.warning(f"[CLIENT_PHONE] Недостаточно прав: {user_role}")
         return
 
     # Проверяем, что это текстовое сообщение
@@ -373,6 +376,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
         validated = ClientPhoneValidator(client_phone=phone)
         phone = validated.client_phone
+        logger.info(f"[CLIENT_PHONE] Валидация прошла успешно: {phone}")
 
     except ValidationError as e:
         error_msg = e.errors()[0]["msg"]
