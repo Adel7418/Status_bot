@@ -1775,7 +1775,7 @@ async def cmd_delete_order(message: Message, user_role: str):
     if len(command_parts) != 2:
         await message.reply(
             "❌ Неверный формат команды\n\n"
-            "Используйте: /delete_order <ID_заявки>\n"
+            "Используйте: /delete_order &lt;ID_заявки&gt;\n"
             "Пример: /delete_order 97"
         )
         return
