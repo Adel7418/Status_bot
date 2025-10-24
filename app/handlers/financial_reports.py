@@ -494,10 +494,9 @@ async def callback_reports_list(callback: CallbackQuery, user_role: str):
 
         if not reports:
             await safe_edit_message(
-        callback,
-        "📋 <b>Последние отчеты</b>\n\n" "❌ Отчетов пока нет.",
-        reply_markup=get_reports_menu_keyboard(,
-    ),
+                callback,
+                "📋 <b>Последние отчеты</b>\n\n" "❌ Отчетов пока нет.",
+                reply_markup=get_reports_menu_keyboard(),
             )
             return
 
