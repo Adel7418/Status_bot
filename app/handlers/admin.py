@@ -19,7 +19,7 @@ from app.keyboards.inline import (
     get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
-from app.states import AddMasterStates, SetWorkChatStates
+from app.states import AddMasterStates, SetWorkChatStates, AdminCloseOrderStates
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -1617,6 +1617,8 @@ async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext,
     order_id = int(callback.data.split(":")[1])
     
     await state.update_data(order_id=order_id, field="total_amount")
+    from app.states import AdminCloseOrderStates
+    await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"💵 <b>Редактирование общей суммы</b>\n\n"
         f"Введите новую общую сумму для заявки #{order_id}:\n\n"
@@ -1634,6 +1636,8 @@ async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContex
     order_id = int(callback.data.split(":")[1])
     
     await state.update_data(order_id=order_id, field="materials_cost")
+    from app.states import AdminCloseOrderStates
+    await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"🔧 <b>Редактирование расходов на материалы</b>\n\n"
         f"Введите новые расходы на материалы для заявки #{order_id}:\n\n"
@@ -1651,6 +1655,8 @@ async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext
     order_id = int(callback.data.split(":")[1])
     
     await state.update_data(order_id=order_id, field="master_profit")
+    from app.states import AdminCloseOrderStates
+    await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"👨‍🔧 <b>Редактирование дохода мастера</b>\n\n"
         f"Введите новый доход мастера для заявки #{order_id}:\n\n"
@@ -1668,6 +1674,8 @@ async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContex
     order_id = int(callback.data.split(":")[1])
     
     await state.update_data(order_id=order_id, field="company_profit")
+    from app.states import AdminCloseOrderStates
+    await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"🏢 <b>Редактирование дохода компании</b>\n\n"
         f"Введите новый доход компании для заявки #{order_id}:\n\n"
@@ -1685,6 +1693,8 @@ async def callback_edit_prepayment(callback: CallbackQuery, state: FSMContext, u
     order_id = int(callback.data.split(":")[1])
     
     await state.update_data(order_id=order_id, field="prepayment_amount")
+    from app.states import AdminCloseOrderStates
+    await state.set_state(AdminCloseOrderStates.enter_value)
     await callback.message.edit_text(
         f"💳 <b>Редактирование предоплаты</b>\n\n"
         f"Введите новую предоплату для заявки #{order_id}:\n\n"
@@ -1702,49 +1712,46 @@ async def callback_close_financial_info(callback: CallbackQuery):
     await callback.answer("Финансовая информация закрыта")
 
 
-# Обработчик ввода новых значений
-@router.message(F.text.regexp(r'^\d+(\.\d{1,2})?$'))
+# Обработчик ввода новых значений (ТОЛЬКО в нужном состоянии)
+@router.message(AdminCloseOrderStates.enter_value)
 @require_role([UserRole.ADMIN])
 @handle_errors
 async def process_financial_value(message: Message, state: FSMContext, user_role: str):
-    """Обработка ввода финансового значения"""
+    """Обработка ввода финансового значения (редактирование закрытой заявки)"""
+    current_state = await state.get_state()
     data = await state.get_data()
     order_id = data.get("order_id")
     field = data.get("field")
-    
+
+    logger.info(f"[ADMIN_EDIT] state={current_state}, field={field}, raw='{message.text}'")
+
     if not order_id or not field:
         await message.reply("❌ Ошибка: данные не найдены. Попробуйте снова.")
         return
-    
+
+    # Парсим число, поддерживая запятую/точку
+    text = (message.text or "").strip().replace(",", ".")
     try:
-        value = float(message.text)
-        
-        # Обновляем значение в базе данных
-        db = ORMDatabase()
-        await db.connect()
-        
-        try:
-            # Обновляем поле в заявке
-            update_data = {field: value}
-            success = await db.update_order(order_id, update_data)
-            
-            if success:
-                # Получаем обновленную заявку
-                order = await db.get_order_by_id(order_id)
-                if order:
-                    # Показываем обновленную финансовую информацию
-                    await show_closed_order_financial_info(message, order, user_role)
-                    await message.reply(f"✅ {field} успешно обновлен на {value:.2f} ₽")
-                else:
-                    await message.reply("✅ Значение обновлено, но не удалось загрузить заявку")
-            else:
-                await message.reply("❌ Ошибка при обновлении значения")
-                
-        finally:
-            await db.disconnect()
-            
+        value = float(text)
     except ValueError:
         await message.reply("❌ Неверный формат числа. Введите число (например: 1500.50)")
         return
-    
+
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        update_data = {field: value}
+        success = await db.update_order(order_id, update_data)
+        if success:
+            order = await db.get_order_by_id(order_id)
+            if order:
+                await show_closed_order_financial_info(message, order, user_role)
+                await message.reply(f"✅ {field} обновлено: {value:.2f} ₽")
+            else:
+                await message.reply("✅ Значение обновлено, но не удалось загрузить заявку")
+        else:
+            await message.reply("❌ Ошибка при обновлении значения")
+    finally:
+        await db.disconnect()
+
     await state.clear()

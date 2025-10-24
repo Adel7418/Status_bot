@@ -79,6 +79,7 @@ class AdminCloseOrderStates(StatesGroup):
     confirm_materials = State()  # Подтверждение суммы материалов
     confirm_review = State()  # Подтверждение наличия отзыва
     confirm_out_of_city = State()  # Подтверждение выезда за город
+    enter_value = State()  # Ввод значения при точечном редактировании
 
 
 class LongRepairStates(StatesGroup):
