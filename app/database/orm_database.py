@@ -839,6 +839,7 @@ class ORMDatabase:
                     joinedload(Order.dispatcher),
                 )
                 .where(Order.assigned_master_id == master_id)
+                .where(Order.deleted_at.is_(None))  # Исключаем удаленные заказы
             )
 
             # Исключаем закрытые и отказанные заявки, если указано

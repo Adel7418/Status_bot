@@ -1906,6 +1906,27 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
                 details=f"Order #{order_id} deleted via /delete_order command",
             )
 
+            # Уведомляем мастера об удалении заказа, если он был назначен
+            if order.assigned_master_id:
+                master = await db.get_master_by_id(order.assigned_master_id)
+                if master and master.telegram_id:
+                    from app.utils import safe_send_message
+                    
+                    result = await safe_send_message(
+                        callback.bot,
+                        master.telegram_id,
+                        f"❌ <b>Заявка #{order_id} удалена администратором</b>\n\n"
+                        f"👤 Клиент: {order.client_name}\n"
+                        f"📱 Техника: {order.equipment_type}\n"
+                        f"📊 Статус: {order.status}\n\n"
+                        f"<i>Заявка больше не доступна для работы.</i>",
+                        parse_mode="HTML",
+                    )
+                    if not result:
+                        logger.error(
+                            f"Не удалось уведомить мастера {master.telegram_id} об удалении заказа #{order_id}"
+                        )
+
             await callback.message.edit_text(
                 f"✅ Заявка #{order_id} успешно удалена\n\n"
                 f"👤 Клиент: {order.client_name}\n"
