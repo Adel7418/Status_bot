@@ -333,7 +333,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
         user_role: Роль пользователя
     """
     logger.info(f"[CLIENT_PHONE] Начало обработки телефона: {message.text}, роль: {user_role}")
-    
+
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         logger.warning(f"[CLIENT_PHONE] Недостаточно прав: {user_role}")
         return
@@ -897,9 +897,11 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         # КРИТИЧНО: Финальная валидация всех данных через Pydantic перед сохранением в БД
         try:
             # Детальное логирование данных перед валидацией
-            logger.info(f"[VALIDATION_DEBUG] client_name: '{data.get('client_name')}', length: {len(data.get('client_name', ''))}")
+            logger.info(
+                f"[VALIDATION_DEBUG] client_name: '{data.get('client_name')}', length: {len(data.get('client_name', ''))}"
+            )
             logger.info(f"[VALIDATION_DEBUG] All data: {data}")
-            
+
             order_data = OrderCreateSchema(
                 equipment_type=data["equipment_type"],
                 description=data["description"],
@@ -2457,9 +2459,9 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    from app.database import Database
+    from app.database.orm_database import ORMDatabase
 
-    db = Database()
+    db = ORMDatabase()
     await db.connect()
 
     try:
