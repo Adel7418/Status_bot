@@ -34,6 +34,7 @@
 
 ### Функциональность
 
+- **[Order Search](ORDER_SEARCH_GUIDE.md)** 🔍 - Поиск заказов по телефону и адресу
 - **[Financial Reports](FINANCIAL_REPORTS_GUIDE.md)** - Финансовые отчеты
 - **[Multiple Roles](MULTIPLE_ROLES_GUIDE.md)** - Множественные роли
 - **[Group Interaction](GROUP_INTERACTION_GUIDE.md)** - Работа в группах
