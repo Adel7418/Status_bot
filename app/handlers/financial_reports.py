@@ -21,6 +21,48 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=None, parse_mode="HTML"):
+    """
+    Безопасное редактирование сообщения с обработкой различных типов сообщений
+    
+    Args:
+        callback: Callback query
+        text: Текст для отображения
+        reply_markup: Клавиатура
+        parse_mode: Режим парсинга
+    """
+    try:
+        # Сначала пытаемся отредактировать текст сообщения
+        await callback.message.edit_text(
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+    except Exception as e:
+        logger.warning(f"Could not edit message text: {e}")
+        # Если не удалось отредактировать текст, пытаемся отредактировать caption
+        try:
+            await callback.message.edit_caption(
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+        except Exception as e2:
+            logger.warning(f"Could not edit message caption: {e2}")
+            # Если и это не удалось, удаляем старое сообщение и отправляем новое
+            try:
+                await callback.message.delete()
+            except Exception as e3:
+                logger.warning(f"Could not delete message: {e3}")
+            
+            # Отправляем новое сообщение
+            await callback.message.answer(
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+
+
 def get_reports_menu_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура главного меню отчетов"""
     keyboard = [
@@ -205,9 +247,9 @@ async def btn_reports_direct(message: Message, user_role: str):
 @handle_errors
 async def callback_reports_menu(callback: CallbackQuery, user_role: str):
     """Возврат в главное меню отчетов"""
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         "📊 <b>Генерация отчетов</b>\n\n" "Выберите тип отчета для генерации:",
-        parse_mode="HTML",
         reply_markup=get_reports_menu_keyboard(),
     )
     await callback.answer()
@@ -218,9 +260,9 @@ async def callback_reports_menu(callback: CallbackQuery, user_role: str):
 @handle_errors
 async def callback_report_daily(callback: CallbackQuery, user_role: str):
     """Выбор ежедневного отчета"""
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         "📅 <b>Ежедневный отчет</b>\n\n" "Выберите день:",
-        parse_mode="HTML",
         reply_markup=get_daily_report_keyboard(),
     )
     await callback.answer()
@@ -231,9 +273,9 @@ async def callback_report_daily(callback: CallbackQuery, user_role: str):
 @handle_errors
 async def callback_report_weekly(callback: CallbackQuery, user_role: str):
     """Выбор еженедельного отчета"""
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         "📊 <b>Еженедельный отчет</b>\n\n" "Выберите неделю:",
-        parse_mode="HTML",
         reply_markup=get_weekly_report_keyboard(),
     )
     await callback.answer()
@@ -244,9 +286,9 @@ async def callback_report_weekly(callback: CallbackQuery, user_role: str):
 @handle_errors
 async def callback_report_monthly(callback: CallbackQuery, user_role: str):
     """Выбор месячного отчета"""
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         "📈 <b>Месячный отчет</b>\n\n" "Выберите месяц:",
-        parse_mode="HTML",
         reply_markup=get_monthly_report_keyboard(),
     )
     await callback.answer()
