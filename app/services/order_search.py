@@ -71,6 +71,17 @@ class OrderSearchService:
         # Выполняем поиск в базе данных
         orders = await self._search_orders_by_address_in_db(normalized_address)
 
+        # Если не нашли по полному адресу, пробуем поиск по отдельным словам
+        if not orders and len(normalized_address.split()) > 1:
+            words = normalized_address.split()
+            for word in words:
+                if len(word) >= 3:  # Ищем только слова длиннее 3 символов
+                    word_orders = await self._search_orders_by_address_in_db(word)
+                    orders.extend(word_orders)
+            
+            # Убираем дубликаты
+            orders = self._remove_duplicate_orders(orders)
+
         logger.info(f"Найдено заказов по адресу: {len(orders)}")
         return orders
 
@@ -195,7 +206,28 @@ class OrderSearchService:
         normalized = re.sub(r"\s+", " ", normalized)
 
         # Убираем знаки препинания в конце
-        return re.sub(r"[.,;:!?]+$", "", normalized)
+        normalized = re.sub(r"[.,;:!?]+$", "", normalized)
+        
+        # Убираем сокращения и заменяем их на полные формы
+        replacements = {
+            'ул.': 'улица',
+            'ул ': 'улица ',
+            'д.': 'дом',
+            'д ': 'дом ',
+            'кв.': 'квартира',
+            'кв ': 'квартира ',
+            'пр.': 'проспект',
+            'пр ': 'проспект ',
+            'пер.': 'переулок',
+            'пер ': 'переулок ',
+            'наб.': 'набережная',
+            'наб ': 'набережная ',
+        }
+        
+        for short, full in replacements.items():
+            normalized = normalized.replace(short, full)
+        
+        return normalized
 
     async def _search_orders_by_address_in_db(self, address: str) -> list[Order]:
         """
@@ -225,22 +257,30 @@ class OrderSearchService:
             Список найденных заказов
         """
         from sqlalchemy import func, select
+        from sqlalchemy.orm import joinedload
 
         from app.database.orm_models import Master, User
         from app.database.orm_models import Order as ORMOrder
 
         async with self.db.session_factory() as session:
-            # Строим запрос с JOIN'ами
+            # Получаем все заказы и фильтруем в Python (из-за проблем с func.lower() и кириллицей)
             query = (
                 select(ORMOrder)
-                .outerjoin(Master, ORMOrder.assigned_master_id == Master.id)
-                .outerjoin(User, ORMOrder.dispatcher_id == User.telegram_id)
-                .where(func.lower(ORMOrder.client_address).like(f"%{address}%"))
+                .options(
+                    joinedload(ORMOrder.assigned_master).joinedload(Master.user),
+                    joinedload(ORMOrder.dispatcher)
+                )
                 .order_by(ORMOrder.created_at.desc())
             )
 
             result = await session.execute(query)
-            orm_orders = result.scalars().all()
+            all_orders = result.unique().scalars().all()
+            
+            # Фильтруем в Python
+            orm_orders = []
+            for order in all_orders:
+                if address in order.client_address.lower():
+                    orm_orders.append(order)
 
             # Конвертируем ORM модели в dataclass модели
             orders = []
