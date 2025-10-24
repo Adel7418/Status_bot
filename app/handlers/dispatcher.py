@@ -201,7 +201,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     if not message.text:
         await message.reply(
             "❌ Пожалуйста, отправьте текстовое сообщение с ФИО клиента.\n"
-            "Минимум 2 символа, максимум 100 символов."
+            "Минимум 2 символа, максимум 200 символов."
         )
         return
 
@@ -214,16 +214,16 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
         from pydantic import BaseModel, Field, field_validator
 
         class ClientNameValidator(BaseModel):
-            client_name: str = Field(..., min_length=4, max_length=200)
+            client_name: str = Field(..., min_length=2, max_length=200)
 
             @field_validator("client_name")
             @classmethod
             def validate_client_name(cls, v: str) -> str:
                 v = v.strip()
 
-                # Минимум 4 символа
-                if len(v) < 4:
-                    raise ValueError("Имя клиента слишком короткое (минимум 4 символа)")
+                # Минимум 2 символа
+                if len(v) < 2:
+                    raise ValueError("Имя клиента слишком короткое (минимум 2 символа)")
 
                 # Проверяем что содержит хотя бы одну букву
                 if not re.search(r"[А-Яа-яЁёA-Za-z]", v):
