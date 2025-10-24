@@ -205,7 +205,7 @@ async def process_search_phone(message: Message, state: FSMContext, user_role: s
 
     finally:
         # ORMDatabase не имеет метода close, только engine
-        if hasattr(db, 'engine') and db.engine:
+        if hasattr(db, "engine") and db.engine:
             await db.engine.dispose()
 
     await state.clear()
@@ -256,7 +256,7 @@ async def process_search_address(message: Message, state: FSMContext, user_role:
 
     finally:
         # ORMDatabase не имеет метода close, только engine
-        if hasattr(db, 'engine') and db.engine:
+        if hasattr(db, "engine") and db.engine:
             await db.engine.dispose()
 
     await state.clear()
@@ -346,7 +346,7 @@ async def process_search_phone_and_address(message: Message, state: FSMContext, 
 
     finally:
         # ORMDatabase не имеет метода close, только engine
-        if hasattr(db, 'engine') and db.engine:
+        if hasattr(db, "engine") and db.engine:
             await db.engine.dispose()
 
     await state.clear()
