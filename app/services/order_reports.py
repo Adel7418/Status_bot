@@ -5,7 +5,7 @@
 import logging
 from datetime import datetime
 
-from app.database import Database
+from app.database.orm_database import ORMDatabase
 from app.database.models import Master, Order, User
 
 
@@ -16,7 +16,7 @@ class OrderReportsService:
     """Сервис для создания отчетов по закрытым заказам"""
 
     def __init__(self):
-        self.db = Database()
+        self.db = ORMDatabase()
 
     async def create_order_report(
         self, order: Order, master: Master | None = None, dispatcher: User | None = None
@@ -75,37 +75,41 @@ class OrderReportsService:
                     logger.warning(f"Не удалось вычислить время выполнения заказа {order.id}: {e}")
 
             # Создаем запись в таблице order_reports
-            await self.db.connection.execute(
-                """
-                INSERT INTO order_reports (
-                    order_id, equipment_type, client_name, client_address,
-                    master_id, master_name, dispatcher_id, dispatcher_name,
-                    total_amount, materials_cost, master_profit, company_profit,
-                    out_of_city, has_review, created_at, closed_at, completion_time_hours
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    order.id,
-                    order.equipment_type,
-                    order.client_name,
-                    order.client_address,
-                    order.assigned_master_id,
-                    master_name,
-                    order.dispatcher_id,
-                    dispatcher_name,
-                    order.total_amount or 0.0,
-                    order.materials_cost or 0.0,
-                    order.master_profit or 0.0,
-                    order.company_profit or 0.0,
-                    1 if order.out_of_city else 0,
-                    1 if order.has_review else 0,
-                    order.created_at,
-                    order.updated_at,
-                    completion_time_hours,
-                ),
-            )
-
-            await self.db.connection.commit()
+            async with self.db.get_session() as session:
+                from sqlalchemy import text
+                await session.execute(
+                    text("""
+                        INSERT INTO order_reports (
+                            order_id, equipment_type, client_name, client_address,
+                            master_id, master_name, dispatcher_id, dispatcher_name,
+                            total_amount, materials_cost, master_profit, company_profit,
+                            out_of_city, has_review, created_at, closed_at, completion_time_hours
+                        ) VALUES (:order_id, :equipment_type, :client_name, :client_address,
+                                 :master_id, :master_name, :dispatcher_id, :dispatcher_name,
+                                 :total_amount, :materials_cost, :master_profit, :company_profit,
+                                 :out_of_city, :has_review, :created_at, :closed_at, :completion_time_hours)
+                    """),
+                    {
+                        "order_id": order.id,
+                        "equipment_type": order.equipment_type,
+                        "client_name": order.client_name,
+                        "client_address": order.client_address,
+                        "master_id": order.assigned_master_id,
+                        "master_name": master_name,
+                        "dispatcher_id": order.dispatcher_id,
+                        "dispatcher_name": dispatcher_name,
+                        "total_amount": order.total_amount or 0.0,
+                        "materials_cost": order.materials_cost or 0.0,
+                        "master_profit": order.master_profit or 0.0,
+                        "company_profit": order.company_profit or 0.0,
+                        "out_of_city": 1 if order.out_of_city else 0,
+                        "has_review": 1 if order.has_review else 0,
+                        "created_at": order.created_at,
+                        "closed_at": order.updated_at,
+                        "completion_time_hours": completion_time_hours,
+                    }
+                )
+                await session.commit()
 
             logger.info(f"Создан отчет по заказу #{order.id}")
             return True
@@ -138,49 +142,51 @@ class OrderReportsService:
 
         try:
             query = "SELECT * FROM order_reports WHERE 1=1"
-            params = []
+            params = {}
 
             if start_date:
-                query += " AND DATE(closed_at) >= ?"
-                params.append(start_date)
+                query += " AND DATE(closed_at) >= :start_date"
+                params["start_date"] = start_date
 
             if end_date:
-                query += " AND DATE(closed_at) <= ?"
-                params.append(end_date)
+                query += " AND DATE(closed_at) <= :end_date"
+                params["end_date"] = end_date
 
             if master_id:
-                query += " AND master_id = ?"
-                params.append(master_id)
+                query += " AND master_id = :master_id"
+                params["master_id"] = master_id
 
             query += " ORDER BY closed_at DESC"
 
-            cursor = await self.db.connection.execute(query, params)
-            rows = await cursor.fetchall()
+            async with self.db.get_session() as session:
+                from sqlalchemy import text
+                result = await session.execute(text(query), params)
+                rows = result.fetchall()
 
-            reports = []
-            for row in rows:
-                reports.append(
-                    {
-                        "id": row["id"],
-                        "order_id": row["order_id"],
-                        "equipment_type": row["equipment_type"],
-                        "client_name": row["client_name"],
-                        "client_address": row["client_address"],
-                        "master_id": row["master_id"],
-                        "master_name": row["master_name"],
-                        "dispatcher_id": row["dispatcher_id"],
-                        "dispatcher_name": row["dispatcher_name"],
-                        "total_amount": row["total_amount"],
-                        "materials_cost": row["materials_cost"],
-                        "master_profit": row["master_profit"],
-                        "company_profit": row["company_profit"],
-                        "out_of_city": bool(row["out_of_city"]),
-                        "has_review": bool(row["has_review"]),
-                        "created_at": row["created_at"],
-                        "closed_at": row["closed_at"],
-                        "completion_time_hours": row["completion_time_hours"],
-                    }
-                )
+                reports = []
+                for row in rows:
+                    reports.append(
+                        {
+                            "id": row.id,
+                            "order_id": row.order_id,
+                            "equipment_type": row.equipment_type,
+                            "client_name": row.client_name,
+                            "client_address": row.client_address,
+                            "master_id": row.master_id,
+                            "master_name": row.master_name,
+                            "dispatcher_id": row.dispatcher_id,
+                            "dispatcher_name": row.dispatcher_name,
+                            "total_amount": row.total_amount,
+                            "materials_cost": row.materials_cost,
+                            "master_profit": row.master_profit,
+                            "company_profit": row.company_profit,
+                            "out_of_city": bool(row.out_of_city),
+                            "has_review": bool(row.has_review),
+                            "created_at": row.created_at,
+                            "closed_at": row.closed_at,
+                            "completion_time_hours": row.completion_time_hours,
+                        }
+                    )
 
             return reports
 
@@ -208,47 +214,49 @@ class OrderReportsService:
 
         try:
             query = "SELECT * FROM order_reports WHERE 1=1"
-            params = []
+            params = {}
 
             if start_date:
-                query += " AND DATE(closed_at) >= ?"
-                params.append(start_date)
+                query += " AND DATE(closed_at) >= :start_date"
+                params["start_date"] = start_date
 
             if end_date:
-                query += " AND DATE(closed_at) <= ?"
-                params.append(end_date)
+                query += " AND DATE(closed_at) <= :end_date"
+                params["end_date"] = end_date
 
-            cursor = await self.db.connection.execute(query, params)
-            rows = await cursor.fetchall()
+            async with self.db.get_session() as session:
+                from sqlalchemy import text
+                result = await session.execute(text(query), params)
+                rows = result.fetchall()
 
-            if not rows:
-                return {
-                    "total_orders": 0,
-                    "total_amount": 0.0,
-                    "total_materials_cost": 0.0,
-                    "total_master_profit": 0.0,
-                    "total_company_profit": 0.0,
-                    "out_of_city_count": 0,
-                    "reviews_count": 0,
-                    "avg_completion_time": 0.0,
-                }
+                if not rows:
+                    return {
+                        "total_orders": 0,
+                        "total_amount": 0.0,
+                        "total_materials_cost": 0.0,
+                        "total_master_profit": 0.0,
+                        "total_company_profit": 0.0,
+                        "out_of_city_count": 0,
+                        "reviews_count": 0,
+                        "avg_completion_time": 0.0,
+                    }
 
-            total_orders = len(rows)
-            total_amount = sum(row["total_amount"] for row in rows)
-            total_materials_cost = sum(row["materials_cost"] for row in rows)
-            total_master_profit = sum(row["master_profit"] for row in rows)
-            total_company_profit = sum(row["company_profit"] for row in rows)
-            out_of_city_count = sum(1 for row in rows if row["out_of_city"])
-            reviews_count = sum(1 for row in rows if row["has_review"])
+                total_orders = len(rows)
+                total_amount = sum(row.total_amount for row in rows)
+                total_materials_cost = sum(row.materials_cost for row in rows)
+                total_master_profit = sum(row.master_profit for row in rows)
+                total_company_profit = sum(row.company_profit for row in rows)
+                out_of_city_count = sum(1 for row in rows if row.out_of_city)
+                reviews_count = sum(1 for row in rows if row.has_review)
 
-            completion_times = [
-                row["completion_time_hours"]
-                for row in rows
-                if row["completion_time_hours"] is not None
-            ]
-            avg_completion_time = (
-                sum(completion_times) / len(completion_times) if completion_times else 0.0
-            )
+                completion_times = [
+                    row.completion_time_hours
+                    for row in rows
+                    if row.completion_time_hours is not None
+                ]
+                avg_completion_time = (
+                    sum(completion_times) / len(completion_times) if completion_times else 0.0
+                )
 
             return {
                 "total_orders": total_orders,
