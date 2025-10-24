@@ -2068,7 +2068,7 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 text(
                     """
                 UPDATE orders
-                SET status = OrderStatus.DR,
+                SET status = :status,
                     estimated_completion_date = :completion_date,
                     prepayment_amount = :prepayment_amount,
                     updated_at = :updated_at
@@ -2076,6 +2076,7 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 """
                 ),
                 {
+                    "status": OrderStatus.DR,
                     "completion_date": completion_date,
                     "prepayment_amount": prepayment_amount,
                     "updated_at": get_now(),
