@@ -1760,16 +1760,16 @@ async def process_financial_value(message: Message, state: FSMContext, user_role
 async def cmd_delete_order(message: Message, user_role: str):
     """
     Команда для удаления заявки
-    
+
     Args:
         message: Сообщение
         user_role: Роль пользователя
     """
     # Проверяем права доступа
-    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+    if user_role not in [UserRole.ADMIN]:
         await message.reply("❌ У вас нет прав для удаления заявок")
         return
-    
+
     # Получаем ID заявки из сообщения
     command_parts = message.text.split()
     if len(command_parts) != 2:
@@ -1779,29 +1779,29 @@ async def cmd_delete_order(message: Message, user_role: str):
             "Пример: /delete_order 97"
         )
         return
-    
+
     try:
         order_id = int(command_parts[1])
     except ValueError:
         await message.reply("❌ ID заявки должен быть числом")
         return
-    
+
     db = ORMDatabase()
     await db.connect()
-    
+
     try:
         # Получаем заявку
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await message.reply(f"❌ Заявка #{order_id} не найдена")
             return
-        
+
         # Проверяем, что заявка не удалена
         if order.deleted_at:
             await message.reply(f"❌ Заявка #{order_id} уже удалена")
             return
-        
+
         # Показываем информацию о заявке
         await message.reply(
             f"📋 <b>Заявка #{order_id}</b>\n\n"
@@ -1812,80 +1812,87 @@ async def cmd_delete_order(message: Message, user_role: str):
             f"📅 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"❓ Вы уверены, что хотите удалить эту заявку?",
             parse_mode="HTML",
-            reply_markup=get_yes_no_keyboard(f"confirm_delete_order:{order_id}")
+            reply_markup=get_yes_no_keyboard("confirm_delete_order", order_id),
         )
-        
+
     except Exception as e:
         logger.error(f"Error in delete_order command: {e}")
         await message.reply("❌ Ошибка при получении информации о заявке")
-        
+
     finally:
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("confirm_delete_order:"))
+@router.callback_query(F.data.startswith("confirm_delete_order"))
 @handle_errors
 async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str):
     """
     Подтверждение удаления заявки
-    
+
     Args:
         callback: Callback query
         user_role: Роль пользователя
     """
     # Проверяем права доступа
-    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+    if user_role not in [UserRole.ADMIN]:
         await callback.answer("❌ У вас нет прав для удаления заявок", show_alert=True)
         return
-    
-    # Получаем ID заявки и действие
-    parts = callback.data.split(":")
-    order_id = int(parts[1])
-    action = parts[2] if len(parts) > 2 else "no"
-    
+
+    # Получаем ID заявки и действие из callback_data
+    # Формат: confirm_delete_order_yes_97 или confirm_delete_order_no_97
+    parts = callback.data.split("_")
+    if len(parts) >= 4:
+        action = parts[-2]  # yes или no
+        order_id = int(parts[-1])  # ID заявки
+    else:
+        await callback.answer("❌ Неверный формат команды", show_alert=True)
+        return
+
     if action == "no":
         await callback.message.edit_text("❌ Удаление заявки отменено")
         await callback.answer()
         return
-    
+
     db = ORMDatabase()
     await db.connect()
-    
+
     try:
         # Получаем заявку
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await callback.message.edit_text(f"❌ Заявка #{order_id} не найдена")
             return
-        
+
         # Мягкое удаление заявки
         success = await db.soft_delete_order(order_id)
-        
+
         if success:
             # Добавляем в аудит
             await db.add_audit_log(
                 user_id=callback.from_user.id,
                 action="DELETE_ORDER_COMMAND",
-                details=f"Order #{order_id} deleted via /delete_order command"
+                details=f"Order #{order_id} deleted via /delete_order command",
             )
-            
+
             await callback.message.edit_text(
                 f"✅ Заявка #{order_id} успешно удалена\n\n"
                 f"👤 Клиент: {order.client_name}\n"
                 f"📱 Техника: {order.equipment_type}\n"
                 f"📊 Статус: {order.status}"
             )
-            
-            logger.info(f"Order #{order_id} deleted by user {callback.from_user.id} via /delete_order command")
+
+            logger.info(
+                f"Order #{order_id} deleted by user {callback.from_user.id} via /delete_order command"
+            )
         else:
             await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
-            
+
     except Exception as e:
         logger.error(f"Error deleting order {order_id}: {e}")
         await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
-        
+
     finally:
         await db.disconnect()
-    
+
     await callback.answer()
