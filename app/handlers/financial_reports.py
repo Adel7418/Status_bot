@@ -35,7 +35,7 @@ async def safe_edit_message(
     """
     try:
         # Сначала пытаемся отредактировать текст сообщения
-        await safe_edit_message(callback, 
+        await callback.message.edit_text(
             text,
             parse_mode=parse_mode,
             reply_markup=reply_markup,
@@ -109,13 +109,13 @@ def get_daily_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"📅 Сегодня ({today.strftime('%d.%m')})",
-                callback_data=f"daily_report_{today.strftime('%Y-%m-%d')}"
+                callback_data=f"daily_report_{today.strftime('%Y-%m-%d')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"📅 Вчера ({yesterday.strftime('%d.%m')})",
-                callback_data=f"daily_report_{yesterday.strftime('%Y-%m-%d')}"
+                callback_data=f"daily_report_{yesterday.strftime('%Y-%m-%d')}",
             ),
         ],
         [
@@ -135,13 +135,13 @@ def get_weekly_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"📅 Текущая неделя ({current_week_start.strftime('%d.%m')} - {(current_week_start + timedelta(days=6)).strftime('%d.%m')})",
-                callback_data=f"weekly_report_{current_week_start.strftime('%Y-%m-%d')}"
+                callback_data=f"weekly_report_{current_week_start.strftime('%Y-%m-%d')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"📅 Прошлая неделя ({last_week_start.strftime('%d.%m')} - {(last_week_start + timedelta(days=6)).strftime('%d.%m')})",
-                callback_data=f"weekly_report_{last_week_start.strftime('%Y-%m-%d')}"
+                callback_data=f"weekly_report_{last_week_start.strftime('%Y-%m-%d')}",
             ),
         ],
         [
@@ -161,13 +161,13 @@ def get_monthly_report_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"📅 Текущий месяц ({current_month.strftime('%B %Y')})",
-                callback_data=f"monthly_report_{current_month.strftime('%Y-%m')}"
+                callback_data=f"monthly_report_{current_month.strftime('%Y-%m')}",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=f"📅 Прошлый месяц ({last_month.strftime('%B %Y')})",
-                callback_data=f"monthly_report_{last_month.strftime('%Y-%m')}"
+                callback_data=f"monthly_report_{last_month.strftime('%Y-%m')}",
             ),
         ],
         [
@@ -400,10 +400,11 @@ async def callback_generate_daily_report(callback: CallbackQuery, user_role: str
     else:
         report_text = await service.format_report_for_display(report.id)
         await safe_edit_message(
-        callback,
-        report_text,
-        reply_markup=get_report_actions_keyboard(report.id,
-    ),
+            callback,
+            report_text,
+            reply_markup=get_report_actions_keyboard(
+                report.id,
+            ),
         )
 
     await callback.answer()
@@ -428,19 +429,21 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
 
     if report.total_orders == 0:
         await safe_edit_message(
-        callback,
-        f"📊 <b>Еженедельный отчет за {week_start.strftime('%d.%m')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
+            callback,
+            f"📊 <b>Еженедельный отчет за {week_start.strftime('%d.%m')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
             f"❌ За эту неделю не было завершенных заказов.",
-        reply_markup=get_report_actions_keyboard(report.id,
-    ),
+            reply_markup=get_report_actions_keyboard(
+                report.id,
+            ),
         )
     else:
         report_text = await service.format_report_for_display(report.id)
         await safe_edit_message(
-        callback,
-        report_text,
-        reply_markup=get_report_actions_keyboard(report.id,
-    ),
+            callback,
+            report_text,
+            reply_markup=get_report_actions_keyboard(
+                report.id,
+            ),
         )
 
     await callback.answer()
@@ -463,19 +466,21 @@ async def callback_generate_monthly_report(callback: CallbackQuery, user_role: s
     if report.total_orders == 0:
         month_name = datetime(year, month, 1).strftime("%B %Y")
         await safe_edit_message(
-        callback,
-        f"📈 <b>Месячный отчет за {month_name}</b>\n\n"
+            callback,
+            f"📈 <b>Месячный отчет за {month_name}</b>\n\n"
             f"❌ За этот месяц не было завершенных заказов.",
-        reply_markup=get_report_actions_keyboard(report.id,
-    ),
+            reply_markup=get_report_actions_keyboard(
+                report.id,
+            ),
         )
     else:
         report_text = await service.format_report_for_display(report.id)
         await safe_edit_message(
-        callback,
-        report_text,
-        reply_markup=get_report_actions_keyboard(report.id,
-    ),
+            callback,
+            report_text,
+            reply_markup=get_report_actions_keyboard(
+                report.id,
+            ),
         )
 
     await callback.answer()
@@ -525,10 +530,11 @@ async def callback_reports_list(callback: CallbackQuery, user_role: str):
         keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
 
         await safe_edit_message(
-        callback,
-        text,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard,
-    ),
+            callback,
+            text,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=keyboard,
+            ),
         )
 
     finally:
@@ -548,16 +554,18 @@ async def callback_view_report(callback: CallbackQuery, user_role: str):
     report_text = await service.format_report_for_display(report_id)
 
     if not report_text or "не найден" in report_text:
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             "❌ Отчет не найден.",
             reply_markup=get_reports_menu_keyboard(),
         )
     else:
         await safe_edit_message(
-        callback,
-        report_text,
-        reply_markup=get_report_actions_keyboard(report_id,
-    ),
+            callback,
+            report_text,
+            reply_markup=get_report_actions_keyboard(
+                report_id,
+            ),
         )
 
     await callback.answer()
@@ -582,7 +590,8 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
         filepath = await excel_service.export_report_to_excel(report_id)
 
         if not filepath:
-            await safe_edit_message(callback, 
+            await safe_edit_message(
+                callback,
                 "❌ Ошибка при создании Excel файла.",
                 reply_markup=get_reports_menu_keyboard(),
             )
@@ -593,7 +602,8 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
         await callback.message.answer_document(file, caption="📄 Финансовый отчет в формате Excel")
 
         # Возвращаем меню
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             "✅ Excel файл успешно создан и отправлен!",
             reply_markup=get_reports_menu_keyboard(),
         )
@@ -606,7 +616,8 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
 
     except Exception as e:
         logger.error(f"Error exporting to Excel: {e}")
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             f"❌ Ошибка при экспорте: {e!s}",
             reply_markup=get_reports_menu_keyboard(),
         )
@@ -684,7 +695,8 @@ async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
     filepath = await excel_service.export_closed_orders_to_excel(period_days=30)
 
     if not filepath:
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             "❌ Не удалось создать отчет.",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -706,7 +718,8 @@ async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
         caption="✅ Закрытые заказы за 30 дней",
     )
 
-    await safe_edit_message(callback, 
+    await safe_edit_message(
+        callback,
         "✅ Отчет создан!",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
@@ -742,7 +755,8 @@ async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str):
         masters = await cursor.fetchall()
 
         if not masters:
-            await safe_edit_message(callback, 
+            await safe_edit_message(
+                callback,
                 "❌ Нет утвержденных мастеров.",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -770,11 +784,12 @@ async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str):
         keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
 
         await safe_edit_message(
-        callback,
-        "👨‍🔧 <b>Выберите мастера:</b>\n\n"
+            callback,
+            "👨‍🔧 <b>Выберите мастера:</b>\n\n"
             "Будет создан отчет со всеми заявками выбранного мастера.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard,
-    ),
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=keyboard,
+            ),
         )
 
     finally:
@@ -798,7 +813,8 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
     filepath = await excel_service.export_master_orders_to_excel(master_id)
 
     if not filepath:
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             "❌ Не удалось создать отчет.",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -824,7 +840,8 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
         # Проверяем, что файл существует
         if not Path(filepath).exists():
             logger.error(f"Excel файл не найден: {filepath}")
-            await safe_edit_message(callback, 
+            await safe_edit_message(
+                callback,
                 "❌ Файл отчета не найден.",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -855,7 +872,8 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
 
     except Exception as e:
         logger.error(f"Ошибка отправки Excel файла {filepath}: {e}")
-        await safe_edit_message(callback, 
+        await safe_edit_message(
+            callback,
             f"❌ Ошибка отправки файла: {e!s}",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -869,7 +887,8 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
         )
         return
 
-    await safe_edit_message(callback, 
+    await safe_edit_message(
+        callback,
         "✅ Отчет создан!",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -951,13 +970,17 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
     if not filepath:
         try:
             await safe_edit_message(
-        callback,
-        f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                callback,
+                f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
                 f"❌ За этот день не было завершенных заказов.",
-        reply_markup=InlineKeyboardMarkup(
+                reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu",
-    )]
+                        [
+                            InlineKeyboardButton(
+                                text="🔙 Назад",
+                                callback_data="reports_menu",
+                            )
+                        ]
                     ]
                 ),
             )
@@ -1036,13 +1059,17 @@ async def callback_generate_weekly_master_report(callback: CallbackQuery, user_r
 
     if not filepath:
         await safe_edit_message(
-        callback,
-        f"📈 <b>Еженедельная сводка за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
+            callback,
+            f"📈 <b>Еженедельная сводка за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>\n\n"
             f"❌ За эту неделю не было завершенных заказов.",
-        reply_markup=InlineKeyboardMarkup(
+            reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu",
-    )]
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="reports_menu",
+                        )
+                    ]
                 ]
             ),
         )
@@ -1089,13 +1116,17 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
 
     if not filepath:
         await safe_edit_message(
-        callback,
-        f"📊 <b>Ежемесячная сводка за {month_start.strftime('%B %Y')}</b>\n\n"
+            callback,
+            f"📊 <b>Ежемесячная сводка за {month_start.strftime('%B %Y')}</b>\n\n"
             f"❌ За этот месяц не было завершенных заказов.",
-        reply_markup=InlineKeyboardMarkup(
+            reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu",
-    )]
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="reports_menu",
+                        )
+                    ]
                 ]
             ),
         )
