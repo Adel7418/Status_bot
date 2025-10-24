@@ -261,7 +261,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             builder.row(
                 InlineKeyboardButton(
                     text="💰 Завершить ремонт",
-                    callback_data=create_callback_data("complete_order", order.id),
+                    callback_data=create_callback_data("complete_dr_order", order.id),
                 )
             )
 
