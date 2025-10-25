@@ -39,8 +39,40 @@ def _preprocess_time_text(text: str) -> str:
 
         >>> _preprocess_time_text("после завтра")
         "послезавтра"
+
+        >>> _preprocess_time_text("16:00")
+        "сегодня в 16:00" (если время еще не прошло) или "завтра в 16:00" (если прошло)
     """
     text_lower = text.lower()
+
+    # Обработка случая, когда введено только время (например, "16:00")
+    time_only_pattern = r"^(\d{1,2}:\d{2})$"
+    if re.match(time_only_pattern, text_lower):
+        # Проверяем, не прошло ли уже это время сегодня
+        from datetime import datetime
+        from app.utils.helpers import MOSCOW_TZ, get_now
+        
+        try:
+            # Парсим время
+            time_parts = text_lower.split(':')
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            
+            # Получаем текущее время
+            now = get_now().replace(tzinfo=MOSCOW_TZ)
+            
+            # Создаем время на сегодня
+            today_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            # Если время уже прошло сегодня - ставим завтра
+            if today_time <= now:
+                return f"завтра в {text_lower}"
+            else:
+                return f"сегодня в {text_lower}"
+                
+        except (ValueError, IndexError):
+            # Если не удалось распарсить время - используем "сегодня"
+            return f"сегодня в {text_lower}"
 
     # Замена "после завтра" на "послезавтра" для единообразия
     text_lower = re.sub(r"\bпосле\s+завтра\b", "послезавтра", text_lower)
@@ -309,6 +341,9 @@ def should_parse_as_date(text: str) -> bool:
         >>> should_parse_as_date("через 1-1.5 часа")
         True
 
+        >>> should_parse_as_date("16:00")
+        True
+
         >>> should_parse_as_date("3")
         False
 
@@ -319,6 +354,11 @@ def should_parse_as_date(text: str) -> bool:
         return False
 
     text_lower = text.lower().strip()
+
+    # Проверка на время в формате HH:MM (например, "16:00")
+    has_time_format = re.search(r"^\d{1,2}:\d{2}$", text_lower)
+    if has_time_format:
+        return True
 
     # Если текст состоит только из цифр (1-2 цифры) - не парсим как дату
     if re.match(r"^\d{1,2}$", text_lower):
@@ -354,9 +394,6 @@ def should_parse_as_date(text: str) -> bool:
 
     # Проверка на даты в формате DD.MM.YYYY или DD/MM/YYYY
     has_date_format = re.search(r"\d{1,2}[./]\d{1,2}[./]\d{2,4}", text_lower)
-
-    # Проверка на время в формате HH:MM
-    has_time_format = re.search(r"\d{1,2}:\d{2}", text_lower)
 
     # Если есть хотя бы одно ключевое слово, диапазон, формат даты или времени - пытаемся парсить
     return (

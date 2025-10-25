@@ -335,8 +335,8 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
             f"📱 Тип техники: {order.equipment_type}\n"
             f"📝 Описание: {order.description}\n"
             f"👤 Клиент: {order.client_name}\n"
-            f"📍 Адрес: {order.client_address}\n\n"
-            f'Контактный телефон не сохраняется в чате. Нажмите кнопку "📞 Показать телефон" для просмотра.',
+            f"📍 Адрес: {order.client_address}\n"
+            f"📞 Телефон: {order.client_phone}\n\n",
             parse_mode="HTML",
             reply_markup=get_group_order_keyboard(order, OrderStatus.ONSITE),
         )
@@ -544,50 +544,7 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
         await db.disconnect()
 
 
-@router.callback_query(F.data.startswith("group_show_phone:"))
-async def callback_group_show_phone(callback: CallbackQuery, user_roles: list):
-    """
-    Показ телефона клиента в рабочей группе во всплывающем окне.
-    Доступ только мастеру заявки или администратору этой рабочей группы.
-    """
-    order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
-
-    try:
-        from app.config import UserRole
-
-        order = await db.get_order_by_id(order_id)
-        if not order:
-            await callback.answer("❌ Заявка не найдена", show_alert=True)
-            return
-
-        # Если админ кликает в группе, проверяем, что это его рабочая группа мастера
-        if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
-            if not master or order.assigned_master_id != master.id:
-                await callback.answer("❌ Нет доступа", show_alert=True)
-                return
-        else:
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
-            if not master or order.assigned_master_id != master.id:
-                await callback.answer("❌ Это не ваша заявка", show_alert=True)
-                return
-
-        # Телефон доступен после прибытия (ONSITE), а также в DR/закрыта
-        if order.status not in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
-            await callback.answer("📵 Телефон доступен после прибытия на объект", show_alert=True)
-            return
-
-        await callback.answer(f"📞 Телефон клиента: {order.client_phone}", show_alert=True)
-
-    finally:
-        await db.disconnect()
-
-        logger.debug(
-            f"[DR] Group DR process started for order #{order_id}, master: {master.telegram_id}"
-        )
+# Удален обработчик group_show_phone - телефон теперь в тексте сообщения
 
 
 @router.callback_query(F.data.startswith("group_reschedule_order:"))

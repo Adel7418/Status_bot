@@ -55,13 +55,7 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
             )
         )
     elif status == OrderStatus.ONSITE:
-        # Показываем кнопку для просмотра телефона клиента во всплывающем окне
-        builder.row(
-            InlineKeyboardButton(
-                text="📞 Показать телефон",
-                callback_data=create_callback_data("group_show_phone", order.id),
-            )
-        )
+        # Убрали кнопку "Показать телефон" - телефон теперь в тексте
         builder.row(
             InlineKeyboardButton(
                 text="💰 Завершить",
