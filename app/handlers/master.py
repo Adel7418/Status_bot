@@ -1685,10 +1685,7 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
             user_friendly = format_datetime_user_friendly(parsed_dt, new_time)
 
             # Сохраняем распознанную дату и причину (None - причина не нужна)
-            await state.update_data(
-                new_scheduled_time=user_friendly,
-                reschedule_reason=None
-            )
+            await state.update_data(new_scheduled_time=user_friendly, reschedule_reason=None)
 
             # Сразу переходим к подтверждению
             await show_reschedule_confirmation(message, state)
@@ -1734,10 +1731,7 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
         return
 
     # Если не цифра - сохраняем как есть (текстовая инструкция)
-    await state.update_data(
-        new_scheduled_time=new_time,
-        reschedule_reason=None
-    )
+    await state.update_data(new_scheduled_time=new_time, reschedule_reason=None)
 
     # Сразу переходим к подтверждению
     await show_reschedule_confirmation(message, state)
@@ -1837,9 +1831,10 @@ async def handle_reschedule_confirm(message: Message, state: FSMContext):
     if message.text == "✅ Подтвердить перенос":
         await confirm_reschedule_order(message, state)
     elif message.text == "❌ Отмена":
-        from app.keyboards.reply import get_main_menu_keyboard
         # Определяем роль пользователя (может быть ADMIN или MASTER)
         from app.database import Database
+        from app.keyboards.reply import get_main_menu_keyboard
+
         db_role = Database()
         await db_role.connect()
         try:
@@ -1847,7 +1842,9 @@ async def handle_reschedule_confirm(message: Message, state: FSMContext):
             user_role = user.role if user else "MASTER"
         finally:
             await db_role.disconnect()
-        await message.answer("❌ Перенос заявки отменен.", reply_markup=get_main_menu_keyboard(user_role))
+        await message.answer(
+            "❌ Перенос заявки отменен.", reply_markup=get_main_menu_keyboard(user_role)
+        )
         await state.clear()
     else:
         # Если введен текст, обрабатываем как изменение времени
@@ -1922,10 +1919,13 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
 
         # Убираем клавиатуру после подтверждения и возвращаем главное меню
         from app.keyboards.reply import get_main_menu_keyboard
+
         # Определяем роль пользователя (может быть ADMIN или MASTER)
         user = await db.get_user_by_telegram_id(message.from_user.id)
         user_role = user.role if user else "MASTER"
-        await message.answer(result_text, parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_role))
+        await message.answer(
+            result_text, parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_role)
+        )
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
