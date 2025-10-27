@@ -49,27 +49,25 @@ def _preprocess_time_text(text: str) -> str:
     time_only_pattern = r"^(\d{1,2}:\d{2})$"
     if re.match(time_only_pattern, text_lower):
         # Проверяем, не прошло ли уже это время сегодня
-        from datetime import datetime
         from app.utils.helpers import MOSCOW_TZ, get_now
-        
+
         try:
             # Парсим время
-            time_parts = text_lower.split(':')
+            time_parts = text_lower.split(":")
             hour = int(time_parts[0])
             minute = int(time_parts[1])
-            
+
             # Получаем текущее время
             now = get_now().replace(tzinfo=MOSCOW_TZ)
-            
+
             # Создаем время на сегодня
             today_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            
+
             # Если время уже прошло сегодня - ставим завтра
             if today_time <= now:
                 return f"завтра в {text_lower}"
-            else:
-                return f"сегодня в {text_lower}"
-                
+            return f"сегодня в {text_lower}"
+
         except (ValueError, IndexError):
             # Если не удалось распарсить время - используем "сегодня"
             return f"сегодня в {text_lower}"
@@ -216,6 +214,34 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
 
     original_text = text.strip()
     text = original_text
+
+    # Предобработка для случаев типа "01.11.25" - исправляем на "01.11.2025"
+    # Проверяем форматы DD.MM.YY или DD.MM.YY
+    short_year_pattern = r'(\d{1,2})\.(\d{1,2})\.(\d{2})$'
+    match = re.match(short_year_pattern, text)
+    if match:
+        day, month, year = match.groups()
+        # Проверяем, что год в разумных пределах (00-99)
+        year_int = int(year)
+        current_year = get_now().year
+        
+        # Определяем полный год
+        # Если год <= текущий год % 100, то это ближайший год
+        # Иначе это прошлый век
+        current_year_short = current_year % 100
+        if year_int <= current_year_short:
+            # Это текущий или ближайший год
+            full_year = (current_year // 100) * 100 + year_int
+        else:
+            # Это прошлый век
+            full_year = ((current_year // 100) - 1) * 100 + year_int
+        
+        # Проверяем, что дата не слишком далеко в будущем
+        if full_year > current_year + 1:
+            full_year = 2000 + year_int
+        
+        text = f"{day}.{month}.{full_year}"
+        logger.debug(f"Исправлена короткая дата '{original_text}' -> '{text}'")
 
     # Предобработка для лучшего распознавания
     preprocessed_text = _preprocess_time_text(text)

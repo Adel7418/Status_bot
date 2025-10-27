@@ -151,19 +151,22 @@ class ReportsNotifier:
         await self.db.connect()
 
         try:
-            cursor = await self.db.connection.execute(
-                """
-                SELECT telegram_id
-                FROM users
-                WHERE role LIKE '%ADMIN%' OR role LIKE '%DISPATCHER%'
-            """
-            )
+            async with self.db.get_session() as session:
+                from sqlalchemy import text
+                
+                result = await session.execute(
+                    text("""
+                        SELECT telegram_id
+                        FROM users
+                        WHERE role LIKE '%ADMIN%' OR role LIKE '%DISPATCHER%'
+                    """)
+                )
+                
+                rows = result.fetchall()
+                recipients = [row[0] for row in rows]
 
-            rows = await cursor.fetchall()
-            recipients = [row["telegram_id"] for row in rows]
-
-            logger.info(f"Найдено {len(recipients)} получателей отчетов")
-            return recipients
+                logger.info(f"Найдено {len(recipients)} получателей отчетов")
+                return recipients
 
         finally:
             await self.db.disconnect()
