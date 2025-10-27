@@ -1684,18 +1684,14 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
             # Успешно распознали дату
             user_friendly = format_datetime_user_friendly(parsed_dt, new_time)
 
-            # Сохраняем распознанную дату
-            await state.update_data(new_scheduled_time=user_friendly)
-
-            # Переходим к запросу причины
-            await state.set_state(RescheduleOrderStates.enter_reason)
-
-            await message.reply(
-                f"✅ <b>Дата распознана:</b> {user_friendly}\n\n"
-                f"Укажите причину переноса:\n"
-                f"<i>(или отправьте '-' чтобы пропустить)</i>",
-                parse_mode="HTML",
+            # Сохраняем распознанную дату и причину (None - причина не нужна)
+            await state.update_data(
+                new_scheduled_time=user_friendly,
+                reschedule_reason=None
             )
+
+            # Сразу переходим к подтверждению
+            await show_reschedule_confirmation(message, state)
             return
         else:
             # Не смогли распознать дату - переспрашиваем с примерами
@@ -1738,17 +1734,13 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
         return
 
     # Если не цифра - сохраняем как есть (текстовая инструкция)
-    await state.update_data(new_scheduled_time=new_time)
-
-    # Переходим к запросу причины
-    await state.set_state(RescheduleOrderStates.enter_reason)
-
-    await message.reply(
-        f"✅ Новое время: <b>{new_time}</b>\n\n"
-        f"Укажите причину переноса:\n"
-        f"<i>(или отправьте '-' чтобы пропустить)</i>",
-        parse_mode="HTML",
+    await state.update_data(
+        new_scheduled_time=new_time,
+        reschedule_reason=None
     )
+
+    # Сразу переходим к подтверждению
+    await show_reschedule_confirmation(message, state)
 
 
 @router.message(RescheduleOrderStates.enter_reason)
@@ -1845,7 +1837,17 @@ async def handle_reschedule_confirm(message: Message, state: FSMContext):
     if message.text == "✅ Подтвердить перенос":
         await confirm_reschedule_order(message, state)
     elif message.text == "❌ Отмена":
-        await message.answer("❌ Перенос заявки отменен.")
+        from app.keyboards.reply import get_main_menu_keyboard
+        # Определяем роль пользователя (может быть ADMIN или MASTER)
+        from app.database import Database
+        db_role = Database()
+        await db_role.connect()
+        try:
+            user = await db_role.get_user_by_telegram_id(message.from_user.id)
+            user_role = user.role if user else "MASTER"
+        finally:
+            await db_role.disconnect()
+        await message.answer("❌ Перенос заявки отменен.", reply_markup=get_main_menu_keyboard(user_role))
         await state.clear()
     else:
         # Если введен текст, обрабатываем как изменение времени
@@ -1918,7 +1920,12 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
 
         result_text += "\n\n<i>Диспетчер уведомлен</i>"
 
-        await message.reply(result_text, parse_mode="HTML")
+        # Убираем клавиатуру после подтверждения и возвращаем главное меню
+        from app.keyboards.reply import get_main_menu_keyboard
+        # Определяем роль пользователя (может быть ADMIN или MASTER)
+        user = await db.get_user_by_telegram_id(message.from_user.id)
+        user_role = user.role if user else "MASTER"
+        await message.answer(result_text, parse_mode="HTML", reply_markup=get_main_menu_keyboard(user_role))
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
