@@ -66,7 +66,8 @@ class EquipmentType:
     """Типы техники"""
 
     WASHING_MACHINE = "Стиральные машины"
-    OVEN = "Духовой шкаф"
+    DRYER = "Сушильные машины"
+    OVEN = "Духовые шкафы / Варочные панели"
     DISHWASHER = "Посудомоечная машина"
     COFFEE_MACHINE = "Кофе машина"
     PLUMBING = "Сантехника"
@@ -79,6 +80,7 @@ class EquipmentType:
         """Список всех типов техники"""
         return [
             cls.WASHING_MACHINE,
+            cls.DRYER,
             cls.OVEN,
             cls.DISHWASHER,
             cls.COFFEE_MACHINE,
