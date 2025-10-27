@@ -67,7 +67,7 @@ class EquipmentType:
 
     WASHING_MACHINE = "Стиральные машины"
     DRYER = "Сушильные машины"
-    OVEN = "Духовые шкафы / Варочные панели"
+    OVEN = "Духовые шкафы/Варочные"
     DISHWASHER = "Посудомоечная машина"
     COFFEE_MACHINE = "Кофе машина"
     PLUMBING = "Сантехника"
