@@ -68,16 +68,24 @@ def _preprocess_time_text(text: str) -> str:
         except (ValueError, IndexError):
             return f"после {time_part}"
 
-    # Обработка фразы "до" + время (например, "до 16:00")
-    before_time_pattern = r"^до\s+(\d{1,2}:\d{2})$"
+    # Обработка фразы "до" + время (например, "до 16:00", "до 12")
+    before_time_pattern = r"^до\s+(\d{1,2})(?::\d{2})?$"
     if re.match(before_time_pattern, text_lower):
-        time_part = re.match(before_time_pattern, text_lower).group(1)
-        # Преобразуем "до 16:00" в интервал "с текущего_времени до 16:00"
+        time_match = re.match(before_time_pattern, text_lower)
+        time_part = time_match.group(1)
+        # Преобразуем "до 16:00" или "до 12" в интервал "с текущего_времени до указанного"
         from app.utils.helpers import MOSCOW_TZ, get_now
         try:
-            time_parts = time_part.split(":")
-            end_hour = int(time_parts[0])
-            end_minute = int(time_parts[1])
+            # Проверяем есть ли минуты
+            if ":" in text_lower:
+                time_parts = time_part.split(":")
+                end_hour = int(time_parts[0])
+                end_minute = int(time_parts[1])
+            else:
+                # "до 12" - без двоеточия
+                end_hour = int(time_part)
+                end_minute = 0
+                
             now = get_now().replace(tzinfo=MOSCOW_TZ)
             current_hour = now.hour
             current_minute = now.minute
@@ -89,7 +97,7 @@ def _preprocess_time_text(text: str) -> str:
                 return f"завтра с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
             return f"с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
         except (ValueError, IndexError):
-            return f"до {time_part}"
+            return text  # Возвращаем как есть
 
     # Обработка интервалов времени (например, "с 10:00 до 16:00", "10-16", "с 14 до 18")
     interval_pattern = r"^с\s+(\d{1,2})(?::\d{2})?\s+до\s+(\d{1,2})(?::\d{2})?$"
@@ -510,11 +518,12 @@ def should_parse_as_date(text: str) -> bool:
 
     # Проверка на интервалы: "с 10 до 16", "до 16:00", "после 18:00"
     # Также "с 12" (начало интервала) - это тоже интервал
+    # И "до 12" (конец интервала) - тоже интервал
     interval_patterns = [
         r"^с\s+\d{1,2}(?::\d{2})?\s+до\s+\d{1,2}(?::\d{2})?$",  # "с 10:00 до 16:00"
         r"^с\s+\d{1,2}(?::\d{2})?$",  # "с 12" - начало интервала
-        r"^до\s+\d{1,2}:\d{2}$",  # "до 16:00"
-        r"^после\s+\d{1,2}:\d{2}$",  # "после 18:00"
+        r"^до\s+\d{1,2}(?::\d{2})?$",  # "до 16:00" или "до 12"
+        r"^после\s+\d{1,2}(?::\d{2})?$",  # "после 18:00" или "после 12"
         r"^\d{1,2}(?:-\s*|\s+до\s+)\d{1,2}$",  # "10-16"
     ]
     
