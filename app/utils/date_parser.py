@@ -68,20 +68,18 @@ def _preprocess_time_text(text: str) -> str:
             return f"после {time_part}"
 
     # Обработка фразы "до" + время (например, "до 16:00", "до 12")
-    before_time_pattern = r"^до\s+(\d{1,2})(?::\d{2})?$"
+    before_time_pattern = r"^до\s+(\d{1,2})(?::(\d{2}))?$"
     if re.match(before_time_pattern, text_lower):
         time_match = re.match(before_time_pattern, text_lower)
-        time_part = time_match.group(1)
+        end_hour = int(time_match.group(1))
+        end_minute_str = time_match.group(2)
         # Преобразуем "до 16:00" или "до 12" в интервал "с текущего_времени до указанного"
         try:
             # Проверяем есть ли минуты
-            if ":" in text_lower:
-                time_parts = time_part.split(":")
-                end_hour = int(time_parts[0])
-                end_minute = int(time_parts[1])
+            if end_minute_str:
+                end_minute = int(end_minute_str)
             else:
                 # "до 12" - без двоеточия
-                end_hour = int(time_part)
                 end_minute = 0
                 
             now = get_now().replace(tzinfo=MOSCOW_TZ)
