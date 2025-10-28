@@ -654,12 +654,18 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
             parsed_dt, user_friendly_text = parse_natural_datetime(scheduled_time, validate=True)
             logger.info(f"[SCHEDULED_TIME] Parsed result: {parsed_dt}, user_friendly: {user_friendly_text}")
 
-            if parsed_dt:
-                # Проверяем валидацию (может быть warning)
-                validation = validate_parsed_datetime(parsed_dt, scheduled_time)
+            # Проверяем, является ли user_friendly интервалом
+            is_interval = user_friendly_text and "с" in user_friendly_text and "до" in user_friendly_text
+            
+            if parsed_dt or is_interval:
+                # Проверяем валидацию (может быть warning) только если есть parsed_dt
+                if parsed_dt:
+                    validation = validate_parsed_datetime(parsed_dt, scheduled_time)
+                else:
+                    validation = {"is_valid": True, "error": None, "warning": None}
 
                 # Проверяем, является ли user_friendly интервалом
-                if user_friendly_text and "с" in user_friendly_text and "до" in user_friendly_text:
+                if is_interval:
                     # Это интервал времени - сохраняем его как есть
                     formatted_time = user_friendly_text
                     user_friendly = user_friendly_text
