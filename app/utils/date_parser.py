@@ -737,7 +737,7 @@ def should_parse_as_date(text: str) -> bool:
 
     # Нормализуем регистр для корректной проверки
     text_normalized = text
-    if text.startswith("До") or text.startswith("ДО"):
+    if text.startswith(("До", "ДО")):
         text_normalized = "до" + text[2:]
     elif text.startswith(("В ", "В")):
         text_normalized = "в" + text[1:]

@@ -244,12 +244,13 @@ class TaskScheduler:
             try:
                 target_date = datetime(year, month, day).date()
             except ValueError:
-                pass  # Неверная дата
+                return False  # Неверная дата
 
         # Создаем целевое время визита
         try:
             scheduled_datetime = datetime.combine(
-                target_date, datetime.min.time().replace(hour=hour, minute=minute)
+                target_date, datetime.min.time().replace(hour=hour, minute=minute),
+                tzinfo=MOSCOW_TZ
             )
             # Добавляем timezone как у now
             scheduled_datetime = scheduled_datetime.replace(tzinfo=now.tzinfo)
@@ -272,7 +273,9 @@ class TaskScheduler:
             import asyncio
 
             try:
-                asyncio.create_task(self._send_scheduled_time_reminder(order, scheduled_datetime))
+                task = asyncio.create_task(self._send_scheduled_time_reminder(order, scheduled_datetime))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
             except Exception as e:
                 logger.error(f"Failed to create reminder task: {e}")
             return True
@@ -993,7 +996,7 @@ class TaskScheduler:
                 admins = await self.db.get_users_by_role("ADMIN")
                 error_text = (
                     f"❌ <b>Ошибка создания ежедневной таблицы</b>\n\n"
-                    f"📅 Дата: {yesterday.strftime('%d.%m.%Y')}\n"
+                    f"📅 Дата: {(get_now() - timedelta(days=1)).strftime('%d.%m.%Y')}\n"
                     f"🔍 Ошибка: {e!s}"
                 )
 
