@@ -119,8 +119,6 @@ def _preprocess_time_text(text: str) -> str:
     time_only_pattern = r"^(\d{1,2}:\d{2})$"
     if re.match(time_only_pattern, text_lower):
         # Проверяем, не прошло ли уже это время сегодня
-        from app.utils.helpers import MOSCOW_TZ, get_now
-
         try:
             # Парсим время
             time_parts = text_lower.split(":")
@@ -302,7 +300,6 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         start_hour = int(match.group(1))
         start_minute = int(match.group(2)) if match.group(2) else 0
         
-        from app.utils.helpers import MOSCOW_TZ, get_now
         now = get_now().replace(tzinfo=MOSCOW_TZ)
         target_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         # Если время уже прошло сегодня, ставим завтра
@@ -319,7 +316,6 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         end_hour = int(match.group(3))
         end_minute = int(match.group(4)) if match.group(4) else 0
         
-        from app.utils.helpers import MOSCOW_TZ, get_now
         now = get_now().replace(tzinfo=MOSCOW_TZ)
         target_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         # Если время уже прошло сегодня, ставим завтра
@@ -333,7 +329,6 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         match = re.match(interval_simple, text_lower)
         start_hour = int(match.group(1))
         end_hour = int(match.group(2))
-        from app.utils.helpers import MOSCOW_TZ, get_now
         now = get_now().replace(tzinfo=MOSCOW_TZ)
         target_time = now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
         # Если время уже прошло сегодня, ставим завтра
