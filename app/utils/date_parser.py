@@ -49,44 +49,47 @@ def _preprocess_time_text(text: str) -> str:
     after_time_pattern = r"^после\s+(\d{1,2}:\d{2})$"
     if re.match(after_time_pattern, text_lower):
         time_part = re.match(after_time_pattern, text_lower).group(1)
-        # Преобразуем "после 16:00" в "сегодня в 16:00" или "завтра в 16:00"
+        # Преобразуем "после 16:00" в интервал "с 16:00 до 17:00" (+1 час)
         from app.utils.helpers import MOSCOW_TZ, get_now
         try:
             time_parts = time_part.split(":")
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
+            start_hour = int(time_parts[0])
+            start_minute = int(time_parts[1])
+            # Добавляем 1 час для окончания интервала
+            end_hour = start_hour + 1
+            if end_hour >= 24:
+                end_hour = 0
             now = get_now().replace(tzinfo=MOSCOW_TZ)
-            today_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if today_time <= now:
-                return f"завтра в {time_part}"
-            return f"сегодня в {time_part}"
+            start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+            # Если время прошло сегодня, ставим на завтра
+            if start_time <= now:
+                return f"завтра с {start_hour:02d}:{start_minute:02d} до {end_hour:02d}:00"
+            return f"с {start_hour:02d}:{start_minute:02d} до {end_hour:02d}:00"
         except (ValueError, IndexError):
-            return f"сегодня в {time_part}"
+            return f"после {time_part}"
 
     # Обработка фразы "до" + время (например, "до 16:00")
     before_time_pattern = r"^до\s+(\d{1,2}:\d{2})$"
     if re.match(before_time_pattern, text_lower):
         time_part = re.match(before_time_pattern, text_lower).group(1)
-        # Преобразуем "до 16:00" в "сегодня в 14:00" (за час до указанного времени)
+        # Преобразуем "до 16:00" в интервал "с текущего_времени до 16:00"
         from app.utils.helpers import MOSCOW_TZ, get_now
         try:
             time_parts = time_part.split(":")
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
+            end_hour = int(time_parts[0])
+            end_minute = int(time_parts[1])
             now = get_now().replace(tzinfo=MOSCOW_TZ)
-            target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            # Для "до 16:00" устанавливаем время примерно за час до указанного
-            # Например, "до 16:00" → "сегодня в 15:00"
-            if hour > 0:
-                suggested_hour = hour - 1
-            else:
-                suggested_hour = 23  # Если до 00:00, то в 23:00 предыдущего дня
-            # Если время уже прошло сегодня, ставим завтра
-            if target_time <= now:
-                return f"завтра в {suggested_hour:02d}:00"
-            return f"сегодня в {suggested_hour:02d}:00"
+            current_hour = now.hour
+            current_minute = now.minute
+            # Создаем интервал от текущего времени до указанного
+            # Если текущее время уже после указанного, ставим на завтра
+            end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+            if end_time <= now:
+                # Если время прошло сегодня, интервал на завтра
+                return f"завтра с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
+            return f"с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
         except (ValueError, IndexError):
-            return f"сегодня в 12:00"  # Fallback
+            return f"до {time_part}"
 
     # Обработка интервалов времени (например, "с 10:00 до 16:00", "10-16", "с 14 до 18")
     interval_pattern = r"^с\s+(\d{1,2})(?::\d{2})?\s+до\s+(\d{1,2})(?::\d{2})?$"
