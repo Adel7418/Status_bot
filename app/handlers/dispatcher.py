@@ -651,16 +651,22 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
         # 🆕 АВТООПРЕДЕЛЕНИЕ ДАТЫ из естественного языка
         if should_parse_as_date(scheduled_time):
             logger.info(f"[SCHEDULED_TIME] Attempting to parse date: '{scheduled_time}'")
-            parsed_dt, _ = parse_natural_datetime(scheduled_time, validate=True)
-            logger.info(f"[SCHEDULED_TIME] Parsed result: {parsed_dt}")
+            parsed_dt, user_friendly_text = parse_natural_datetime(scheduled_time, validate=True)
+            logger.info(f"[SCHEDULED_TIME] Parsed result: {parsed_dt}, user_friendly: {user_friendly_text}")
 
             if parsed_dt:
                 # Проверяем валидацию (может быть warning)
                 validation = validate_parsed_datetime(parsed_dt, scheduled_time)
 
-                # Успешно распознали дату - форматируем для хранения
-                formatted_time = format_datetime_for_storage(parsed_dt, scheduled_time)
-                user_friendly = format_datetime_user_friendly(parsed_dt, scheduled_time)
+                # Проверяем, является ли user_friendly интервалом
+                if user_friendly_text and "с" in user_friendly_text and "до" in user_friendly_text:
+                    # Это интервал времени - сохраняем его как есть
+                    formatted_time = user_friendly_text
+                    user_friendly = user_friendly_text
+                else:
+                    # Обычная дата - форматируем как обычно
+                    formatted_time = format_datetime_for_storage(parsed_dt, scheduled_time)
+                    user_friendly = format_datetime_user_friendly(parsed_dt, scheduled_time)
 
                 # Формируем сообщение с предупреждением если есть
                 confirmation_text = f"✅ <b>Дата распознана:</b>\n\n{user_friendly}"

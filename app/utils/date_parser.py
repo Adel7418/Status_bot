@@ -282,21 +282,27 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     # 🔥 СПЕЦИАЛЬНАЯ ОБРАБОТКА ИНТЕРВАЛОВ
     # Проверяем интервалы "с 10:00 до 16:00", "10-16" и т.д.
     text_lower = text.lower()
-    interval_pattern = r"^с\s+(\d{1,2})(?::\d{2})?\s+до\s+(\d{1,2})(?::\d{2})?$"
+    
+    # Полный формат: "с 10:00 до 16:00", "с 14 до 18"
+    interval_pattern = r"^с\s+(\d{1,2})(?::(\d{2}))?\s+до\s+(\d{1,2})(?::(\d{2}))?$"
+    # Простой формат: "10-16", "10 до 16"
     interval_simple = r"^(\d{1,2})(?:-\s*|\s+до\s+)(\d{1,2})$"
     
     if re.match(interval_pattern, text_lower):
         match = re.match(interval_pattern, text_lower)
         start_hour = int(match.group(1))
-        end_hour = int(match.group(2))
+        start_minute = int(match.group(2)) if match.group(2) else 0
+        end_hour = int(match.group(3))
+        end_minute = int(match.group(4)) if match.group(4) else 0
+        
         from app.utils.helpers import MOSCOW_TZ, get_now
         now = get_now().replace(tzinfo=MOSCOW_TZ)
-        target_time = now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        target_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         # Если время уже прошло сегодня, ставим завтра
         if target_time <= now:
             target_time = target_time + timedelta(days=1)
-        # Возвращаем datetime и user_friendly текст
-        user_friendly = f"с {start_hour:02d}:00 до {end_hour:02d}:00"
+        # Возвращаем datetime и user_friendly текст с интервалом
+        user_friendly = f"с {start_hour:02d}:{start_minute:02d} до {end_hour:02d}:{end_minute:02d}"
         return target_time, user_friendly
     
     if re.match(interval_simple, text_lower):
