@@ -50,7 +50,6 @@ def _preprocess_time_text(text: str) -> str:
     if re.match(after_time_pattern, text_lower):
         time_part = re.match(after_time_pattern, text_lower).group(1)
         # Преобразуем "после 16:00" в интервал "с 16:00 до 17:00" (+1 час)
-        from app.utils.helpers import MOSCOW_TZ, get_now
         try:
             time_parts = time_part.split(":")
             start_hour = int(time_parts[0])
@@ -74,7 +73,6 @@ def _preprocess_time_text(text: str) -> str:
         time_match = re.match(before_time_pattern, text_lower)
         time_part = time_match.group(1)
         # Преобразуем "до 16:00" или "до 12" в интервал "с текущего_времени до указанного"
-        from app.utils.helpers import MOSCOW_TZ, get_now
         try:
             # Проверяем есть ли минуты
             if ":" in text_lower:
