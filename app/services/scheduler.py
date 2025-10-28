@@ -337,7 +337,26 @@ class TaskScheduler:
             # Отправляем уведомления администраторам
             if alerts:
                 for admin_id in Config.ADMIN_IDS:
-                    text = f"<b>Мастер слишком долго на адресе</b> - {len(alerts)} заявок\n\n"
+                    # Группируем заявки по статусам для более точного заголовка
+                    accepted_orders = [
+                        a for a in alerts if a["order"].status == OrderStatus.ACCEPTED
+                    ]
+                    onsite_orders = [a for a in alerts if a["order"].status == OrderStatus.ONSITE]
+                    other_orders = [
+                        a
+                        for a in alerts
+                        if a["order"].status not in [OrderStatus.ACCEPTED, OrderStatus.ONSITE]
+                    ]
+
+                    # Определяем заголовок в зависимости от типов заявок
+                    if onsite_orders and not accepted_orders and not other_orders:
+                        text = (
+                            f"<b>⚠️ Мастер слишком долго на объекте</b> - {len(alerts)} заявок\n\n"
+                        )
+                    elif accepted_orders and not onsite_orders and not other_orders:
+                        text = f"<b>🚗 Мастер принял заявку, но не выехал к клиенту</b> - {len(alerts)} заявок\n\n"
+                    else:
+                        text = f"<b>⏰ Заявки требуют действий</b> - {len(alerts)} заявок\n\n"
 
                     for alert in alerts[:5]:  # Показываем первые 5
                         order = alert["order"]
@@ -345,10 +364,29 @@ class TaskScheduler:
 
                         status_name = OrderStatus.get_status_name(order.status)
                         master_info = f" - {order.master_name}" if order.master_name else ""
-                        text += f"📋 #{order.id} - {status_name} ({hours}ч){master_info}\n"
+
+                        # Добавляем подсказку в зависимости от статуса
+                        if order.status == OrderStatus.ASSIGNED:
+                            hint = " → Мастеру нужно принять заявку"
+                        elif order.status == OrderStatus.ACCEPTED:
+                            hint = " → Мастеру нужно выехать к клиенту"
+                        elif order.status == OrderStatus.ONSITE:
+                            hint = " → Мастеру нужно завершить работу"
+                        else:
+                            hint = ""
+
+                        text += f"📋 #{order.id} - {status_name} ({hours}ч){master_info}{hint}\n"
 
                     if len(alerts) > 5:
                         text += f"<i>И еще {len(alerts) - 5} заявок...</i>"
+
+                    # Добавляем общую подсказку в конце
+                    if onsite_orders and not accepted_orders and not other_orders:
+                        text += "\n<i>💡 Проверьте, не застрял ли мастер на объекте</i>"
+                    elif accepted_orders and not onsite_orders and not other_orders:
+                        text += "\n<i>💡 Свяжитесь с мастером - возможно, он забыл выехать</i>"
+                    else:
+                        text += "\n<i>💡 Проверьте статус заявок и действия мастеров</i>"
 
                     await safe_send_message(
                         self.bot, admin_id, text, parse_mode="HTML", max_attempts=5
