@@ -63,6 +63,31 @@ def _preprocess_time_text(text: str) -> str:
         except (ValueError, IndexError):
             return f"сегодня в {time_part}"
 
+    # Обработка фразы "до" + время (например, "до 16:00")
+    before_time_pattern = r"^до\s+(\d{1,2}:\d{2})$"
+    if re.match(before_time_pattern, text_lower):
+        time_part = re.match(before_time_pattern, text_lower).group(1)
+        # Преобразуем "до 16:00" в "сегодня в 14:00" (за час до указанного времени)
+        from app.utils.helpers import MOSCOW_TZ, get_now
+        try:
+            time_parts = time_part.split(":")
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            now = get_now().replace(tzinfo=MOSCOW_TZ)
+            target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            # Для "до 16:00" устанавливаем время примерно за час до указанного
+            # Например, "до 16:00" → "сегодня в 15:00"
+            if hour > 0:
+                suggested_hour = hour - 1
+            else:
+                suggested_hour = 23  # Если до 00:00, то в 23:00 предыдущего дня
+            # Если время уже прошло сегодня, ставим завтра
+            if target_time <= now:
+                return f"завтра в {suggested_hour:02d}:00"
+            return f"сегодня в {suggested_hour:02d}:00"
+        except (ValueError, IndexError):
+            return f"сегодня в 12:00"  # Fallback
+
     # Обработка случая, когда введено только время (например, "16:00")
     time_only_pattern = r"^(\d{1,2}:\d{2})$"
     if re.match(time_only_pattern, text_lower):
