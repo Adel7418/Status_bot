@@ -45,6 +45,24 @@ def _preprocess_time_text(text: str) -> str:
     """
     text_lower = text.lower()
 
+    # Обработка фразы "после" + время (например, "после 16:00")
+    after_time_pattern = r"^после\s+(\d{1,2}:\d{2})$"
+    if re.match(after_time_pattern, text_lower):
+        time_part = re.match(after_time_pattern, text_lower).group(1)
+        # Преобразуем "после 16:00" в "сегодня в 16:00" или "завтра в 16:00"
+        from app.utils.helpers import MOSCOW_TZ, get_now
+        try:
+            time_parts = time_part.split(":")
+            hour = int(time_parts[0])
+            minute = int(time_parts[1])
+            now = get_now().replace(tzinfo=MOSCOW_TZ)
+            today_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if today_time <= now:
+                return f"завтра в {time_part}"
+            return f"сегодня в {time_part}"
+        except (ValueError, IndexError):
+            return f"сегодня в {time_part}"
+
     # Обработка случая, когда введено только время (например, "16:00")
     time_only_pattern = r"^(\d{1,2}:\d{2})$"
     if re.match(time_only_pattern, text_lower):
