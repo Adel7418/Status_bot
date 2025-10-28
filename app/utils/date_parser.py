@@ -287,6 +287,24 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     interval_pattern = r"^с\s+(\d{1,2})(?::(\d{2}))?\s+до\s+(\d{1,2})(?::(\d{2}))?$"
     # Простой формат: "10-16", "10 до 16"
     interval_simple = r"^(\d{1,2})(?:-\s*|\s+до\s+)(\d{1,2})$"
+    # Начало интервала: "с 12"
+    interval_start_only = r"^с\s+(\d{1,2})(?::(\d{2}))?$"
+    
+    # Обработка "с 12" (начало интервала без конца)
+    if re.match(interval_start_only, text_lower):
+        match = re.match(interval_start_only, text_lower)
+        start_hour = int(match.group(1))
+        start_minute = int(match.group(2)) if match.group(2) else 0
+        
+        from app.utils.helpers import MOSCOW_TZ, get_now
+        now = get_now().replace(tzinfo=MOSCOW_TZ)
+        target_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        # Если время уже прошло сегодня, ставим завтра
+        if target_time <= now:
+            target_time = target_time + timedelta(days=1)
+        # Возвращаем datetime и user_friendly текст (только начало интервала)
+        user_friendly = f"с {start_hour:02d}:{start_minute:02d}"
+        return target_time, user_friendly
     
     if re.match(interval_pattern, text_lower):
         match = re.match(interval_pattern, text_lower)
@@ -489,6 +507,20 @@ def should_parse_as_date(text: str) -> bool:
     has_time_format = re.search(r"^\d{1,2}:\d{2}$", text_lower)
     if has_time_format:
         return True
+
+    # Проверка на интервалы: "с 10 до 16", "до 16:00", "после 18:00"
+    # Также "с 12" (начало интервала) - это тоже интервал
+    interval_patterns = [
+        r"^с\s+\d{1,2}(?::\d{2})?\s+до\s+\d{1,2}(?::\d{2})?$",  # "с 10:00 до 16:00"
+        r"^с\s+\d{1,2}(?::\d{2})?$",  # "с 12" - начало интервала
+        r"^до\s+\d{1,2}:\d{2}$",  # "до 16:00"
+        r"^после\s+\d{1,2}:\d{2}$",  # "после 18:00"
+        r"^\d{1,2}(?:-\s*|\s+до\s+)\d{1,2}$",  # "10-16"
+    ]
+    
+    for pattern in interval_patterns:
+        if re.match(pattern, text_lower):
+            return True
 
     # Если текст состоит только из цифр (1-2 цифры) - не парсим как дату
     if re.match(r"^\d{1,2}$", text_lower):
