@@ -34,6 +34,10 @@ class TaskScheduler:
         self.bot = bot
         self.scheduler = AsyncIOScheduler()
         self.db = db
+        # Трекер фоновых задач и отправленных напоминаний, чтобы избегать дубликатов
+        self._background_tasks = set()
+        # Ключ: (order_id, date) — напоминание за 2 часа уже поставлено/отправлено в этот день
+        self._sent_scheduled_reminders = set()
 
     async def start(self):
         """Запуск планировщика"""
@@ -249,8 +253,7 @@ class TaskScheduler:
         # Создаем целевое время визита
         try:
             scheduled_datetime = datetime.combine(
-                target_date, datetime.min.time().replace(hour=hour, minute=minute),
-                tzinfo=MOSCOW_TZ
+                target_date, datetime.min.time().replace(hour=hour, minute=minute), tzinfo=MOSCOW_TZ
             )
             # Добавляем timezone как у now
             scheduled_datetime = scheduled_datetime.replace(tzinfo=now.tzinfo)
@@ -273,7 +276,17 @@ class TaskScheduler:
             import asyncio
 
             try:
-                task = asyncio.create_task(self._send_scheduled_time_reminder(order, scheduled_datetime))
+                # Дедупликация: не отправляем больше одного напоминания для одной заявки в одну дату
+                reminder_key = (order.id, scheduled_datetime.date())
+                if reminder_key in self._sent_scheduled_reminders:
+                    return True
+
+                # Помечаем как запланированное до фактической отправки, чтобы избежать гонок между задачами
+                self._sent_scheduled_reminders.add(reminder_key)
+
+                task = asyncio.create_task(
+                    self._send_scheduled_time_reminder(order, scheduled_datetime)
+                )
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
             except Exception as e:
