@@ -15,7 +15,6 @@ services:
     container_name: telegram_repair_bot_city1
     restart: always
     env_file:
-      - ../.env                      # общий (необязательно)
       - ../env.city1                 # специфичный для city1
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
@@ -51,7 +50,6 @@ services:
     container_name: telegram_repair_bot_city2
     restart: always
     env_file:
-      - ../.env                      # общий (необязательно)
       - ../env.city2                 # специфичный для city2
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
