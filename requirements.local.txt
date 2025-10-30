@@ -13,7 +13,6 @@ aiofiles==24.1.0
 
 # SQLAlchemy ORM
 sqlalchemy[asyncio]==2.0.39
-asyncpg==0.29.0  # PostgreSQL async driver
 
 # Task Scheduler
 APScheduler==3.11.0  # Stable version (4.x имеет breaking changes)

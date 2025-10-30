@@ -126,6 +126,79 @@ prod-env:  ## Показать переменные окружения конт�
 	@docker exec telegram_repair_bot_prod env | grep -E "BOT_TOKEN|LOG_LEVEL|DEV_MODE|USE_ORM|ADMIN_IDS|DATABASE_PATH|REDIS_URL" | sort
 
 # ========================================
+# MULTIBOT (Docker: два бота + Redis)
+# ========================================
+
+MB_COMPOSE = docker/docker-compose.multibot.yml
+
+mb-prepare:  ## Создать каталоги для данных/логов/бэкапов и Redis
+	@mkdir -p data/city1 data/city2 logs/city1 logs/city2 backups/city1 backups/city2 data/redis
+	@echo "✅ Каталоги подготовлены: data/city1, data/city2, logs/*, backups/*, data/redis"
+
+mb-env-fix:  ## Закомментировать первую строку в env.city1/env.city2 (если там заголовок)
+	@sed -i '1s/^/# /' env.city1 || true
+	@sed -i '1s/^/# /' env.city2 || true
+	@echo "✅ Первая строка в env.city1/env.city2 приведена к комментарию"
+
+mb-start:  ## 🚀 Запустить оба бота и Redis (мультибот)
+	@echo "🚀 Запуск multibot..."
+	@docker compose -f $(MB_COMPOSE) up -d --build
+	@echo "✅ Multibot запущен!"
+	@echo "📋 Логи: make mb-logs-city1 | make mb-logs-city2"
+
+mb-stop:  ## Остановить multibot
+	@echo "🛑 Остановка multibot..."
+	@docker compose -f $(MB_COMPOSE) down
+	@echo "✅ Остановлен"
+
+mb-restart:  ## Перезапустить multibot
+	@echo "🔄 Перезапуск multibot..."
+	@docker compose -f $(MB_COMPOSE) up -d --build
+	@echo "✅ Перезапущен"
+
+mb-status:  ## Статус контейнеров multibot
+	@docker compose -f $(MB_COMPOSE) ps
+
+mb-logs-city1:  ## Логи бота city1
+	@docker compose -f $(MB_COMPOSE) logs -f --tail=80 bot_city1
+
+mb-logs-city2:  ## Логи бота city2
+	@docker compose -f $(MB_COMPOSE) logs -f --tail=80 bot_city2
+
+mb-migrate-city1:  ## Применить миграции для БД city1
+	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 alembic upgrade head
+
+mb-migrate-city2:  ## Применить миграции для БД city2
+	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 alembic upgrade head
+
+mb-update:  ## Обновить код и пересобрать multibot
+	@echo "🔄 Обновление кода и пересборка multibot..."
+	@git pull
+	@docker compose -f $(MB_COMPOSE) up -d --build
+	@echo "✅ Обновлено и запущено!"
+	@docker compose -f $(MB_COMPOSE) ps
+
+mb-update-city1:  ## Обновить код и пересобрать только bot_city1
+	@echo "🔄 Обновление кода и пересборка bot_city1..."
+	@git pull
+	@docker compose -f $(MB_COMPOSE) up -d --build bot_city1
+	@echo "✅ bot_city1 обновлён и запущен!"
+
+mb-update-city2:  ## Обновить код и пересобрать только bot_city2
+	@echo "🔄 Обновление кода и пересборка bot_city2..."
+	@git pull
+	@docker compose -f $(MB_COMPOSE) up -d --build bot_city2
+	@echo "✅ bot_city2 обновлён и запущен!"
+
+mb-restart-city1:  ## Перезапустить только bot_city1 (без пересборки)
+	@docker compose -f $(MB_COMPOSE) restart bot_city1
+	@echo "✅ bot_city1 перезапущен"
+
+mb-restart-city2:  ## Перезапустить только bot_city2 (без пересборки)
+	@docker compose -f $(MB_COMPOSE) restart bot_city2
+	@echo "✅ bot_city2 перезапущен"
+
+# ========================================
 # GIT SHORTCUTS
 # ========================================
 
