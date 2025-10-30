@@ -411,49 +411,21 @@ async def callback_group_complete_order(
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Если админ действует от имени мастера, нужно установить состояние для МАСТЕРА, а не админа
-        # Для этого создаем FSM контекст для мастера
-        if is_admin_acting:
-            from aiogram.fsm.context import FSMContext
-            from aiogram.fsm.storage.base import StorageKey
+        # Устанавливаем состояние ТОМУ, КТО инициировал процесс
+        # Если админ инициировал завершение, пишем acting_as_master_id, чтобы обработчики знали за кого действовать
+        await state.update_data(
+            order_id=order_id,
+            group_chat_id=callback.message.chat.id,
+            group_message_id=callback.message.message_id,
+            acting_as_master_id=master.telegram_id if is_admin_acting else None,
+        )
 
-            # Создаем ключ для состояния мастера в этом чате
-            master_storage_key = StorageKey(
-                bot_id=callback.bot.id, chat_id=callback.message.chat.id, user_id=master.telegram_id
-            )
+        from app.states import CompleteOrderStates
 
-            # Получаем FSM контекст для мастера
-            master_state = FSMContext(storage=state.storage, key=master_storage_key)
-
-            # Устанавливаем состояние и данные для мастера
-            await master_state.update_data(
-                order_id=order_id,
-                group_chat_id=callback.message.chat.id,
-                group_message_id=callback.message.message_id,
-                acting_as_master_id=None,  # Мастер действует от своего имени
-            )
-
-            from app.states import CompleteOrderStates
-
-            await master_state.set_state(CompleteOrderStates.enter_total_amount)
-
-            # Также очищаем состояние админа, если оно было
-            await state.clear()
-        else:
-            # Обычный мастер - сохраняем для него
-            await state.update_data(
-                order_id=order_id,
-                group_chat_id=callback.message.chat.id,
-                group_message_id=callback.message.message_id,
-                acting_as_master_id=None,
-            )
-
-            from app.states import CompleteOrderStates
-
-            await state.set_state(CompleteOrderStates.enter_total_amount)
-            logger.info(
-                f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {callback.from_user.id} in chat {callback.message.chat.id}"
-            )
+        await state.set_state(CompleteOrderStates.enter_total_amount)
+        logger.info(
+            f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {callback.from_user.id} in chat {callback.message.chat.id} (acting_as_master_id={master.telegram_id if is_admin_acting else 'self'})"
+        )
 
         # Запрашиваем сумму прямо в группе
         await callback.message.reply(
