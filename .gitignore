@@ -38,6 +38,7 @@ env/
 .env.staging
 .env.production
 .env.local
+env.city*
 
 # Database
 *.db
