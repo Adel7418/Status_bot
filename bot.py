@@ -29,36 +29,48 @@ from app.services.scheduler import TaskScheduler
 from app.utils.sentry import init_sentry
 
 
-# Создаем директорию для логов если не существует
-Path("logs").mkdir(exist_ok=True)
+"""
+Гибкая настройка логирования:
+- Пытаемся писать в файл logs/bot.log с ротацией
+- Если нет прав на запись (напр., bind mount в Docker), падаем обратно на вывод в консоль
+  чтобы контейнер не падал с PermissionError
+"""
 
-# Настройка логирования с ротацией
+# Настройка форматтера
 log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-# Rotating file handler (макс 10MB, хранить 5 файлов)
-file_handler = RotatingFileHandler(
-    "logs/bot.log",
-    maxBytes=10 * 1024 * 1024,  # 10 MB
-    backupCount=5,
-    encoding="utf-8",
-)
-file_handler.setFormatter(log_formatter)
-
-# Console handler
+# Готовим console handler заранее
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(log_formatter)
-# Устанавливаем кодировку UTF-8 для консоли
 if hasattr(console_handler.stream, "reconfigure"):
     console_handler.stream.reconfigure(encoding="utf-8")
 
-# Настройка root logger
-# Используем LOG_LEVEL из .env (по умолчанию INFO)
-log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
+handlers: list[logging.Handler] = [console_handler]
 
-logging.basicConfig(
-    level=log_level,
-    handlers=[file_handler, console_handler],
-)
+# Опционально включаем file handler, если возможно
+# Директория логов может быть переопределена через переменную окружения LOGS_DIR
+logs_dir = os.getenv("LOGS_DIR", "logs")
+log_file_path = Path(logs_dir) / "bot.log"
+try:
+    # Создаем директорию для логов если не существует
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_handler = RotatingFileHandler(
+        str(log_file_path),
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(log_formatter)
+    handlers.insert(0, file_handler)  # файл первым, затем консоль
+except (PermissionError, OSError) as e:
+    # Фикс: если нет прав на запись, продолжаем только с консолью
+    # Сообщение об этой проблеме попадет в stdout/stderr Docker'а
+    sys.stderr.write(f"[logging] WARNING: cannot use file logging at {log_file_path}: {e}\n")
+
+# Настройка root logger
+log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
+logging.basicConfig(level=log_level, handlers=handlers)
 
 logger = logging.getLogger(__name__)
 

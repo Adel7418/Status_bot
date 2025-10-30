@@ -24,7 +24,7 @@ services:
       - LC_ALL=C.UTF-8
     volumes:
       - ../data/city1:/app/data
-      - ../logs/city1:/app/logs
+      - ../logs/city1:/app/logs1
       - ../backups/city1:/app/backups
     depends_on:
       redis:
@@ -59,7 +59,7 @@ services:
       - LC_ALL=C.UTF-8
     volumes:
       - ../data/city2:/app/data
-      - ../logs/city2:/app/logs
+      - ../logs/city2:/app/logs2
       - ../backups/city2:/app/backups
     depends_on:
       redis:
