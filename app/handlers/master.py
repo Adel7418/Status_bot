@@ -1063,9 +1063,28 @@ async def process_total_amount(message: Message, state: FSMContext):
         )
         return
 
+    # Нормализация пользовательского ввода: удаляем пробелы/валюту/прочие символы, заменяем запятую на точку
+    raw_text = message.text.strip()
+    # Удаляем неразрывные пробелы и обычные пробелы
+    normalized = (
+        raw_text.replace("\u00A0", "").replace(" ", "")
+        .replace("₽", "").replace("р.", "").replace("р", "")
+        .replace("RUB", "").replace("rub", "")
+        .replace("\\", "")
+    )
+    # Разрешаем только цифры и разделители, остальные символы отбрасываем
+    allowed_chars = set("0123456789.,")
+    normalized = "".join(ch for ch in normalized if ch in allowed_chars)
+    # Заменяем запятые на точки (русский формат)
+    normalized = normalized.replace(",", ".")
+    # Если осталось больше одной точки, пробуем убрать все, кроме последней (случай тысячных разделителей)
+    if normalized.count(".") > 1:
+        parts = normalized.split(".")
+        normalized = "".join(parts[:-1]).replace(".", "") + "." + parts[-1]
+
     # Проверяем, что введена корректная сумма
     try:
-        total_amount = float(message.text.replace(",", ".").strip())
+        total_amount = float(normalized)
         if total_amount < 0:
             await message.reply("❌ Сумма не может быть отрицательной.\n" "Попробуйте еще раз:")
             return
