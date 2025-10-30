@@ -64,7 +64,28 @@ class RealtimeActiveOrdersService:
             os.rename(report_path, new_path)
             logger.info(f"Таблица активных заказов создана: {new_path}")
         else:
-            logger.error(f"Не удалось создать таблицу активных заказов: {report_path}")
+            # Нет активных заявок или произошла тихая ошибка экспорта.
+            # Создаём пустую таблицу по умолчанию, чтобы downstream-логика не падала.
+            try:
+                from openpyxl import Workbook
+
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Сводка"
+                ws["A1"] = "АКТИВНЫЕ ЗАЯВКИ"
+                ws["A2"] = "Всего активных заявок: 0"
+
+                # Если файл уже существует, удаляем его
+                if os.path.exists(new_path):
+                    os.remove(new_path)
+                wb.save(new_path)
+                logger.info(
+                    f"Создана пустая таблица активных заказов (нет активных заявок): {new_path}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Не удалось создать таблицу активных заказов (fallback) {new_path}: {e}. Источник: {report_path}"
+                )
 
     async def update_table(self):
         """Обновляет текущую таблицу активных заказов"""
