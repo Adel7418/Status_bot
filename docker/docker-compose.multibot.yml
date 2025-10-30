@@ -1,0 +1,105 @@
+# ========================================
+# Docker Compose для двух ботов на одном сервере
+# Использование:
+#  - Запуск обоих:   docker-compose -f docker/docker-compose.multibot.yml up -d --build
+#  - Только city1:   docker-compose -f docker/docker-compose.multibot.yml up -d --build bot_city1
+#  - Только city2:   docker-compose -f docker/docker-compose.multibot.yml up -d --build bot_city2
+#  - Логи:           docker-compose -f docker/docker-compose.multibot.yml logs -f bot_city1
+# ========================================
+
+services:
+  bot_city1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: telegram_repair_bot_city1
+    restart: always
+    env_file:
+      - ../.env                      # общий (необязательно)
+      - ../env.city1                 # специфичный для city1
+    environment:
+      - DATABASE_PATH=/app/data/bot_database.db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONIOENCODING=utf-8
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+    volumes:
+      - ../data/city1:/app/data
+      - ../logs/city1:/app/logs
+      - ../backups/city1:/app/backups
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/data/bot_database.db') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  bot_city2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: telegram_repair_bot_city2
+    restart: always
+    env_file:
+      - ../.env                      # общий (необязательно)
+      - ../env.city2                 # специфичный для city2
+    environment:
+      - DATABASE_PATH=/app/data/bot_database.db
+      - REDIS_URL=redis://redis:6379/1   # отдельная БД Redis для второго бота
+      - PYTHONIOENCODING=utf-8
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+    volumes:
+      - ../data/city2:/app/data
+      - ../logs/city2:/app/logs
+      - ../backups/city2:/app/backups
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/data/bot_database.db') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_bot_redis_multibot
+    restart: always
+    volumes:
+      - ../data/redis:/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bot_network:
+    driver: bridge
