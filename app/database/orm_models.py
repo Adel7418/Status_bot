@@ -252,7 +252,7 @@ class Order(Base):
         Index("idx_orders_financial", "status", "total_amount"),
         Index("idx_orders_review", "has_review", "status"),
         CheckConstraint(
-            "status IN ('NEW', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'REFUSED')",
+            "status IN ('NEW', 'ASSIGNED', 'ACCEPTED', 'ONSITE', 'CLOSED', 'REFUSED', 'DR')",
             name="chk_orders_status",
         ),
         CheckConstraint(
