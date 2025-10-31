@@ -17,20 +17,27 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Исправление CHECK constraint для статусов заказов
-    
-    SQLite не поддерживает DROP CONSTRAINT напрямую, поэтому используем batch_alter_table.
+    """Исправление CHECK constraint для статусов заказов.
+
+    Если таблицы orders ещё нет (новая БД) — пропускаем.
+    Для SQLite используем batch_alter_table (алембик пересоздаст таблицу сам).
     """
-    # Используем batch_alter_table для SQLite - он пересоздаст таблицу автоматически
+    from sqlalchemy import inspect
+
+    bind = op.get_bind()
+    inspector = inspect(bind)
+
+    # Если таблицы нет, ничего не делаем
+    if not inspector.has_table('orders'):
+        return
+
+    # Обновляем constraint
     with op.batch_alter_table('orders', schema=None) as batch_op:
-        # Пытаемся удалить старый constraint (может не сработать, но попробуем)
         try:
             batch_op.drop_constraint('chk_orders_status', type_='check')
         except Exception:
-            # Игнорируем, если constraint уже удалён или его нет
             pass
-        
-        # Создаём новый constraint с правильными статусами
+
         batch_op.create_check_constraint(
             'chk_orders_status',
             "status IN ('NEW', 'ASSIGNED', 'ACCEPTED', 'ONSITE', 'CLOSED', 'REFUSED', 'DR')"
