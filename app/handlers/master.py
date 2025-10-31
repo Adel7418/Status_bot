@@ -633,12 +633,17 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
 
         await state.set_state(CompleteOrderStates.enter_total_amount)
 
-        await callback.message.edit_text(
+        # В ЛС открываем ForceReply, чтобы у пользователя автоматически включился режим ответа
+        from aiogram.types import ForceReply
+        prompt = await callback.message.answer(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
+            reply_markup=ForceReply(selective=True, input_field_placeholder="Введите сумму…"),
         )
+
+        await state.update_data(prompt_message_id=prompt.message_id)
 
         log_action(callback.from_user.id, "START_COMPLETE_ORDER", f"Order #{order_id}")
 

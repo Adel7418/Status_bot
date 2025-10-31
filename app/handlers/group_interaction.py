@@ -428,14 +428,20 @@ async def callback_group_complete_order(
             f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {callback.from_user.id} in chat {callback.message.chat.id} (acting_as_master_id={master.telegram_id if is_admin_acting else 'self'})"
         )
 
-        # Запрашиваем сумму прямо в группе
-        await callback.message.reply(
+        # Запрашиваем сумму прямо в группе и открываем интерфейс ответа (ForceReply)
+        from aiogram.types import ForceReply
+
+        prompt = await callback.message.reply(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
+            reply_markup=ForceReply(selective=True, input_field_placeholder="Введите сумму…"),
         )
+
+        # Сохраняем id сообщения-промпта для валидации реплая (если нужно)
+        await state.update_data(prompt_message_id=prompt.message_id)
 
         await callback.answer("Введите общую сумму заказа")
 
