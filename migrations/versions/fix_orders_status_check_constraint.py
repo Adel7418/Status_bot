@@ -17,16 +17,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Исправление CHECK constraint для статусов заказов"""
-    # Удаляем старый constraint
-    op.drop_constraint('chk_orders_status', 'orders', type_='check')
+    """Исправление CHECK constraint для статусов заказов
     
-    # Создаём новый с правильными статусами
-    op.create_check_constraint(
-        'chk_orders_status',
-        'orders',
-        "status IN ('NEW', 'ASSIGNED', 'ACCEPTED', 'ONSITE', 'CLOSED', 'REFUSED', 'DR')"
-    )
+    SQLite не поддерживает DROP CONSTRAINT напрямую, поэтому используем batch_alter_table.
+    """
+    # Используем batch_alter_table для SQLite - он пересоздаст таблицу автоматически
+    with op.batch_alter_table('orders', schema=None) as batch_op:
+        # Пытаемся удалить старый constraint (может не сработать, но попробуем)
+        try:
+            batch_op.drop_constraint('chk_orders_status', type_='check')
+        except Exception:
+            # Игнорируем, если constraint уже удалён или его нет
+            pass
+        
+        # Создаём новый constraint с правильными статусами
+        batch_op.create_check_constraint(
+            'chk_orders_status',
+            "status IN ('NEW', 'ASSIGNED', 'ACCEPTED', 'ONSITE', 'CLOSED', 'REFUSED', 'DR')"
+        )
 
 
 def downgrade() -> None:
