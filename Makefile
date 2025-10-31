@@ -165,11 +165,19 @@ mb-logs-city1:  ## Логи бота city1
 mb-logs-city2:  ## Логи бота city2
 	@docker compose -f $(MB_COMPOSE) logs -f --tail=80 bot_city2
 
-mb-migrate-city1:  ## Применить миграции для БД city1
+mb-migrate-city1:  ## Применить миграции для БД city1 (останавливает контейнер)
+	@echo "🔄 Применение миграций для city1..."
+	@docker compose -f $(MB_COMPOSE) stop bot_city1 || true
 	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 alembic upgrade head
+	@echo "✅ Миграции применены для city1"
+	@echo "💡 Запустите бота: make mb-start-city1"
 
-mb-migrate-city2:  ## Применить миграции для БД city2
+mb-migrate-city2:  ## Применить миграции для БД city2 (останавливает контейнер)
+	@echo "🔄 Применение миграций для city2..."
+	@docker compose -f $(MB_COMPOSE) stop bot_city2 || true
 	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 alembic upgrade head
+	@echo "✅ Миграции применены для city2"
+	@echo "💡 Запустите бота: make mb-start-city2"
 
 mb-update:  ## Обновить код и пересобрать multibot
 	@echo "🔄 Обновление кода и пересборка multibot..."
@@ -197,6 +205,26 @@ mb-restart-city1:  ## Перезапустить только bot_city1 (без 
 mb-restart-city2:  ## Перезапустить только bot_city2 (без пересборки)
 	@docker compose -f $(MB_COMPOSE) restart bot_city2
 	@echo "✅ bot_city2 перезапущен"
+
+mb-stop-city1:  ## Остановить только bot_city1
+	@echo "🛑 Остановка bot_city1..."
+	@docker compose -f $(MB_COMPOSE) stop bot_city1
+	@echo "✅ bot_city1 остановлен"
+
+mb-stop-city2:  ## Остановить только bot_city2
+	@echo "🛑 Остановка bot_city2..."
+	@docker compose -f $(MB_COMPOSE) stop bot_city2
+	@echo "✅ bot_city2 остановлен"
+
+mb-start-city1:  ## Запустить только bot_city1
+	@echo "🚀 Запуск bot_city1..."
+	@docker compose -f $(MB_COMPOSE) up -d --build bot_city1
+	@echo "✅ bot_city1 запущен"
+
+mb-start-city2:  ## Запустить только bot_city2
+	@echo "🚀 Запуск bot_city2..."
+	@docker compose -f $(MB_COMPOSE) up -d --build bot_city2
+	@echo "✅ bot_city2 запущен"
 
 # ========================================
 # GIT SHORTCUTS
