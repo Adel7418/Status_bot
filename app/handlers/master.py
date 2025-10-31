@@ -621,8 +621,12 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
-        # Сохраняем ID заказа в состоянии FSM
-        await state.update_data(order_id=order_id)
+        # Сохраняем контекст завершения в FSM
+        await state.update_data(
+            order_id=order_id,
+            initiator_user_id=callback.from_user.id,
+            allowed_chat_id=callback.message.chat.id,
+        )
 
         # Переходим в состояние запроса общей суммы
         from app.states import CompleteOrderStates
@@ -1054,6 +1058,27 @@ async def process_total_amount(message: Message, state: FSMContext):
     logger.info(
         f"[PROCESS_TOTAL_AMOUNT] Received message: '{message.text}' from user {message.from_user.id} in chat {message.chat.id}"
     )
+
+    # Проверяем авторизацию ввода суммы относительно сохранённого контекста
+    data_ctx = await state.get_data()
+    initiator_user_id = data_ctx.get("initiator_user_id")
+    allowed_chat_id = data_ctx.get("allowed_chat_id") or data_ctx.get("group_chat_id")
+    acting_as_master_id = data_ctx.get("acting_as_master_id")
+
+    is_sender_allowed = False
+    if initiator_user_id and message.from_user.id == initiator_user_id:
+        is_sender_allowed = True
+    if acting_as_master_id and message.from_user.id == acting_as_master_id:
+        is_sender_allowed = True
+    if allowed_chat_id and message.chat and message.chat.id == allowed_chat_id:
+        is_sender_allowed = True
+
+    if not is_sender_allowed:
+        await message.reply(
+            "❌ Это сообщение не соответствует текущему шагу завершения заявки.\n"
+            "Пожалуйста, нажмите ‘Завершить заявку’ ещё раз и отправьте сумму в том же чате, либо завершите через админ‑панель."
+        )
+        return
 
     # Проверяем, что это текстовое сообщение
     if not message.text:

@@ -418,6 +418,7 @@ async def callback_group_complete_order(
             group_chat_id=callback.message.chat.id,
             group_message_id=callback.message.message_id,
             acting_as_master_id=master.telegram_id if is_admin_acting else None,
+            initiator_user_id=callback.from_user.id,
         )
 
         from app.states import CompleteOrderStates
