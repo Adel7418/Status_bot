@@ -2000,7 +2000,10 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
             group_notification = (
                 f"📞 <b>ВАЖНО: Клиент ждет!</b>\n\n"
                 f"📋 Заявка #{order.id}\n"
-                f"👨‍🔧 Мастер: {master_mention}\n\n"
+                f"🔧 {order.equipment_type}\n"
+                f"👨‍🔧 Мастер: {master_mention}\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📞 Телефон: {order.client_phone}\n\n"
                 f"⚠️ Клиент звонил и спрашивает где мастер.\n"
                 f"Пожалуйста, свяжитесь с клиентом."
             )
