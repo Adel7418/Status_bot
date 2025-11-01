@@ -127,7 +127,7 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     if not message.text:
         await message.reply(
             "❌ Пожалуйста, отправьте текстовое сообщение с описанием проблемы.\n"
-            f"Минимум {10} символов, максимум {MAX_DESCRIPTION_LENGTH} символов."
+            f"Минимум {4} символа, максимум {MAX_DESCRIPTION_LENGTH} символов."
         )
         return
 
@@ -139,7 +139,7 @@ async def process_description(message: Message, state: FSMContext, user_role: st
         from pydantic import BaseModel, Field, field_validator
 
         class DescriptionValidator(BaseModel):
-            description: str = Field(..., min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
+            description: str = Field(..., min_length=4, max_length=MAX_DESCRIPTION_LENGTH)
 
             @field_validator("description")
             @classmethod
@@ -147,8 +147,8 @@ async def process_description(message: Message, state: FSMContext, user_role: st
                 import re
 
                 v = v.strip()
-                if len(v) < 10:
-                    raise ValueError("Описание слишком короткое. Минимум 10 символов")
+                if len(v) < 4:
+                    raise ValueError("Описание слишком короткое. Минимум 4 символа")
 
                 # Базовая защита от SQL injection
                 suspicious_patterns = [
@@ -285,15 +285,15 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
         from pydantic import BaseModel, Field, field_validator
 
         class ClientAddressValidator(BaseModel):
-            client_address: str = Field(..., min_length=10, max_length=500)
+            client_address: str = Field(..., min_length=4, max_length=500)
 
             @field_validator("client_address")
             @classmethod
             def validate_client_address(cls, v: str) -> str:
                 v = v.strip()
 
-                if len(v) < 10:
-                    raise ValueError("Адрес слишком короткий. Минимум 10 символов")
+                if len(v) < 4:
+                    raise ValueError("Адрес слишком короткий. Минимум 4 символа")
 
                 # Проверка что адрес содержит хотя бы одну цифру (номер дома)
                 if not re.search(r"\d", v):

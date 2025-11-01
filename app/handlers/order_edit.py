@@ -271,13 +271,13 @@ async def callback_select_field(callback: CallbackQuery, state: FSMContext, user
             prompt += "\n<i>Введите точное название типа техники</i>"
 
         elif field == "description":
-            prompt += f"<i>Минимум 10 символов, максимум {MAX_DESCRIPTION_LENGTH}</i>"
+            prompt += f"<i>Минимум 4 символа, максимум {MAX_DESCRIPTION_LENGTH}</i>"
 
         elif field == "client_name":
             prompt += "<i>Минимум 5 символов</i>"
 
         elif field == "client_address":
-            prompt += "<i>Минимум 10 символов</i>"
+            prompt += "<i>Минимум 4 символа</i>"
 
         elif field == "client_phone":
             prompt += "<i>Формат: +7 (xxx) xxx-xx-xx или 8xxxxxxxxxx</i>"
@@ -488,8 +488,8 @@ async def validate_field_value(field: str, value: str | None, message: Message):
         return value
 
     elif field == "description":
-        if len(value) < 10:
-            raise ValueError("Описание слишком короткое (минимум 10 символов)")
+        if len(value) < 4:
+            raise ValueError("Описание слишком короткое (минимум 4 символа)")
         if len(value) > MAX_DESCRIPTION_LENGTH:
             raise ValueError(
                 f"Описание слишком длинное (максимум {MAX_DESCRIPTION_LENGTH} символов)"
@@ -515,8 +515,8 @@ async def validate_field_value(field: str, value: str | None, message: Message):
         return value
 
     if field == "client_address":
-        if len(value) < 10:
-            raise ValueError("Адрес слишком короткий (минимум 10 символов)")
+        if len(value) < 4:
+            raise ValueError("Адрес слишком короткий (минимум 4 символа)")
         if len(value) > 200:
             raise ValueError("Адрес слишком длинный (максимум 200 символов)")
         return value

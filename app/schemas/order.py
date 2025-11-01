@@ -11,10 +11,10 @@ class OrderCreateSchema(BaseModel):
 
     equipment_type: str = Field(..., min_length=1, max_length=100, description="Тип техники")
     description: str = Field(
-        ..., min_length=10, max_length=MAX_DESCRIPTION_LENGTH, description="Описание проблемы"
+        ..., min_length=4, max_length=MAX_DESCRIPTION_LENGTH, description="Описание проблемы"
     )
     client_name: str = Field(..., min_length=2, max_length=200, description="ФИО клиента")
-    client_address: str = Field(..., min_length=10, max_length=500, description="Адрес клиента")
+    client_address: str = Field(..., min_length=4, max_length=500, description="Адрес клиента")
     client_phone: str = Field(..., min_length=10, max_length=20, description="Телефон клиента")
     notes: str | None = Field(
         None, max_length=MAX_NOTES_LENGTH, description="Дополнительные заметки"
@@ -51,8 +51,8 @@ class OrderCreateSchema(BaseModel):
     def validate_description(cls, v: str) -> str:
         """Валидация описания проблемы"""
         v = v.strip()
-        if len(v) < 10:
-            raise ValueError("Описание слишком короткое. Минимум 10 символов")
+        if len(v) < 4:
+            raise ValueError("Описание слишком короткое. Минимум 4 символа")
 
         # Проверка на подозрительные паттерны (базовая защита от SQL injection)
         suspicious_patterns = [
@@ -73,8 +73,8 @@ class OrderCreateSchema(BaseModel):
         """Валидация адреса клиента"""
         v = v.strip()
 
-        if len(v) < 10:
-            raise ValueError("Адрес слишком короткий. Минимум 10 символов")
+        if len(v) < 4:
+            raise ValueError("Адрес слишком короткий. Минимум 4 символа")
 
         # Проверка что адрес содержит хотя бы одну цифру (номер дома)
         if not re.search(r"\d", v):
@@ -194,9 +194,9 @@ class OrderUpdateSchema(BaseModel):
     """Схема для обновления заявки (все поля опциональны)"""
 
     equipment_type: str | None = Field(None, min_length=1, max_length=100)
-    description: str | None = Field(None, min_length=10, max_length=MAX_DESCRIPTION_LENGTH)
+    description: str | None = Field(None, min_length=4, max_length=MAX_DESCRIPTION_LENGTH)
     client_name: str | None = Field(None, min_length=2, max_length=200)
-    client_address: str | None = Field(None, min_length=10, max_length=500)
+    client_address: str | None = Field(None, min_length=4, max_length=500)
     client_phone: str | None = Field(None, min_length=10, max_length=20)
     notes: str | None = Field(None, max_length=MAX_NOTES_LENGTH)
 
