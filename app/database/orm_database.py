@@ -87,7 +87,7 @@ class ORMDatabase:
 
             logger.info(f"OK: Подключено к базе данных: {self.database_url}")
             logger.info("OK: Session factory создан")
-            logger.info("INFO: Используйте 'alembic upgrade head' для применения миграций БД")
+            logger.debug("Используйте 'alembic upgrade head' для применения миграций БД")
 
         except Exception as e:
             logger.error(f"ERROR: Ошибка подключения к БД: {e}")
