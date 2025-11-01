@@ -143,6 +143,12 @@ class ORMDatabase:
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
 
+            # Проверяем, является ли пользователь мастером
+            master_stmt = select(Master).where(Master.telegram_id == telegram_id)
+            master_result = await session.execute(master_stmt)
+            master = master_result.scalar_one_or_none()
+            is_master = master is not None and master.is_active and master.is_approved
+
             if user:
                 # Обновляем информацию если изменилась
                 updated = False
@@ -156,6 +162,14 @@ class ORMDatabase:
                     user.last_name = last_name
                     updated = True
 
+                # Проверяем и добавляем роль MASTER, если пользователь является мастером
+                if is_master and not user.has_role(UserRole.MASTER):
+                    user.add_role(UserRole.MASTER)
+                    updated = True
+                    logger.info(f"Автоматически добавлена роль MASTER пользователю {telegram_id}")
+                # Если пользователь больше не мастер, но роль MASTER есть - не удаляем её,
+                # так как это может быть временное состояние
+
                 if updated:
                     user.version += 1
                     await session.commit()
@@ -168,6 +182,9 @@ class ORMDatabase:
                 role = UserRole.ADMIN
             elif telegram_id in Config.DISPATCHER_IDS:
                 role = UserRole.DISPATCHER
+            elif is_master:
+                # Если пользователь новый, но уже есть в таблице masters - назначаем роль MASTER
+                role = UserRole.MASTER
 
             # Создаем нового пользователя
             user = User(
