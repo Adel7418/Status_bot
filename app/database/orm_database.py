@@ -514,7 +514,39 @@ class ORMDatabase:
 
                 master_id = master.id
 
-                # Удаляем мастера (каскадное удаление удалит связанные записи)
+                # Удаляем связанные записи из master_report_archives
+                # так как ForeignKey не имеет ondelete="CASCADE"
+                archive_stmt = select(MasterReportArchive).where(
+                    MasterReportArchive.master_id == master_id
+                )
+                archive_result = await session.execute(archive_stmt)
+                archives = archive_result.scalars().all()
+
+                for archive in archives:
+                    await session.delete(archive)
+
+                if archives:
+                    logger.info(
+                        f"Deleted {len(list(archives))} archive records for master {telegram_id}"
+                    )
+
+                # Удаляем связанные записи из order_group_messages
+                # так как ForeignKey не имеет ondelete="CASCADE"
+                group_messages_stmt = select(OrderGroupMessage).where(
+                    OrderGroupMessage.master_id == master_id
+                )
+                group_messages_result = await session.execute(group_messages_stmt)
+                group_messages = group_messages_result.scalars().all()
+
+                for group_message in group_messages:
+                    await session.delete(group_message)
+
+                if group_messages:
+                    logger.info(
+                        f"Deleted {len(list(group_messages))} group message records for master {telegram_id}"
+                    )
+
+                # Удаляем мастера
                 await session.delete(master)
                 await session.commit()
 

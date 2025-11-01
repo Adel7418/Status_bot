@@ -101,7 +101,8 @@ prod-status:  ## Статус контейнеров
 
 prod-update:  ## Обновить код и перезапустить
 	@echo "🔄 Полное обновление..."
-	git pull
+	@git fetch origin
+	@git pull --no-rebase origin main || (echo "⚠️ Ошибка при обновлении. Возможно есть конфликты. Разрешите вручную и повторите." && exit 1)
 	docker compose -f docker/docker-compose.prod.yml up -d --build
 	@echo "✅ Обновлено!"
 	@echo ""
@@ -112,7 +113,8 @@ prod-update:  ## Обновить код и перезапустить
 
 prod-deploy:  ## Полный деплой с пересборкой
 	@echo "🚀 Полный деплой..."
-	git pull
+	@git fetch origin
+	@git pull --no-rebase origin main || (echo "⚠️ Ошибка при обновлении. Возможно есть конфликты. Разрешите вручную и повторите." && exit 1)
 	docker compose -f docker/docker-compose.prod.yml down
 	docker compose -f docker/docker-compose.prod.yml up -d --build
 	@echo "✅ Деплой завершен!"
@@ -199,20 +201,23 @@ mb-migrate-city2:  ## Применить миграции для БД city2 (о�
 
 mb-update:  ## Обновить код и пересобрать multibot
 	@echo "🔄 Обновление кода и пересборка multibot..."
-	@git pull
+	@git fetch origin
+	@git pull --no-rebase origin main || (echo "⚠️ Ошибка при обновлении. Возможно есть конфликты. Разрешите вручную и повторите." && exit 1)
 	@docker compose -f $(MB_COMPOSE) up -d --build
 	@echo "✅ Обновлено и запущено!"
 	@docker compose -f $(MB_COMPOSE) ps
 
 mb-update-city1:  ## Обновить код и пересобрать только bot_city1
 	@echo "🔄 Обновление кода и пересборка bot_city1..."
-	@git pull
+	@git fetch origin
+	@git pull --no-rebase origin main || (echo "⚠️ Ошибка при обновлении. Возможно есть конфликты. Разрешите вручную и повторите." && exit 1)
 	@docker compose -f $(MB_COMPOSE) up -d --build bot_city1
 	@echo "✅ bot_city1 обновлён и запущен!"
 
 mb-update-city2:  ## Обновить код и пересобрать только bot_city2
 	@echo "🔄 Обновление кода и пересборка bot_city2..."
-	@git pull
+	@git fetch origin
+	@git pull --no-rebase origin main || (echo "⚠️ Ошибка при обновлении. Возможно есть конфликты. Разрешите вручную и повторите." && exit 1)
 	@docker compose -f $(MB_COMPOSE) up -d --build bot_city2
 	@echo "✅ bot_city2 обновлён и запущен!"
 
@@ -320,20 +325,3 @@ prod-install-deps:  ## Установить/обновить зависимос�
 	@echo "📦 Установка зависимостей в production контейнере..."
 	docker exec telegram_repair_bot_prod pip install -r /app/requirements.txt
 	@echo "✅ Зависимости установлены!"
-
-clean:  ## Очистить кэш Python
-	find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	find . -type f -name "*.pyo" -delete 2>/dev/null || true
-	find . -type d -name "*.egg-info" -exec rm -r {} + 2>/dev/null || true
-	@echo "✅ Кэш очищен!"
-
-clean-logs:  ## Очистить логи
-	rm -f logs/*.log logs/*.log.* 2>/dev/null || true
-	rm -f data/*.log data/*.log.* 2>/dev/null || true
-	@echo "✅ Логи очищены!"
-
-clean-all:  ## Очистить всё (кэш, логи, __pycache__)
-	make clean
-	make clean-logs
-	@echo "✅ Всё очищено!"
