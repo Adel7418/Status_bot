@@ -20,7 +20,6 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.config import Config, OrderStatus, UserRole
 from app.database.orm_models import (
     AuditLog,
-    Base,
     FinancialReport,
     Master,
     MasterFinancialReport,
@@ -86,13 +85,9 @@ class ORMDatabase:
                 expire_on_commit=False,  # Важно для async работы
             )
 
-            logger.info("Создание таблиц...")
-            # Создаем таблицы если их нет
-            async with self.engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-
             logger.info(f"OK: Подключено к базе данных: {self.database_url}")
-            logger.info("OK: Таблицы созданы/проверены")
+            logger.info("OK: Session factory создан")
+            logger.info("INFO: Используйте 'alembic upgrade head' для применения миграций БД")
 
         except Exception as e:
             logger.error(f"ERROR: Ошибка подключения к БД: {e}")
@@ -357,9 +352,9 @@ class ORMDatabase:
             stmt = select(Master).options(joinedload(Master.user))
 
             if only_approved:
-                stmt = stmt.where(Master.is_approved == True)
+                stmt = stmt.where(Master.is_approved.is_(True))
             if only_active:
-                stmt = stmt.where(Master.is_active == True)
+                stmt = stmt.where(Master.is_active.is_(True))
 
             stmt = stmt.order_by(Master.created_at.desc())
             result = await session.execute(stmt)
@@ -969,7 +964,7 @@ class ORMDatabase:
 
             # Количество активных мастеров
             stmt = select(func.count(Master.id).label("count")).where(
-                and_(Master.is_active == True, Master.is_approved == True)
+                and_(Master.is_active.is_(True), Master.is_approved.is_(True))
             )
             result = await session.execute(stmt)
             stats["active_masters"] = result.scalar()
