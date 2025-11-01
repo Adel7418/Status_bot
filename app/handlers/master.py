@@ -1069,19 +1069,39 @@ async def process_total_amount(message: Message, state: FSMContext):
     initiator_user_id = data_ctx.get("initiator_user_id")
     allowed_chat_id = data_ctx.get("allowed_chat_id") or data_ctx.get("group_chat_id")
     acting_as_master_id = data_ctx.get("acting_as_master_id")
+    prompt_message_id = data_ctx.get("prompt_message_id")
 
+    # Проверка: разрешаем если сообщение:
+    # 1. От инициатора процесса ИЛИ
+    # 2. В нужном чате (где был запущен процесс) ИЛИ
+    # 3. Это реплай на промпт-сообщение бота (для работы с ForceReply)
     is_sender_allowed = False
+    
+    # Проверка 1: от инициатора
     if initiator_user_id and message.from_user.id == initiator_user_id:
         is_sender_allowed = True
-    if acting_as_master_id and message.from_user.id == acting_as_master_id:
-        is_sender_allowed = True
+    
+    # Проверка 2: в нужном чате
     if allowed_chat_id and message.chat and message.chat.id == allowed_chat_id:
+        is_sender_allowed = True
+    
+    # Проверка 3: реплай на промпт-сообщение (для ForceReply)
+    if prompt_message_id and message.reply_to_message:
+        if message.reply_to_message.message_id == prompt_message_id:
+            is_sender_allowed = True
+    
+    # Проверка 4: админ действует за мастера
+    if acting_as_master_id and message.from_user.id == acting_as_master_id:
         is_sender_allowed = True
 
     if not is_sender_allowed:
+        logger.warning(
+            f"[PROCESS_TOTAL_AMOUNT] Rejected message from user {message.from_user.id} in chat {message.chat.id}. "
+            f"Context: initiator={initiator_user_id}, allowed_chat={allowed_chat_id}, acting_as={acting_as_master_id}"
+        )
         await message.reply(
             "❌ Это сообщение не соответствует текущему шагу завершения заявки.\n"
-            "Пожалуйста, нажмите ‘Завершить заявку’ ещё раз и отправьте сумму в том же чате, либо завершите через админ‑панель."
+            "Пожалуйста, нажмите 'Завершить заявку' ещё раз и отправьте сумму в том же чате, либо завершите через админ‑панель."
         )
         return
 
