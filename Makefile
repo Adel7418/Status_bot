@@ -51,6 +51,10 @@ migrate:  ## Применить миграции
 	alembic upgrade head
 
 migrate-create:  ## Создать миграцию (make migrate-create MSG="описание")
+	@if [ -z "$(MSG)" ]; then \
+		echo "❌ Укажите MSG=\"описание\""; \
+		exit 1; \
+	fi
 	alembic revision --autogenerate -m "$(MSG)"
 
 migrate-history:  ## История миграций
@@ -61,6 +65,13 @@ migrate-current:  ## Текущая версия БД
 
 migrate-rollback:  ## Откатить миграцию
 	alembic downgrade -1
+
+migrate-stamp:  ## Установить версию БД (make migrate-stamp REV="revision")
+	@if [ -z "$(REV)" ]; then \
+		echo "❌ Укажите REV=\"revision\""; \
+		exit 1; \
+	fi
+	alembic stamp $(REV)
 
 # ========================================
 # PRODUCTION (Docker на сервере)
@@ -124,6 +135,13 @@ prod-shell:  ## Войти в контейнер
 prod-env:  ## Показать переменные окружения контейнера
 	@echo "🔍 Переменные окружения:"
 	@docker exec telegram_repair_bot_prod env | grep -E "BOT_TOKEN|LOG_LEVEL|DEV_MODE|USE_ORM|ADMIN_IDS|DATABASE_PATH|REDIS_URL" | sort
+
+prod-migrate:  ## Применить миграции в production контейнере
+	@echo "🔄 Применение миграций в production..."
+	@docker compose -f docker/docker-compose.prod.yml stop telegram_repair_bot_prod || true
+	@docker compose -f docker/docker-compose.prod.yml run --rm telegram_repair_bot_prod alembic upgrade head
+	@echo "✅ Миграции применены"
+	@echo "💡 Запустите бота: make prod-start"
 
 # ========================================
 # MULTIBOT (Docker: два бота + Redis)
@@ -239,6 +257,15 @@ git-save:  ## Быстрое сохранение (make git-save MSG="описа
 	git commit -m "$(MSG)"
 	git push
 
+git-save-no-verify:  ## Быстрое сохранение без хуков (make git-save-no-verify MSG="описание")
+	@if [ -z "$(MSG)" ]; then \
+		echo "❌ Укажите MSG=\"описание\""; \
+		exit 1; \
+	fi
+	git add -A
+	git commit --no-verify -m "$(MSG)"
+	git push
+
 git-pull:  ## Получить изменения
 	git pull
 
@@ -247,6 +274,23 @@ git-status:  ## Статус git
 
 git-log:  ## Последние 10 коммитов
 	git log --oneline -10
+
+git-commit:  ## Коммит изменений (make git-commit MSG="описание")
+	@if [ -z "$(MSG)" ]; then \
+		echo "❌ Укажите MSG=\"описание\""; \
+		exit 1; \
+	fi
+	git add -A
+	git commit -m "$(MSG)"
+
+git-commit-push:  ## Коммит и push (make git-commit-push MSG="описание")
+	@if [ -z "$(MSG)" ]; then \
+		echo "❌ Укажите MSG=\"описание\""; \
+		exit 1; \
+	fi
+	git add -A
+	git commit -m "$(MSG)"
+	git push
 
 # ========================================
 # UTILITIES
@@ -259,12 +303,37 @@ check-db:  ## Проверить БД
 	python scripts/check_database.py
 
 check-role:  ## Проверить роль (make check-role ID=123456)
+	@if [ -z "$(ID)" ]; then \
+		echo "❌ Укажите ID=\"telegram_id\""; \
+		exit 1; \
+	fi
 	python scripts/check_user_role.py $(ID)
 
 set-role:  ## Установить роль (make set-role ID=123456 ROLE=ADMIN)
+	@if [ -z "$(ID)" ] || [ -z "$(ROLE)" ]; then \
+		echo "❌ Укажите ID=\"telegram_id\" и ROLE=\"ADMIN|DISPATCHER|MASTER\""; \
+		exit 1; \
+	fi
 	python scripts/set_user_role.py $(ID) $(ROLE)
 
 prod-install-deps:  ## Установить/обновить зависимости в контейнере
 	@echo "📦 Установка зависимостей в production контейнере..."
 	docker exec telegram_repair_bot_prod pip install -r /app/requirements.txt
 	@echo "✅ Зависимости установлены!"
+
+clean:  ## Очистить кэш Python
+	find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	find . -type d -name "*.egg-info" -exec rm -r {} + 2>/dev/null || true
+	@echo "✅ Кэш очищен!"
+
+clean-logs:  ## Очистить логи
+	rm -f logs/*.log logs/*.log.* 2>/dev/null || true
+	rm -f data/*.log data/*.log.* 2>/dev/null || true
+	@echo "✅ Логи очищены!"
+
+clean-all:  ## Очистить всё (кэш, логи, __pycache__)
+	make clean
+	make clean-logs
+	@echo "✅ Всё очищено!"
