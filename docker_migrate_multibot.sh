@@ -138,6 +138,15 @@ migrate_bot() {
 log_info "Начало миграции multibot окружения"
 echo ""
 
+# 0. Пересборка образов с новым кодом
+log_info "Пересборка Docker образов с новым кодом..."
+if $DOCKER_CMD -f $COMPOSE_FILE build 2>/dev/null; then
+    log_success "Образы пересобраны с новым кодом"
+else
+    log_warning "Не удалось пересобрать образы"
+fi
+echo ""
+
 # Миграция для bot_city1
 if ! migrate_bot "bot_city1" "telegram_repair_bot_city1"; then
     log_error "Ошибка при миграции bot_city1"
