@@ -1477,6 +1477,9 @@ async def callback_select_master_for_order(
         keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
         logger.info(f"Notification text prepared: {len(notification_text)} chars")
+        logger.info(
+            f"Sending notification to group {target_chat_id} for order {order_id}, master {master_id}"
+        )
 
         result = await safe_send_message(
             callback.bot,
@@ -1488,7 +1491,10 @@ async def callback_select_master_for_order(
         )
 
         if result:
-            logger.info(f"SUCCESS: Notification sent to group {target_chat_id}")
+            logger.info(
+                f"SUCCESS: Notification sent to group {target_chat_id} for order {order_id}, "
+                f"message_id={result.message_id}"
+            )
             # Сохраняем message_id для последующего удаления при снятии мастера
             try:
                 # ORM: сохраняем в таблицу order_group_messages
@@ -1499,12 +1505,17 @@ async def callback_select_master_for_order(
                         chat_id=target_chat_id,
                         message_id=result.message_id,
                     )
+                    logger.info(f"Saved group message for order {order_id} in database")
             except Exception as e:
                 logger.warning(
-                    f"Не удалось сохранить групповое сообщение для заявки {order_id}: {e}"
+                    f"Не удалось сохранить групповое сообщение для заявки {order_id}: {e}",
+                    exc_info=True,
                 )
         else:
-            logger.error(f"КРИТИЧНО: Не удалось уведомить мастера в группе {target_chat_id}")
+            logger.error(
+                f"КРИТИЧНО: Не удалось уведомить мастера в группе {target_chat_id} "
+                f"для заявки {order_id} после всех попыток"
+            )
 
         await callback.message.edit_text(
             f"✅ <b>Мастер назначен!</b>\n\n"

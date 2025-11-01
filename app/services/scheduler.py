@@ -544,11 +544,28 @@ class TaskScheduler:
                         )
 
                         if master.work_chat_id:
-                            # Отправляем в группу с упоминанием мастера
+                            # Отправляем в группу с упоминанием мастера и полной информацией о заявке
+                            from app.keyboards.inline import get_group_order_keyboard
+
                             reminder_text = (
-                                f"<b>Непринятая заявка</b> #{order.id}\n"
-                                f"{order.equipment_type} ({minutes}мин)\n"
+                                f"🔔 <b>Напоминание о непринятой заявке</b>\n\n"
+                                f"📋 <b>Заявка #{order.id}</b>\n"
+                                f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
+                                f"⏰ <b>Назначена:</b> {minutes} минут назад\n\n"
+                                f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
+                                f"📝 <b>Описание:</b> {order.description}\n\n"
+                                f"👤 <b>Клиент:</b> {order.client_name}\n"
+                                f"📍 <b>Адрес:</b> {order.client_address}\n"
+                                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
                             )
+
+                            if order.notes:
+                                reminder_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
+
+                            if order.scheduled_time:
+                                reminder_text += (
+                                    f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
+                                )
 
                             # Упоминаем мастера в группе (ORM: через master.user)
                             master_username = (
@@ -557,17 +574,23 @@ class TaskScheduler:
                                 else None
                             )
                             if master_username:
-                                reminder_text += f"Мастер: @{master_username}\n\n"
+                                reminder_text += f"👨‍🔧 <b>Мастер:</b> @{master_username}\n\n"
                             else:
-                                reminder_text += f"Мастер: {master.get_display_name()}\n\n"
+                                reminder_text += (
+                                    f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
+                                )
 
-                            reminder_text += "Пожалуйста, примите или отклоните заявку."
+                            reminder_text += "❗ <b>Пожалуйста, примите или отклоните заявку.</b>"
+
+                            # Создаем клавиатуру с кнопками для принятия/отклонения
+                            keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
 
                             result = await safe_send_message(
                                 self.bot,
                                 target_chat_id,
                                 reminder_text,
                                 parse_mode="HTML",
+                                reply_markup=keyboard,
                                 max_attempts=5,
                             )
 

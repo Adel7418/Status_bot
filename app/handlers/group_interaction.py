@@ -70,12 +70,20 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
 
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            logger.error(f"Order {order_id} not found")
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             # Находим мастера по ID группы
             master = await db.get_master_by_work_chat_id(callback.message.chat.id)
 
             if not master:
+                logger.warning(
+                    f"Admin {callback.from_user.id} tried to accept order in group {callback.message.chat.id} without master"
+                )
                 await callback.answer(
                     "❌ В этой группе не настроена работа для мастера", show_alert=True
                 )
@@ -88,13 +96,27 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
             # Обычная проверка для мастера
             master = await db.get_master_by_telegram_id(callback.from_user.id)
 
+            if not master:
+                logger.warning(f"User {callback.from_user.id} is not a master")
+                await callback.answer("❌ Вы не являетесь мастером", show_alert=True)
+                return
+
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
 
         # Проверяем права на заявку
-        if not master or order.assigned_master_id != master.id:
-            await callback.answer("Это не ваша заявка", show_alert=True)
+        if not master:
+            logger.error(f"Master not found for order {order_id}")
+            await callback.answer("❌ Мастер не найден", show_alert=True)
+            return
+
+        if order.assigned_master_id != master.id:
+            logger.warning(
+                f"Order {order_id} assigned to master {order.assigned_master_id}, "
+                f"but master {master.id} tried to accept it"
+            )
+            await callback.answer("❌ Это не ваша заявка", show_alert=True)
             return
 
         # Обновляем статус (с валидацией через State Machine)
@@ -158,10 +180,17 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
 
         log_action(callback.from_user.id, "ACCEPT_ORDER_GROUP", f"Order #{order_id}")
 
+        # Отвечаем на callback после успешного выполнения
+        await callback.answer("✅ Заявка принята!")
+
+    except Exception as e:
+        logger.exception(f"Error in callback_group_accept_order: {e}")
+        from contextlib import suppress
+
+        with suppress(Exception):
+            await callback.answer("❌ Произошла ошибка при принятии заявки", show_alert=True)
     finally:
         await db.disconnect()
-
-    await callback.answer("Заявка принята!")
 
 
 @router.callback_query(F.data.startswith("group_refuse_order:"))

@@ -9,7 +9,12 @@ from dotenv import load_dotenv
 
 
 # Загрузка переменных окружения
-load_dotenv()
+# Поддержка multibot: загружаем env.city1 если указано в переменной окружения ENV_FILE
+env_file = os.getenv("ENV_FILE", ".env")
+if env_file in ("env.city1", "env.city2"):
+    load_dotenv(env_file)
+else:
+    load_dotenv()  # По умолчанию загружаем .env
 
 
 class Config:
