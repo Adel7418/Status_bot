@@ -635,6 +635,7 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
 
         # В ЛС открываем ForceReply, чтобы у пользователя автоматически включился режим ответа
         from aiogram.types import ForceReply
+
         prompt = await callback.message.answer(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
@@ -1076,20 +1077,20 @@ async def process_total_amount(message: Message, state: FSMContext):
     # 2. В нужном чате (где был запущен процесс) ИЛИ
     # 3. Это реплай на промпт-сообщение бота (для работы с ForceReply)
     is_sender_allowed = False
-    
+
     # Проверка 1: от инициатора
     if initiator_user_id and message.from_user.id == initiator_user_id:
         is_sender_allowed = True
-    
+
     # Проверка 2: в нужном чате
     if allowed_chat_id and message.chat and message.chat.id == allowed_chat_id:
         is_sender_allowed = True
-    
+
     # Проверка 3: реплай на промпт-сообщение (для ForceReply)
     if prompt_message_id and message.reply_to_message:
         if message.reply_to_message.message_id == prompt_message_id:
             is_sender_allowed = True
-    
+
     # Проверка 4: админ действует за мастера
     if acting_as_master_id and message.from_user.id == acting_as_master_id:
         is_sender_allowed = True
@@ -1117,9 +1118,13 @@ async def process_total_amount(message: Message, state: FSMContext):
     raw_text = message.text.strip()
     # Удаляем неразрывные пробелы и обычные пробелы
     normalized = (
-        raw_text.replace("\u00A0", "").replace(" ", "")
-        .replace("₽", "").replace("р.", "").replace("р", "")
-        .replace("RUB", "").replace("rub", "")
+        raw_text.replace("\u00A0", "")
+        .replace(" ", "")
+        .replace("₽", "")
+        .replace("р.", "")
+        .replace("р", "")
+        .replace("RUB", "")
+        .replace("rub", "")
         .replace("\\", "")
     )
     # Разрешаем только цифры и разделители, остальные символы отбрасываем
@@ -2722,20 +2727,30 @@ async def callback_complete_dr_order(callback: CallbackQuery, state: FSMContext)
             await callback.answer("Эта заявка не в статусе длительного ремонта", show_alert=True)
             return
 
-        # Сохраняем ID заказа в состоянии FSM
-        await state.update_data(order_id=order_id)
+        # Сохраняем контекст завершения в FSM
+        await state.update_data(
+            order_id=order_id,
+            initiator_user_id=callback.from_user.id,
+            allowed_chat_id=callback.message.chat.id,
+        )
 
         # Переходим в состояние запроса общей суммы
         from app.states import CompleteOrderStates
 
         await state.set_state(CompleteOrderStates.enter_total_amount)
 
-        await callback.message.edit_text(
+        # В ЛС открываем ForceReply, чтобы у пользователя автоматически включился режим ответа
+        from aiogram.types import ForceReply
+
+        prompt = await callback.message.answer(
             f"💰 <b>Завершение длительного ремонта #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
+            reply_markup=ForceReply(selective=True, input_field_placeholder="Введите сумму…"),
         )
+
+        await state.update_data(prompt_message_id=prompt.message_id)
 
         log_action(callback.from_user.id, "START_COMPLETE_DR_ORDER", f"Order #{order_id}")
 

@@ -189,6 +189,9 @@ class Order(Base):
     )
 
     # Дополнительные поля
+    master_lead_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # Имя мастера-источника лида
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_time: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -359,9 +362,7 @@ class MasterFinancialReport(Base):
     report_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("financial_reports.id"), nullable=False
     )
-    master_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("masters.id"), nullable=True
-    )
+    master_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("masters.id"), nullable=True)
     master_name: Mapped[str] = mapped_column(String(255), nullable=False)
     orders_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

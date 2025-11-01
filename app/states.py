@@ -14,6 +14,7 @@ class CreateOrderStates(StatesGroup):
     client_address = State()  # Ввод адреса клиента
     client_phone = State()  # Ввод телефона клиента
     confirm_client_data = State()  # Подтверждение найденных данных клиента
+    master_lead_name = State()  # Ввод имени мастера-источника лида
     notes = State()  # Ввод дополнительных заметок
     scheduled_time = State()  # Ввод времени прибытия к клиенту
     confirm = State()  # Подтверждение создания

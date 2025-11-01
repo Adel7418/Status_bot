@@ -71,7 +71,7 @@ async def btn_create_order(message: Message, state: FSMContext, user_role: str):
     await state.set_state(CreateOrderStates.equipment_type)
 
     await message.answer(
-        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/7: Выберите тип техники:",
+        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/8: Выберите тип техники:",
         parse_mode="HTML",
         reply_markup=get_equipment_types_keyboard(),
     )
@@ -97,7 +97,7 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await state.set_state(CreateOrderStates.description)
 
     await callback.message.edit_text(
-        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/7: Опишите проблему:", parse_mode="HTML"
+        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/8: Опишите проблему:", parse_mode="HTML"
     )
 
     await callback.message.answer(
@@ -178,7 +178,7 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     await state.set_state(CreateOrderStates.client_address)
 
     await message.answer(
-        "📍 Шаг 3/7: Введите адрес клиента:",
+        "📍 Шаг 3/8: Введите адрес клиента:",
         reply_markup=get_cancel_keyboard(),
     )
 
@@ -246,7 +246,7 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     await state.set_state(CreateOrderStates.client_phone)
 
     await message.answer(
-        "📞 Шаг 5/7: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
+        "📞 Шаг 5/8: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
     )
@@ -316,7 +316,7 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     await state.set_state(CreateOrderStates.client_name)
 
     await message.answer(
-        "👤 Шаг 4/7: Введите имя клиента:",
+        "👤 Шаг 4/8: Введите имя клиента:",
         reply_markup=get_cancel_keyboard(),
     )
 
@@ -444,16 +444,15 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
     logger.info(f"Переходим к следующему шагу для телефона {phone}")
     await state.update_data(client_phone=phone)
-    await state.set_state(CreateOrderStates.notes)
+    await state.set_state(CreateOrderStates.master_lead_name)
 
     await message.answer(
-        "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
-        f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
+        "👨‍🔧 Шаг 6/8: Введите имя мастера-источника лида (необязательно):\n"
+        "<i>(например: Иван Иванов, Петров или оставьте пустым)</i>\n\n"
         "Или нажмите 'Пропустить'.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
-    logger.info("Отправлено сообщение с запросом заметок")
 
 
 @router.message(CreateOrderStates.confirm_client_data, F.text == "✅ Да, использовать")
@@ -478,15 +477,15 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
         client_name=data["found_client_name"], client_address=data["found_client_address"]
     )
 
-    await state.set_state(CreateOrderStates.notes)
+    await state.set_state(CreateOrderStates.master_lead_name)
 
     await message.answer(
         "✅ <b>Данные клиента сохранены</b>\n\n"
         f"👤 <b>Имя:</b> {escape_html(data['found_client_name'])}\n"
         f"🏠 <b>Адрес:</b> {escape_html(data['found_client_address'])}\n"
         f"📞 <b>Телефон:</b> {escape_html(data['client_phone'])}\n\n"
-        "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
-        f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
+        "👨‍🔧 Шаг 6/8: Введите имя мастера-источника лида (необязательно):\n"
+        "<i>(например: Иван Иванов, Петров или оставьте пустым)</i>\n\n"
         "Или нажмите 'Пропустить'.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
@@ -510,9 +509,81 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     await state.set_state(CreateOrderStates.client_name)
 
     await message.answer(
-        "👤 Шаг 3/7: Введите ФИО клиента:\n" "<i>(минимум 4 символа, максимум 200 символов)</i>",
+        "👤 Шаг 4/8: Введите ФИО клиента:\n" "<i>(минимум 2 символа, максимум 200 символов)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
+    )
+
+
+@router.message(CreateOrderStates.master_lead_name, F.text != "❌ Отмена")
+@handle_errors
+async def process_master_lead_name(message: Message, state: FSMContext, user_role: str):
+    """
+    Обработка имени мастера-источника лида
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    # Проверяем, что это текстовое сообщение
+    if not message.text:
+        await message.reply(
+            "❌ Пожалуйста, отправьте текстовое сообщение с именем мастера или нажмите 'Пропустить'."
+        )
+        return
+
+    master_lead_name = message.text.strip()
+
+    # Валидация длины
+    if len(master_lead_name) > 255:
+        await message.answer(
+            "❌ Имя мастера слишком длинное (максимум 255 символов).\n\nПопробуйте еще раз:",
+            reply_markup=get_skip_cancel_keyboard(),
+        )
+        return
+
+    await state.update_data(master_lead_name=master_lead_name if master_lead_name else None)
+    await state.set_state(CreateOrderStates.notes)
+
+    await message.answer(
+        "✅ Имя мастера-лида сохранено\n\n"
+        f"👨‍🔧 <b>Мастер-лид:</b> {escape_html(master_lead_name) if master_lead_name else 'не указан'}\n\n"
+        "📝 Шаг 7/8: Введите дополнительные заметки (необязательно):\n"
+        f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
+        "Или нажмите 'Пропустить'.",
+        parse_mode="HTML",
+        reply_markup=get_skip_cancel_keyboard(),
+    )
+
+
+@router.message(CreateOrderStates.master_lead_name, F.text == "⏭️ Пропустить")
+@handle_errors
+async def skip_master_lead_name(message: Message, state: FSMContext, user_role: str):
+    """
+    Пропуск имени мастера-источника лида
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    await state.update_data(master_lead_name=None)
+
+    await state.set_state(CreateOrderStates.notes)
+    await message.answer(
+        "📝 <b>Шаг 7/8: Дополнительные заметки</b>\n\n"
+        "Введите дополнительные заметки (необязательно):\n"
+        f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
+        "Или нажмите '⏭️ Пропустить' если не требуется.",
+        parse_mode="HTML",
+        reply_markup=get_skip_cancel_keyboard(),
     )
 
 
@@ -535,7 +606,7 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
     # Переходим к вводу времени прибытия (не пропускаем этот шаг!)
     await state.set_state(CreateOrderStates.scheduled_time)
     await message.answer(
-        "⏰ <b>Время прибытия к клиенту</b>\n\n"
+        "⏰ <b>Шаг 8/8: Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
         "Или нажмите '⏭️ Пропустить' если не требуется.",
         parse_mode="HTML",
@@ -579,7 +650,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     # Переходим к вводу времени прибытия
     await state.set_state(CreateOrderStates.scheduled_time)
     await message.answer(
-        "⏰ <b>Время прибытия к клиенту</b>\n\n"
+        "⏰ <b>Шаг 8/8: Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
         "Или нажмите '⏭️ Пропустить' если не требуется.",
         parse_mode="HTML",
@@ -652,11 +723,15 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
         if should_parse_as_date(scheduled_time):
             logger.info(f"[SCHEDULED_TIME] Attempting to parse date: '{scheduled_time}'")
             parsed_dt, user_friendly_text = parse_natural_datetime(scheduled_time, validate=True)
-            logger.info(f"[SCHEDULED_TIME] Parsed result: {parsed_dt}, user_friendly: {user_friendly_text}")
+            logger.info(
+                f"[SCHEDULED_TIME] Parsed result: {parsed_dt}, user_friendly: {user_friendly_text}"
+            )
 
             # Проверяем, является ли user_friendly интервалом
-            is_interval = user_friendly_text and "с" in user_friendly_text and "до" in user_friendly_text
-            
+            is_interval = (
+                user_friendly_text and "с" in user_friendly_text and "до" in user_friendly_text
+            )
+
             if parsed_dt or is_interval:
                 # Проверяем валидацию (может быть warning) только если есть parsed_dt
                 if parsed_dt:
@@ -810,6 +885,9 @@ async def show_order_confirmation(message: Message, state: FSMContext):
         f"📞 <b>Телефон:</b> {escape_html(data['client_phone'])}\n"
     )
 
+    if data.get("master_lead_name"):
+        text += f"👨‍🔧 <b>Мастер-лид:</b> {escape_html(data['master_lead_name'])}\n"
+
     if data.get("notes"):
         text += f"\n📝 <b>Заметки:</b> {escape_html(data['notes'])}\n"
 
@@ -920,6 +998,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
                 client_name=data["client_name"],
                 client_address=data["client_address"],
                 client_phone=data["client_phone"],
+                master_lead_name=data.get("master_lead_name"),
                 dispatcher_id=message.from_user.id,
                 notes=data.get("notes"),
                 scheduled_time=data.get("scheduled_time"),
@@ -951,6 +1030,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             client_name=order_data.client_name,
             client_address=order_data.client_address,
             client_phone=order_data.client_phone,
+            master_lead_name=order_data.master_lead_name,
             dispatcher_id=order_data.dispatcher_id,
             notes=order_data.notes,
             scheduled_time=order_data.scheduled_time,

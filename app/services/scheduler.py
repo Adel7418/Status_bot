@@ -55,7 +55,7 @@ class TaskScheduler:
         # Ежедневный отчет (в 8:00 каждый день)
         self.scheduler.add_job(
             self.send_daily_report,
-            trigger=CronTrigger(hour=8, minute=0),
+            trigger=CronTrigger(hour=8, minute=0, timezone=MOSCOW_TZ),
             id="daily_report",
             name="Ежедневный отчет",
             replace_existing=True,
@@ -64,7 +64,7 @@ class TaskScheduler:
         # Еженедельный отчет (в понедельник в 9:00)
         self.scheduler.add_job(
             self.send_weekly_report,
-            trigger=CronTrigger(day_of_week=0, hour=9, minute=0),
+            trigger=CronTrigger(day_of_week=0, hour=9, minute=0, timezone=MOSCOW_TZ),
             id="weekly_report",
             name="Еженедельный отчет",
             replace_existing=True,
@@ -73,7 +73,7 @@ class TaskScheduler:
         # Ежемесячный отчет (1 числа каждого месяца в 10:00)
         self.scheduler.add_job(
             self.send_monthly_report,
-            trigger=CronTrigger(day=1, hour=10, minute=0),
+            trigger=CronTrigger(day=1, hour=10, minute=0, timezone=MOSCOW_TZ),
             id="monthly_report",
             name="Ежемесячный отчет",
             replace_existing=True,
@@ -97,10 +97,10 @@ class TaskScheduler:
         #     replace_existing=True,
         # )
 
-        # Ежедневная сводка (в 9:00 каждый день)
+        # Ежедневная сводка (в 21:30 каждый день)
         self.scheduler.add_job(
             self.send_daily_summary,
-            trigger=CronTrigger(hour=9, minute=0),
+            trigger=CronTrigger(hour=21, minute=30, timezone=MOSCOW_TZ),
             id="daily_summary",
             name="Ежедневная сводка",
             replace_existing=True,
@@ -109,7 +109,7 @@ class TaskScheduler:
         # Автоматическое создание ежедневной таблицы (в 00:00 каждый день)
         self.scheduler.add_job(
             self.create_daily_master_report,
-            trigger=CronTrigger(hour=0, minute=0),
+            trigger=CronTrigger(hour=0, minute=0, timezone=MOSCOW_TZ),
             id="daily_master_report",
             name="Автоматическое создание ежедневной таблицы",
             replace_existing=True,
@@ -136,7 +136,7 @@ class TaskScheduler:
         # Архивирование отчетов мастеров (каждые 30 дней, 1 числа каждого месяца в 02:00)
         self.scheduler.add_job(
             self.archive_master_reports,
-            trigger=CronTrigger(day=1, hour=2, minute=0),
+            trigger=CronTrigger(day=1, hour=2, minute=0, timezone=MOSCOW_TZ),
             id="archive_master_reports",
             name="Архивирование отчетов мастеров",
             replace_existing=True,
@@ -421,9 +421,15 @@ class TaskScheduler:
             # Получаем статистику
             stats = await self.db.get_statistics()
 
-            # Получаем заявки за последние 24 часа
+            # Получаем заявки за сегодня с 00:01 до 21:30
             all_orders = await self.db.get_all_orders()
-            yesterday = get_now() - timedelta(days=1)
+            now = get_now()
+
+            # Начало рабочего дня - сегодня в 00:01
+            day_start = now.replace(hour=0, minute=1, second=0, microsecond=0)
+
+            # Конец рабочего дня - сегодня в 21:30
+            day_end = now.replace(hour=21, minute=30, second=0, microsecond=0)
 
             new_orders = []
             for o in all_orders:
@@ -432,7 +438,8 @@ class TaskScheduler:
                     created_at = o.created_at
                     if created_at.tzinfo is None:
                         created_at = created_at.replace(tzinfo=MOSCOW_TZ)
-                    if created_at > yesterday:
+                    # Заявки созданные сегодня с 00:01 до 21:30
+                    if day_start <= created_at <= day_end:
                         new_orders.append(o)
 
             # Активные заявки
@@ -442,8 +449,8 @@ class TaskScheduler:
 
             text = (
                 "📊 <b>Ежедневная сводка</b>\n"
-                f"📅 {get_now().strftime('%d.%m.%Y')}\n\n"
-                f"<b>За последние 24 часа:</b>\n"
+                f"📅 {now.strftime('%d.%m.%Y')}\n\n"
+                f"<b>За сегодня (с 00:01 до 21:30):</b>\n"
                 f"• Новых заявок: {len(new_orders)}\n\n"
                 f"<b>Текущее состояние:</b>\n"
                 f"• Активных заявок: {len(active_orders)}\n"

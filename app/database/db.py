@@ -764,6 +764,7 @@ class Database:
         client_address: str,
         client_phone: str,
         dispatcher_id: int,
+        master_lead_name: str | None = None,
         notes: str | None = None,
         scheduled_time: str | None = None,
     ) -> Order:
@@ -777,6 +778,7 @@ class Database:
             client_address: Адрес клиента
             client_phone: Телефон клиента
             dispatcher_id: ID диспетчера
+            master_lead_name: Имя мастера-источника лида
             notes: Заметки
             scheduled_time: Время прибытия к клиенту
 
@@ -787,8 +789,8 @@ class Database:
         cursor = await self.connection.execute(
             """
             INSERT INTO orders (equipment_type, description, client_name, client_address,
-                              client_phone, dispatcher_id, notes, scheduled_time, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              client_phone, master_lead_name, dispatcher_id, notes, scheduled_time, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 equipment_type,
@@ -796,6 +798,7 @@ class Database:
                 client_name,
                 client_address,
                 client_phone,
+                master_lead_name,
                 dispatcher_id,
                 notes,
                 scheduled_time,
@@ -812,6 +815,7 @@ class Database:
             client_name=client_name,
             client_address=client_address,
             client_phone=client_phone,
+            master_lead_name=master_lead_name,
             dispatcher_id=dispatcher_id,
             notes=notes,
             scheduled_time=scheduled_time,
@@ -857,6 +861,7 @@ class Database:
                 client_name=row["client_name"],
                 client_address=row["client_address"],
                 client_phone=row["client_phone"],
+                master_lead_name=row.get("master_lead_name"),
                 status=row["status"],
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],

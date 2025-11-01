@@ -29,19 +29,31 @@ def upgrade() -> None:
 
     # Если таблицы нет, ничего не делаем
     if not inspector.has_table('orders'):
+        print("[SKIP] Таблица orders не существует")
         return
+
+    # Проверяем существование constraint
+    constraints = inspector.get_check_constraints('orders')
+    constraint_exists = any(c['name'] == 'chk_orders_status' for c in constraints)
+    
+    if constraint_exists:
+        print("[INFO] Удаляем существующий constraint chk_orders_status")
+    else:
+        print("[INFO] Constraint chk_orders_status не существует, создаем новый")
 
     # Обновляем constraint
     with op.batch_alter_table('orders', schema=None) as batch_op:
-        try:
+        # Пытаемся удалить constraint если существует
+        if constraint_exists:
             batch_op.drop_constraint('chk_orders_status', type_='check')
-        except Exception:
-            pass
+            print("[OK] Constraint chk_orders_status удален")
 
+        # Создаем новый constraint
         batch_op.create_check_constraint(
             'chk_orders_status',
             "status IN ('NEW', 'ASSIGNED', 'ACCEPTED', 'ONSITE', 'CLOSED', 'REFUSED', 'DR')"
         )
+        print("[OK] Constraint chk_orders_status создан")
 
 
 def downgrade() -> None:

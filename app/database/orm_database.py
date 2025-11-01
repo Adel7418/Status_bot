@@ -524,6 +524,7 @@ class ORMDatabase:
         client_address: str,
         client_phone: str,
         dispatcher_id: int,
+        master_lead_name: str | None = None,
         notes: str | None = None,
         scheduled_time: str | None = None,
     ) -> Order:
@@ -536,6 +537,7 @@ class ORMDatabase:
                 client_name=client_name,
                 client_address=client_address,
                 client_phone=client_phone,
+                master_lead_name=master_lead_name,
                 dispatcher_id=dispatcher_id,
                 notes=notes,
                 scheduled_time=scheduled_time,

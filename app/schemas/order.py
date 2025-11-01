@@ -16,6 +16,9 @@ class OrderCreateSchema(BaseModel):
     client_name: str = Field(..., min_length=2, max_length=200, description="ФИО клиента")
     client_address: str = Field(..., min_length=4, max_length=500, description="Адрес клиента")
     client_phone: str = Field(..., min_length=10, max_length=20, description="Телефон клиента")
+    master_lead_name: str | None = Field(
+        None, max_length=255, description="Имя мастера-источника лида"
+    )
     notes: str | None = Field(
         None, max_length=MAX_NOTES_LENGTH, description="Дополнительные заметки"
     )
@@ -198,6 +201,7 @@ class OrderUpdateSchema(BaseModel):
     client_name: str | None = Field(None, min_length=2, max_length=200)
     client_address: str | None = Field(None, min_length=4, max_length=500)
     client_phone: str | None = Field(None, min_length=10, max_length=20)
+    master_lead_name: str | None = Field(None, max_length=255)
     notes: str | None = Field(None, max_length=MAX_NOTES_LENGTH)
 
     @field_validator("equipment_type")

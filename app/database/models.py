@@ -154,6 +154,7 @@ class Order:
     client_name: str = ""
     client_address: str = ""
     client_phone: str = ""
+    master_lead_name: str | None = None  # Имя мастера-источника лида
     status: str = "NEW"
     assigned_master_id: int | None = None
     dispatcher_id: int | None = None
