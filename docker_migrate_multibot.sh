@@ -108,6 +108,20 @@ migrate_bot() {
         return 1
     fi
 
+    # 5.1. Проверка и ручное добавление колонки master_lead_name если её нет
+    log_info "Проверка наличия колонки master_lead_name в таблице orders для $BOT_NAME..."
+    if $DOCKER_CMD -f $COMPOSE_FILE run --rm $BOT_NAME sqlite3 /app/data/bot_database.db "PRAGMA table_info(orders);" | grep -q "master_lead_name"; then
+        log_success "Колонка master_lead_name уже существует в таблице orders для $BOT_NAME"
+    else
+        log_warning "Колонка master_lead_name отсутствует в таблице orders для $BOT_NAME"
+        log_info "Добавление колонки master_lead_name вручную..."
+        if $DOCKER_CMD -f $COMPOSE_FILE run --rm $BOT_NAME sqlite3 /app/data/bot_database.db "ALTER TABLE orders ADD COLUMN master_lead_name VARCHAR(255) NULL;" 2>/dev/null; then
+            log_success "Колонка master_lead_name добавлена для $BOT_NAME"
+        else
+            log_warning "Не удалось добавить колонку master_lead_name для $BOT_NAME (возможно, уже существует)"
+        fi
+    fi
+
     # 6. Запуск бота
     log_info "Запуск $BOT_NAME..."
     if $DOCKER_CMD -f $COMPOSE_FILE up -d $BOT_NAME; then
