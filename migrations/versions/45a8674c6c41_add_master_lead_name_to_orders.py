@@ -24,35 +24,45 @@ def upgrade() -> None:
     NOTE: Эта миграция также добавляла lead_source, но в более поздней
     миграции 4734f51bfd4b колонка lead_source была удалена как неиспользуемая.
     """
-    conn = op.get_bind()
+    from sqlalchemy import inspect
+    
+    bind = op.get_bind()
+    inspector = inspect(bind)
     
     # Проверяем существование таблицы orders
-    try:
-        conn.execute(sa.text("SELECT 1 FROM orders LIMIT 1"))
-        table_exists = True
-    except Exception:
-        table_exists = False
+    if not inspector.has_table('orders'):
         print("[SKIP] Таблица orders не существует")
         return
     
-    if table_exists:
-        # Проверяем и добавляем колонку master_lead_name в orders
-        try:
-            conn.execute(sa.text("SELECT master_lead_name FROM orders LIMIT 1"))
-            print("[INFO] Колонка master_lead_name уже существует в orders")
-        except Exception:
-            op.add_column('orders', sa.Column('master_lead_name', sa.String(255), nullable=True))
-            print("[OK] Добавлена колонка master_lead_name в orders")
+    # Получаем список колонок
+    columns = [c['name'] for c in inspector.get_columns('orders')]
+    
+    # Проверяем и добавляем колонку master_lead_name в orders
+    if 'master_lead_name' in columns:
+        print("[INFO] Колонка master_lead_name уже существует в orders")
+    else:
+        op.add_column('orders', sa.Column('master_lead_name', sa.String(255), nullable=True))
+        print("[OK] Добавлена колонка master_lead_name в orders")
 
 
 def downgrade() -> None:
     """Удаление колонки master_lead_name из orders"""
-    conn = op.get_bind()
+    from sqlalchemy import inspect
+    
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    
+    # Проверяем существование таблицы orders
+    if not inspector.has_table('orders'):
+        print("[SKIP] Таблица orders не существует")
+        return
+    
+    # Получаем список колонок
+    columns = [c['name'] for c in inspector.get_columns('orders')]
     
     # Удаляем master_lead_name
-    try:
-        conn.execute(sa.text("SELECT master_lead_name FROM orders LIMIT 1"))
+    if 'master_lead_name' in columns:
         op.drop_column('orders', 'master_lead_name')
         print("[OK] Удалена колонка master_lead_name из orders")
-    except Exception:
+    else:
         print("[INFO] Колонка master_lead_name не существует в orders")
