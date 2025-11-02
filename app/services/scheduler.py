@@ -176,9 +176,13 @@ class TaskScheduler:
             if not master:
                 return
 
+            # Форматируем дату и время для напоминания
+            date_str = scheduled_datetime.strftime('%d.%m.%Y')
+            time_str = scheduled_datetime.strftime('%H:%M')
+            
             reminder_text = (
                 f"<b>Напоминание о визите</b> #{order.id}\n"
-                f"{order.equipment_type} в {scheduled_datetime.strftime('%H:%M')}\n"
+                f"{order.equipment_type} в {date_str} {time_str}\n"
                 f"Подготовьтесь к выезду"
             )
 

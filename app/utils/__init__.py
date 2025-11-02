@@ -2,6 +2,7 @@
 from app.utils.date_parser import (
     format_datetime_for_storage,
     format_datetime_user_friendly,
+    format_estimated_completion_with_days,
     parse_natural_datetime,
     should_parse_as_date,
     validate_parsed_datetime,
@@ -51,6 +52,7 @@ __all__ = [
     "format_datetime",
     "format_datetime_for_storage",
     "format_datetime_user_friendly",
+    "format_estimated_completion_with_days",
     "format_phone",
     # DateTime utilities
     "get_now",

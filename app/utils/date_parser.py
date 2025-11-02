@@ -607,11 +607,16 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     preprocessed_text = text
 
     # Настройки для dateparser
+    # Используем текущее время с правильным часовым поясом для правильного расчета относительных дат
+    now_for_parsing = get_now()
+    if now_for_parsing.tzinfo is None:
+        now_for_parsing = now_for_parsing.replace(tzinfo=MOSCOW_TZ)
+    
     settings = {
         "TIMEZONE": "Europe/Moscow",
         "RETURN_AS_TIMEZONE_AWARE": True,
         "PREFER_DATES_FROM": "future",  # Предпочитаем будущие даты
-        "RELATIVE_BASE": get_now().replace(tzinfo=MOSCOW_TZ),
+        "RELATIVE_BASE": now_for_parsing,  # Используем текущее время для правильного расчета
     }
 
     # Пытаемся распарсить дату
@@ -670,7 +675,8 @@ def format_datetime_for_storage(dt: datetime | None, original_text: str) -> str:
     # Форматируем дату в удобный формат
     formatted = dt.strftime("%d.%m.%Y %H:%M")
 
-    # Если исходный текст короткий и похож на время - не дублируем
+    # Если исходный текст короткий и похож на время - сохраняем его для справки
+    # Разницу дней вычисляем при отображении, а не при сохранении
     if len(original_text) < 20 and any(
         keyword in original_text.lower()
         for keyword in ["завтра", "послезавтра", "через", "сегодня"]
@@ -678,6 +684,77 @@ def format_datetime_for_storage(dt: datetime | None, original_text: str) -> str:
         return f"{formatted} ({original_text})"
 
     return formatted
+
+
+def _get_days_word(days: int) -> str:
+    """Получение правильной формы слова 'день'"""
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+    elif 2 <= days % 10 <= 4 and (days % 100 < 10 or days % 100 >= 20):
+        return "дня"
+    else:
+        return "дней"
+
+
+def format_estimated_completion_with_days(estimated_date_str: str) -> str:
+    """
+    Форматирование estimated_completion_date с расчетом "Через X дней"
+    
+    Args:
+        estimated_date_str: Строка с датой завершения из БД (формат: "DD.MM.YYYY HH:MM (текст)" или "DD.MM.YYYY HH:MM")
+    
+    Returns:
+        Отформатированная строка с расчетом дней
+    """
+    if not estimated_date_str:
+        return estimated_date_str
+    
+    # Пытаемся извлечь дату из строки (формат: "DD.MM.YYYY HH:MM")
+    date_pattern = r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})"
+    match = re.match(date_pattern, estimated_date_str)
+    
+    if not match:
+        return estimated_date_str  # Не удалось распарсить, возвращаем как есть
+    
+    day, month, year, hour, minute = map(int, match.groups())
+    
+    try:
+        from datetime import datetime
+        from app.utils.helpers import MOSCOW_TZ, get_now
+        
+        # Создаем datetime объект
+        completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+        now = get_now()
+        
+        # Вычисляем разницу в днях
+        days_diff = (completion_dt.date() - now.date()).days
+        
+        # Формируем текст с датой и расчетом дней
+        date_formatted = completion_dt.strftime("%d.%m.%Y %H:%M")
+        
+        if days_diff == 0:
+            days_text = "(Сегодня)"
+        elif days_diff == 1:
+            days_text = "(Завтра)"
+        elif days_diff == 2:
+            days_text = "(Послезавтра)"
+        elif days_diff > 0:
+            days_text = f"(Через {days_diff} {_get_days_word(days_diff)})"
+        else:
+            days_text = ""  # Дата в прошлом, не показываем расчет
+        
+        # Извлекаем оригинальный текст из скобок, если есть
+        original_in_brackets = re.search(r"\((.+?)\)", estimated_date_str)
+        if original_in_brackets and days_diff > 0:
+            # Используем расчет дней вместо оригинального текста
+            return f"{date_formatted} {days_text}"
+        elif days_text:
+            return f"{date_formatted} {days_text}"
+        else:
+            return date_formatted
+            
+    except (ValueError, TypeError):
+        return estimated_date_str  # Ошибка парсинга, возвращаем как есть
 
 
 def format_datetime_user_friendly(dt: datetime | None, original_text: str) -> str:

@@ -2172,10 +2172,15 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             details=f"Order #{order_id} translated to long repair. Completion: {completion_date}, Prepayment: {prepayment_amount or 'none'}",
         )
 
+        # Форматируем дату с расчетом дней для отображения
+        from app.utils.date_parser import format_estimated_completion_with_days
+        
+        completion_date_formatted = format_estimated_completion_with_days(completion_date)
+        
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
-            f"⏰ <b>Срок завершения:</b> {completion_date}\n"
+            f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
         )
 
         if prepayment_amount:
@@ -2203,12 +2208,17 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             master = await db.get_master_by_telegram_id(message.from_user.id)
             master_name = master.get_display_name() if master else f"ID: {message.from_user.id}"
 
+            # Форматируем дату с расчетом дней для отображения
+            from app.utils.date_parser import format_estimated_completion_with_days
+            
+            completion_date_formatted = format_estimated_completion_with_days(completion_date)
+            
             notification = (
                 f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
                 f"👨‍🔧 {master_name}\n"
                 f"👤 {order.client_name} - {order.client_phone}\n"
                 f"🔧 {order.equipment_type}\n\n"
-                f"⏰ <b>Срок завершения:</b> {completion_date}\n"
+                f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
             )
 
             if prepayment_amount:
