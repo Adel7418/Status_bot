@@ -631,6 +631,24 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
             # Убедимся что есть timezone
             if parsed_date.tzinfo is None:
                 parsed_date = parsed_date.replace(tzinfo=MOSCOW_TZ)
+            
+            # Проверяем и исправляем год, если он слишком далеко в будущем
+            # Это может произойти, если dateparser неправильно парсит относительные даты
+            current_year = get_now().year
+            if parsed_date.year > current_year + 1:
+                logger.warning(
+                    f"Парсинг даты '{original_text}' дал год {parsed_date.year}, "
+                    f"исправляем на {current_year}"
+                )
+                # Пробуем исправить год, сохраняя месяц и день
+                try:
+                    parsed_date = parsed_date.replace(year=current_year)
+                    # Если дата в прошлом после исправления, добавляем год
+                    if parsed_date < get_now():
+                        parsed_date = parsed_date.replace(year=current_year + 1)
+                except ValueError:
+                    # Если дата невалидна (например, 29 февраля в невисокосном году), оставляем как есть
+                    pass
 
             # Валидация если требуется
             if validate:
@@ -722,14 +740,30 @@ def format_estimated_completion_with_days(estimated_date_str: str) -> str:
         from datetime import datetime
         from app.utils.helpers import MOSCOW_TZ, get_now
         
-        # Создаем datetime объект
-        completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+        # Проверяем год - если он слишком далеко в будущем, исправляем
         now = get_now()
+        current_year = now.year
+        if year > current_year + 1:
+            logger.warning(
+                f"Дата завершения имеет год {year}, исправляем на {current_year}"
+            )
+            # Пробуем использовать текущий год
+            try:
+                completion_dt = datetime(current_year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+                # Если дата в прошлом, добавляем год
+                if completion_dt < now:
+                    completion_dt = datetime(current_year + 1, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+            except ValueError:
+                # Если дата невалидна, используем исходный год
+                completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+        else:
+            # Создаем datetime объект
+            completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
         
-        # Вычисляем разницу в днях
+        # Вычисляем разницу в днях относительно текущей даты
         days_diff = (completion_dt.date() - now.date()).days
         
-        # Формируем текст с датой и расчетом дней
+        # Формируем текст с датой и расчетом дней (всегда используем актуальный расчет)
         date_formatted = completion_dt.strftime("%d.%m.%Y %H:%M")
         
         if days_diff == 0:
@@ -743,12 +777,8 @@ def format_estimated_completion_with_days(estimated_date_str: str) -> str:
         else:
             days_text = ""  # Дата в прошлом, не показываем расчет
         
-        # Извлекаем оригинальный текст из скобок, если есть
-        original_in_brackets = re.search(r"\((.+?)\)", estimated_date_str)
-        if original_in_brackets and days_diff > 0:
-            # Используем расчет дней вместо оригинального текста
-            return f"{date_formatted} {days_text}"
-        elif days_text:
+        # Всегда используем актуальный расчет дней, а не оригинальный текст из БД
+        if days_text:
             return f"{date_formatted} {days_text}"
         else:
             return date_formatted
