@@ -93,11 +93,13 @@ def upgrade() -> None:
         if 'version' in audit_log_columns:
             batch_op.drop_column('version')
 
-    with op.batch_alter_table('entity_history', schema=None) as batch_op:
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+    if inspector.has_table('entity_history'):
+        with op.batch_alter_table('entity_history', schema=None) as batch_op:
+            batch_op.drop_column('version')
+            batch_op.drop_column('deleted_at')
 
-    with op.batch_alter_table('financial_reports', schema=None) as batch_op:
+    if inspector.has_table('financial_reports'):
+        with op.batch_alter_table('financial_reports', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -153,7 +155,8 @@ def upgrade() -> None:
         batch_op.drop_column('version')
         batch_op.drop_column('deleted_at')
 
-    with op.batch_alter_table('master_financial_reports', schema=None) as batch_op:
+    if inspector.has_table('master_financial_reports'):
+        with op.batch_alter_table('master_financial_reports', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -204,11 +207,13 @@ def upgrade() -> None:
         batch_op.drop_column('version')
         batch_op.drop_column('deleted_at')
 
-    with op.batch_alter_table('master_report_archives', schema=None) as batch_op:
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+    if inspector.has_table('master_report_archives'):
+        with op.batch_alter_table('master_report_archives', schema=None) as batch_op:
+            batch_op.drop_column('version')
+            batch_op.drop_column('deleted_at')
 
-    with op.batch_alter_table('masters', schema=None) as batch_op:
+    if inspector.has_table('masters'):
+        with op.batch_alter_table('masters', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -242,10 +247,12 @@ def upgrade() -> None:
         batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
         batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
 
-    with op.batch_alter_table('order_group_messages', schema=None) as batch_op:
-        batch_op.drop_column('version')
+    if inspector.has_table('order_group_messages'):
+        with op.batch_alter_table('order_group_messages', schema=None) as batch_op:
+            batch_op.drop_column('version')
 
-    with op.batch_alter_table('order_status_history', schema=None) as batch_op:
+    if inspector.has_table('order_status_history'):
+        with op.batch_alter_table('order_status_history', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -269,7 +276,8 @@ def upgrade() -> None:
         batch_op.drop_column('version')
         batch_op.drop_column('deleted_at')
 
-    with op.batch_alter_table('orders', schema=None) as batch_op:
+    if inspector.has_table('orders'):
+        with op.batch_alter_table('orders', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -345,7 +353,8 @@ def upgrade() -> None:
         batch_op.create_index('idx_orders_review', ['has_review', 'status'], unique=False)
         batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
 
-    with op.batch_alter_table('users', schema=None) as batch_op:
+    if inspector.has_table('users'):
+        with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
