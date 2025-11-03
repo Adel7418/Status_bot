@@ -53,7 +53,17 @@ def upgrade() -> None:
     else:
         print("[SKIP] Таблица order_reports уже существует")
     
-    op.drop_table('master_archives')
+    # Удаляем master_archives только если существует
+    try:
+        from sqlalchemy import inspect as _insp2
+        _ins = _insp2(op.get_bind())
+        if _ins.has_table('master_archives'):
+            op.drop_table('master_archives')
+            print('[OK] Таблица master_archives удалена')
+        else:
+            print('[SKIP] Таблица master_archives не существует')
+    except Exception as _e:
+        print(f'[WARN] Пропускаем удаление master_archives: {_e}')
     with op.batch_alter_table('audit_log', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
