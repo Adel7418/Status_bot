@@ -197,6 +197,95 @@ class OrderReportsService:
         finally:
             await self.db.disconnect()
 
+    async def upsert_order_report(
+        self,
+        order: Order,
+        master: Master | None = None,
+        dispatcher: User | None = None,
+    ) -> bool:
+        """Обновить существующий отчет по заказу или создать, если его нет.
+
+        Используется при админ-редактировании закрытой заявки для синхронизации отчетов.
+        """
+        await self.db.connect()
+        try:
+            master_name = None
+            dispatcher_name = None
+
+            if master and hasattr(master, "telegram_id"):
+                master_user = await self.db.get_user_by_telegram_id(master.telegram_id)
+                if master_user:
+                    master_name = f"{master_user.first_name} {master_user.last_name}"
+
+            if dispatcher:
+                dispatcher_name = f"{dispatcher.first_name} {dispatcher.last_name}"
+
+            # Пересчитываем время выполнения
+            completion_time_hours = None
+            try:
+                created_dt = order.created_at
+                closed_dt = order.updated_at
+                if isinstance(created_dt, str):
+                    created_dt = datetime.fromisoformat(created_dt.replace("Z", "+00:00"))
+                if isinstance(closed_dt, str):
+                    closed_dt = datetime.fromisoformat(closed_dt.replace("Z", "+00:00"))
+                if created_dt and closed_dt:
+                    if getattr(created_dt, "tzinfo", None) is not None:
+                        created_dt = created_dt.replace(tzinfo=None)
+                    if getattr(closed_dt, "tzinfo", None) is not None:
+                        closed_dt = closed_dt.replace(tzinfo=None)
+                    completion_time_hours = (closed_dt - created_dt).total_seconds() / 3600
+            except Exception:
+                pass
+
+            async with self.db.get_session() as session:
+                from sqlalchemy import text
+                # Удаляем существующую запись и вставляем новую (простой UPSERT для SQLite)
+                await session.execute(text("DELETE FROM order_reports WHERE order_id = :oid"), {"oid": order.id})
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO order_reports (
+                            order_id, equipment_type, client_name, client_address,
+                            master_id, master_name, dispatcher_id, dispatcher_name,
+                            total_amount, materials_cost, master_profit, company_profit,
+                            out_of_city, has_review, created_at, closed_at, completion_time_hours
+                        ) VALUES (:order_id, :equipment_type, :client_name, :client_address,
+                                 :master_id, :master_name, :dispatcher_id, :dispatcher_name,
+                                 :total_amount, :materials_cost, :master_profit, :company_profit,
+                                 :out_of_city, :has_review, :created_at, :closed_at, :completion_time_hours)
+                        """
+                    ),
+                    {
+                        "order_id": order.id,
+                        "equipment_type": order.equipment_type,
+                        "client_name": order.client_name,
+                        "client_address": order.client_address,
+                        "master_id": order.assigned_master_id,
+                        "master_name": master_name,
+                        "dispatcher_id": order.dispatcher_id,
+                        "dispatcher_name": dispatcher_name,
+                        "total_amount": order.total_amount or 0.0,
+                        "materials_cost": order.materials_cost or 0.0,
+                        "master_profit": order.master_profit or 0.0,
+                        "company_profit": order.company_profit or 0.0,
+                        "out_of_city": 1 if order.out_of_city else 0,
+                        "has_review": 1 if order.has_review else 0,
+                        "created_at": order.created_at,
+                        "closed_at": order.updated_at,
+                        "completion_time_hours": completion_time_hours,
+                    },
+                )
+                await session.commit()
+
+            logger.info(f"Upsert отчета по заказу #{order.id} выполнен")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка upsert отчета по заказу {order.id}: {e}")
+            return False
+        finally:
+            await self.db.disconnect()
+
     async def get_order_reports_summary(
         self, start_date: str | None = None, end_date: str | None = None
     ) -> dict:

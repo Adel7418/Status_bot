@@ -27,7 +27,7 @@ from app.keyboards.reply import (
     get_skip_cancel_keyboard,
 )
 from app.schemas import OrderCreateSchema
-from app.states import AdminCloseOrderStates, CreateOrderStates
+from app.states import AdminCloseOrderStates, CreateOrderStates, EditClosedOrderStates
 from app.utils import (
     escape_html,
     format_datetime,
@@ -47,6 +47,350 @@ logger = logging.getLogger(__name__)
 router = Router(name="dispatcher")
 # Фильтры на уровне роутера НЕ работают, т.к. выполняются ДО middleware
 # Проверка роли теперь в каждом обработчике через декоратор
+# ==================== РЕДАКТИРОВАНИЕ ЗАКРЫТОЙ ЗАЯВКИ (ADMIN) ====================
+
+
+@router.message(F.text.regexp(r"^/edit_closed(\s+\d+)?$"))
+@handle_errors
+async def admin_edit_closed_start(message: Message, state: FSMContext, user_role: str):
+    """Старт редактирования закрытой заявки. Только ADMIN.
+
+    Формат: /edit_closed <order_id>
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    await state.clear()
+
+    parts = message.text.strip().split()
+    if len(parts) >= 2 and parts[1].isdigit():
+        order_id = int(parts[1])
+        await state.update_data(order_id=order_id)
+    else:
+        await state.set_state(EditClosedOrderStates.waiting_order_id)
+        await message.answer("🔎 Введите ID закрытой заявки для редактирования:")
+        return
+
+    # Проверим заявку
+    from app.database.orm_database import ORMDatabase
+
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await message.answer("❌ Заявка не найдена")
+            return
+        if order.status != OrderStatus.CLOSED:
+            await message.answer("❌ Редактировать можно только закрытые заявки (CLOSED)")
+            return
+    finally:
+        await db.disconnect()
+
+    # Переходим к выбору поля для редактирования
+    await state.set_state(EditClosedOrderStates.select_field)
+    await send_edit_closed_menu(message, state)
+
+
+@router.message(EditClosedOrderStates.waiting_order_id)
+@handle_errors
+async def admin_edit_closed_set_id(message: Message, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("❌ Укажите числовой ID. Попробуйте снова:")
+        return
+    order_id = int(message.text.strip())
+    from app.database.orm_database import ORMDatabase
+
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await message.answer("❌ Заявка не найдена. Введите другой ID:")
+            return
+        if order.status != OrderStatus.CLOSED:
+            await message.answer("❌ Редактировать можно только закрытые заявки (CLOSED). Введите другой ID:")
+            return
+    finally:
+        await db.disconnect()
+
+    await state.update_data(order_id=order_id)
+    await state.set_state(EditClosedOrderStates.select_field)
+    await send_edit_closed_menu(message, state)
+
+
+async def send_edit_closed_menu(message: Message, state: FSMContext):
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    total = data.get("total_amount")
+    materials = data.get("materials_cost")
+    has_review = data.get("has_review")
+    out_of_city = data.get("out_of_city")
+
+    preview_lines = []
+    if total is not None:
+        preview_lines.append(f"Сумма: {float(total):.2f} ₽")
+    if materials is not None:
+        preview_lines.append(f"Расход: {float(materials):.2f} ₽")
+    if has_review is not None:
+        preview_lines.append(f"Отзыв: {'да' if has_review else 'нет'}")
+    if out_of_city is not None:
+        preview_lines.append(f"Выезд: {'да' if out_of_city else 'нет'}")
+
+    preview = ("\n" + "\n".join(preview_lines)) if preview_lines else ""
+
+    from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="💰 Общая сумма", callback_data=f"ec_select:total:{order_id}"),
+        InlineKeyboardButton(text="🧾 Расход", callback_data=f"ec_select:materials:{order_id}"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="⭐ Отзыв: да", callback_data=f"ec_set_review:yes:{order_id}"),
+        InlineKeyboardButton(text="⭐ Отзыв: нет", callback_data=f"ec_set_review:no:{order_id}"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="🚗 Выезд: да", callback_data=f"ec_set_out:yes:{order_id}"),
+        InlineKeyboardButton(text="🚗 Выезд: нет", callback_data=f"ec_set_out:no:{order_id}"),
+    )
+    kb.row(InlineKeyboardButton(text="✅ Сохранить", callback_data=f"ec_save:{order_id}"))
+
+    await message.answer(
+        "✏️ <b>Редактирование закрытой заявки</b>\nВыберите поле для изменения:" + preview,
+        parse_mode="HTML",
+        reply_markup=kb.as_markup(),
+    )
+
+
+@router.callback_query(F.data.startswith("ec_select:"))
+@handle_errors
+async def admin_edit_closed_select(callback: CallbackQuery, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    _, field, _order_id = callback.data.split(":", 2)
+    if field == "total":
+        await state.set_state(EditClosedOrderStates.enter_total_amount)
+        await callback.message.edit_text("💰 Введите общую сумму заказа (число, ₽):", reply_markup=None)
+    elif field == "materials":
+        await state.set_state(EditClosedOrderStates.enter_materials_cost)
+        await callback.message.edit_text("🧾 Введите сумму расхода (материалы), ₽:", reply_markup=None)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ec_set_review:"))
+@handle_errors
+async def admin_edit_closed_set_review(callback: CallbackQuery, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    _, answer, _order_id = callback.data.split(":", 2)
+    await state.update_data(has_review=(answer == "yes"))
+    await callback.answer("OK")
+    await send_edit_closed_menu(callback.message, state)
+
+
+@router.callback_query(F.data.startswith("ec_set_out:"))
+@handle_errors
+async def admin_edit_closed_set_out(callback: CallbackQuery, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    _, answer, _order_id = callback.data.split(":", 2)
+    await state.update_data(out_of_city=(answer == "yes"))
+    await callback.answer("OK")
+    await send_edit_closed_menu(callback.message, state)
+
+
+@router.callback_query(F.data.startswith("ec_save:"))
+@handle_errors
+async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    data = await state.get_data()
+    order_id = int(data.get("order_id"))
+    total = float(data.get("total_amount")) if data.get("total_amount") is not None else 0.0
+    materials = float(data.get("materials_cost")) if data.get("materials_cost") is not None else 0.0
+    has_review = bool(data.get("has_review")) if data.get("has_review") is not None else False
+    out_of_city = bool(data.get("out_of_city")) if data.get("out_of_city") is not None else False
+
+    net = max(total - materials, 0)
+    base_split = (0.5, 0.5) if net >= 7000 else (0.4, 0.6)
+    master_profit = round(net * base_split[0], 2)
+    company_profit = round(net * base_split[1], 2)
+
+    from app.database.orm_database import ORMDatabase
+
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        await db.update_order_amounts(
+            order_id=order_id,
+            total_amount=total,
+            materials_cost=materials,
+            master_profit=master_profit,
+            company_profit=company_profit,
+            has_review=has_review,
+            out_of_city=out_of_city,
+        )
+        await db.add_audit_log(
+            user_id=callback.from_user.id,
+            action="ADMIN_EDIT_CLOSED_ORDER",
+            details=(
+                f"order_id={order_id}; total={total}; materials={materials}; net={net}; "
+                f"master_profit={master_profit}; company_profit={company_profit}; "
+                f"review={has_review}; out_of_city={out_of_city}"
+            ),
+        )
+
+        # Обновляем данные в отчетах
+        try:
+            from app.services.order_reports import OrderReportsService
+
+            updated_order = await db.get_order_by_id(order_id)
+            master_obj = updated_order.assigned_master if hasattr(updated_order, "assigned_master") else None
+            dispatcher_user = updated_order.dispatcher if hasattr(updated_order, "dispatcher") else None
+
+            reports_service = OrderReportsService()
+            await reports_service.upsert_order_report(updated_order, master_obj, dispatcher_user)
+        except Exception as e:
+            logger.warning(f"Не удалось обновить отчет по заказу {order_id} после редактирования: {e}")
+    finally:
+        await db.disconnect()
+
+    await state.clear()
+    await callback.message.edit_text(
+        (
+            "✅ Изменения сохранены.\n\n"
+            f"Заявка #{order_id}\n"
+            f"• Сумма: {total:.2f} ₽\n"
+            f"• Расход: {materials:.2f} ₽\n"
+            f"• Чистая: {net:.2f} ₽\n"
+            f"• Ваша прибыль: {master_profit:.2f} ₽\n"
+            f"• Прибыль компании: {company_profit:.2f} ₽\n"
+            f"• Отзыв: {'да' if has_review else 'нет'}\n"
+            f"• Выезд за город: {'да' if out_of_city else 'нет'}"
+        ),
+        parse_mode="HTML",
+        reply_markup=None,
+    )
+    await callback.answer("Сохранено")
+
+
+@router.message(EditClosedOrderStates.enter_total_amount)
+@handle_errors
+async def admin_edit_closed_total(message: Message, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    try:
+        total = float(message.text.replace(",", ".").strip())
+        if total < 0:
+            raise ValueError
+    except Exception:
+        await message.answer("❌ Введите корректную сумму (число ≥ 0). Попробуйте снова:")
+        return
+    await state.update_data(total_amount=total)
+    await state.set_state(EditClosedOrderStates.enter_materials_cost)
+    await message.answer("🧾 Введите сумму расхода (материалы), ₽:", reply_markup=get_cancel_keyboard())
+
+
+@router.message(EditClosedOrderStates.enter_materials_cost)
+@handle_errors
+async def admin_edit_closed_materials(message: Message, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    try:
+        materials = float(message.text.replace(",", ".").strip())
+        if materials < 0:
+            raise ValueError
+    except Exception:
+        await message.answer("❌ Введите корректную сумму расходов (число ≥ 0). Попробуйте снова:")
+        return
+    await state.update_data(materials_cost=materials)
+    await state.set_state(EditClosedOrderStates.confirm_review)
+    await message.answer("⭐ Есть отзыв клиента? (да/нет)", reply_markup=get_skip_cancel_keyboard())
+
+
+@router.message(EditClosedOrderStates.confirm_review)
+@handle_errors
+async def admin_edit_closed_review(message: Message, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    val = (message.text or "").strip().lower()
+    has_review = True if val in {"да", "+", "yes", "y", "1"} else False if val in {"нет", "-", "no", "n", "0"} else None
+    if has_review is None:
+        await message.answer("Ответьте 'да' или 'нет'.")
+        return
+    await state.update_data(has_review=has_review)
+    await state.set_state(EditClosedOrderStates.confirm_out_of_city)
+    await message.answer("🚗 Выезд за город? (да/нет)")
+
+
+@router.message(EditClosedOrderStates.confirm_out_of_city)
+@handle_errors
+async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, user_role: str):
+    if user_role != UserRole.ADMIN:
+        return
+    val = (message.text or "").strip().lower()
+    out_of_city = True if val in {"да", "+", "yes", "y", "1"} else False if val in {"нет", "-", "no", "n", "0"} else None
+    if out_of_city is None:
+        await message.answer("Ответьте 'да' или 'нет'.")
+        return
+    await state.update_data(out_of_city=out_of_city)
+
+    data = await state.get_data()
+    order_id = int(data["order_id"]) if "order_id" in data else None
+    total = float(data.get("total_amount", 0))
+    materials = float(data.get("materials_cost", 0))
+    net = max(total - materials, 0)
+    base_split = (0.5, 0.5) if net >= 7000 else (0.4, 0.6)
+    master_profit = round(net * base_split[0], 2)
+    company_profit = round(net * base_split[1], 2)
+
+    # Сохраняем
+    from app.database.orm_database import ORMDatabase
+
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        await db.update_order_amounts(
+            order_id=order_id,
+            total_amount=total,
+            materials_cost=materials,
+            master_profit=master_profit,
+            company_profit=company_profit,
+            has_review=data.get("has_review"),
+            out_of_city=out_of_city,
+        )
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="ADMIN_EDIT_CLOSED_ORDER",
+            details=(
+                f"order_id={order_id}; total={total}; materials={materials}; net={net}; "
+                f"master_profit={master_profit}; company_profit={company_profit}; "
+                f"review={data.get('has_review')}; out_of_city={out_of_city}"
+            ),
+        )
+    finally:
+        await db.disconnect()
+
+    await state.clear()
+    await message.answer(
+        (
+            "✅ Изменения сохранены.\n\n"
+            f"Заявка #{order_id}\n"
+            f"• Сумма: {total:.2f} ₽\n"
+            f"• Расход: {materials:.2f} ₽\n"
+            f"• Чистая: {net:.2f} ₽\n"
+            f"• Ваша прибыль: {master_profit:.2f} ₽\n"
+            f"• Прибыль компании: {company_profit:.2f} ₽\n"
+            f"• Отзыв: {'да' if data.get('has_review') else 'нет'}\n"
+            f"• Выезд за город: {'да' if out_of_city else 'нет'}"
+        ),
+        parse_mode="HTML",
+    )
+
 
 
 # ==================== СОЗДАНИЕ ЗАЯВКИ ====================

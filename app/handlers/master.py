@@ -1096,6 +1096,26 @@ async def process_total_amount(message: Message, state: FSMContext):
         is_sender_allowed = True
 
     if not is_sender_allowed:
+        # Дополнительный допуск: администратор может вводить сумму из любого чата
+        try:
+            from app.database import Database as _LegacyDB
+            from app.config import UserRole as _UserRole
+
+            _db = _LegacyDB()
+            await _db.connect()
+            try:
+                _user = await _db.get_user_by_telegram_id(message.from_user.id)
+                if _user and _user.has_role(_UserRole.ADMIN):
+                    is_sender_allowed = True
+                    logger.info(
+                        f"[PROCESS_TOTAL_AMOUNT] Admin override allowed for user {message.from_user.id}"
+                    )
+            finally:
+                await _db.disconnect()
+        except Exception:
+            pass
+
+    if not is_sender_allowed:
         logger.warning(
             f"[PROCESS_TOTAL_AMOUNT] Rejected message from user {message.from_user.id} in chat {message.chat.id}. "
             f"Context: initiator={initiator_user_id}, allowed_chat={allowed_chat_id}, acting_as={acting_as_master_id}"

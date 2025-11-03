@@ -83,6 +83,17 @@ class AdminCloseOrderStates(StatesGroup):
     enter_value = State()  # Ввод значения при точечном редактировании
 
 
+class EditClosedOrderStates(StatesGroup):
+    """Состояния для редактирования закрытой заявки (только ADMIN)"""
+
+    waiting_order_id = State()  # Ввод ID заявки или выбор
+    select_field = State()  # Выбор редактируемого поля
+    enter_total_amount = State()  # Ввод общей суммы
+    enter_materials_cost = State()  # Ввод суммы расхода
+    confirm_review = State()  # Подтверждение наличия отзыва
+    confirm_out_of_city = State()  # Подтверждение выезда за город
+    confirm = State()  # Подтверждение изменений
+
 class LongRepairStates(StatesGroup):
     """Состояния для перевода заявки в длительный ремонт"""
 
