@@ -119,7 +119,14 @@ async def admin_edit_closed_set_id(message: Message, state: FSMContext, user_rol
     finally:
         await db.disconnect()
 
-    await state.update_data(order_id=order_id)
+    # Инициализируем FSM начальными значениями из БД, чтобы они были доступны при сохранении
+    await state.update_data(
+        order_id=order_id,
+        total_amount=order.total_amount,
+        materials_cost=order.materials_cost,
+        has_review=order.has_review if order.has_review is not None else False,
+        out_of_city=order.out_of_city if order.out_of_city is not None else False,
+    )
     await state.set_state(EditClosedOrderStates.select_field)
     await send_edit_closed_menu(message, state)
 
@@ -259,6 +266,7 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
             return
 
         # Определяем, какие поля реально редактировались
+        # Важно: проверяем, были ли значения изменены явно (не просто присутствуют в FSM)
         total = (
             float(data["total_amount"])
             if "total_amount" in data and data["total_amount"] is not None
@@ -269,20 +277,48 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
             if "materials_cost" in data and data["materials_cost"] is not None
             else None
         )
-        has_review = data["has_review"] if "has_review" in data else None
-        out_of_city = data["out_of_city"] if "out_of_city" in data else None
+        
+        # Для has_review и out_of_city проверяем, были ли они явно изменены через кнопки
+        # Если они присутствуют в FSM, но равны текущим значениям из БД - значит не изменялись
+        has_review = data.get("has_review")
+        out_of_city = data.get("out_of_city")
+        
+        # Проверяем, были ли значения явно изменены (отличаются от текущих в БД)
+        has_review_changed = (
+            has_review is not None 
+            and has_review != (current.has_review or False)
+        )
+        out_of_city_changed = (
+            out_of_city is not None 
+            and out_of_city != (current.out_of_city or False)
+        )
+        
+        # Если значения не были изменены, используем None чтобы не обновлять их в БД
+        has_review = has_review if has_review_changed else None
+        out_of_city = out_of_city if out_of_city_changed else None
 
-        # Определяем значения для расчета прибыли (используем новые, если они есть, иначе текущие)
-        # Важно: если total_amount или materials_cost не были изменены, используем текущие значения из БД
+        # Определяем значения для расчета прибыли
+        # Важно: используем значения из FSM (которые инициализированы из БД при начале редактирования),
+        # если они не были изменены явно. Это гарантирует, что расчет будет таким же, как в предпросмотре.
         new_total_for_calc = total if total is not None else (current.total_amount or 0.0)
         new_materials_for_calc = (
             materials if materials is not None else (current.materials_cost or 0.0)
         )
+        
+        # Для has_review и out_of_city используем значения из FSM (если они есть) или из БД
+        # Это гарантирует консистентность с предпросмотром
+        has_review_from_fsm = data.get("has_review")
+        out_of_city_from_fsm = data.get("out_of_city")
+        
         new_has_review_for_calc = (
-            has_review if has_review is not None else (current.has_review or False)
+            has_review_from_fsm 
+            if has_review_from_fsm is not None 
+            else (current.has_review or False)
         )
         new_out_of_city_for_calc = (
-            out_of_city if out_of_city is not None else (current.out_of_city or False)
+            out_of_city_from_fsm 
+            if out_of_city_from_fsm is not None 
+            else (current.out_of_city or False)
         )
 
         # Пересчет прибыли ВСЕГДА, если изменилось любое из полей, влияющих на расчет:
