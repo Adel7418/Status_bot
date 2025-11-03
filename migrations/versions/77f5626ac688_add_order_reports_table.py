@@ -64,6 +64,10 @@ def upgrade() -> None:
             print('[SKIP] Таблица master_archives не существует')
     except Exception as _e:
         print(f'[WARN] Пропускаем удаление master_archives: {_e}')
+    # Подготовим информацию о столбцах/индексах audit_log
+    audit_log_columns = {c['name'] for c in inspector.get_columns('audit_log')} if inspector.has_table('audit_log') else set()
+    audit_log_indexes = {i['name'] for i in inspector.get_indexes('audit_log')} if inspector.has_table('audit_log') else set()
+
     with op.batch_alter_table('audit_log', schema=None) as batch_op:
         batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -82,9 +86,12 @@ def upgrade() -> None:
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.create_index('idx_audit_log_deleted_at', ['deleted_at'], unique=False)
-        batch_op.create_index('idx_audit_timestamp', ['timestamp'], unique=False)
-        batch_op.drop_column('version')
+        if 'idx_audit_log_deleted_at' not in audit_log_indexes:
+            batch_op.create_index('idx_audit_log_deleted_at', ['deleted_at'], unique=False)
+        if 'idx_audit_timestamp' not in audit_log_indexes:
+            batch_op.create_index('idx_audit_timestamp', ['timestamp'], unique=False)
+        if 'version' in audit_log_columns:
+            batch_op.drop_column('version')
 
     with op.batch_alter_table('entity_history', schema=None) as batch_op:
         batch_op.drop_column('version')
