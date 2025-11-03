@@ -29,6 +29,7 @@ from app.keyboards.reply import (
 from app.schemas import OrderCreateSchema
 from app.states import AdminCloseOrderStates, CreateOrderStates, EditClosedOrderStates
 from app.utils import (
+    calculate_profit_split,
     escape_html,
     format_datetime,
     format_datetime_for_storage,
@@ -111,7 +112,9 @@ async def admin_edit_closed_set_id(message: Message, state: FSMContext, user_rol
             await message.answer("❌ Заявка не найдена. Введите другой ID:")
             return
         if order.status != OrderStatus.CLOSED:
-            await message.answer("❌ Редактировать можно только закрытые заявки (CLOSED). Введите другой ID:")
+            await message.answer(
+                "❌ Редактировать можно только закрытые заявки (CLOSED). Введите другой ID:"
+            )
             return
     finally:
         await db.disconnect()
@@ -124,46 +127,74 @@ async def admin_edit_closed_set_id(message: Message, state: FSMContext, user_rol
 async def send_edit_closed_menu(message: Message, state: FSMContext):
     data = await state.get_data()
     order_id = data.get("order_id")
-    total = data.get("total_amount")
-    materials = data.get("materials_cost")
-    has_review = data.get("has_review")
-    out_of_city = data.get("out_of_city")
 
-    preview_lines = []
-    if total is not None:
-        preview_lines.append(f"Сумма: {float(total):.2f} ₽")
-    if materials is not None:
-        preview_lines.append(f"Расход: {float(materials):.2f} ₽")
-    if has_review is not None:
-        preview_lines.append(f"Отзыв: {'да' if has_review else 'нет'}")
-    if out_of_city is not None:
-        preview_lines.append(f"Выезд: {'да' if out_of_city else 'нет'}")
+    # Загружаем текущие значения из БД
+    from app.database.orm_database import ORMDatabase
 
-    preview = ("\n" + "\n".join(preview_lines)) if preview_lines else ""
+    db = ORMDatabase()
+    await db.connect()
+    try:
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await message.answer("Заявка не найдена.")
+            return
 
-    from aiogram.types import InlineKeyboardButton
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
+        # Используем значения из FSM, если они есть, иначе из БД
+        total = data.get("total_amount", order.total_amount)
+        materials = data.get("materials_cost", order.materials_cost)
+        has_review = data.get("has_review", order.has_review)
+        out_of_city = data.get("out_of_city", order.out_of_city)
 
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="💰 Общая сумма", callback_data=f"ec_select:total:{order_id}"),
-        InlineKeyboardButton(text="🧾 Расход", callback_data=f"ec_select:materials:{order_id}"),
-    )
-    kb.row(
-        InlineKeyboardButton(text="⭐ Отзыв: да", callback_data=f"ec_set_review:yes:{order_id}"),
-        InlineKeyboardButton(text="⭐ Отзыв: нет", callback_data=f"ec_set_review:no:{order_id}"),
-    )
-    kb.row(
-        InlineKeyboardButton(text="🚗 Выезд: да", callback_data=f"ec_set_out:yes:{order_id}"),
-        InlineKeyboardButton(text="🚗 Выезд: нет", callback_data=f"ec_set_out:no:{order_id}"),
-    )
-    kb.row(InlineKeyboardButton(text="✅ Сохранить", callback_data=f"ec_save:{order_id}"))
+        # Рассчитываем прибыль с учетом текущих значений
+        net_profit = (total or 0.0) - (materials or 0.0)
+        master_profit, company_profit = calculate_profit_split(
+            total or 0.0, materials or 0.0, has_review or False, out_of_city or False
+        )
 
-    await message.answer(
-        "✏️ <b>Редактирование закрытой заявки</b>\nВыберите поле для изменения:" + preview,
-        parse_mode="HTML",
-        reply_markup=kb.as_markup(),
-    )
+        text = (
+            f"✏️ <b>Редактирование закрытой заявки #{order_id}</b>\n\n"
+            f"<b>Текущие значения:</b>\n"
+            f"• Общая сумма: <b>{total or 0.0:.2f} ₽</b>\n"
+            f"• Расход: <b>{materials or 0.0:.2f} ₽</b>\n"
+            f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
+            f"• Прибыль мастера: <b>{master_profit:.2f} ₽</b>\n"
+            f"• Прибыль компании: <b>{company_profit:.2f} ₽</b>\n"
+            f"• Отзыв: {'✅ Да' if has_review else '❌ Нет'}\n"
+            f"• Выезд за город: {'✅ Да' if out_of_city else '❌ Нет'}\n\n"
+            f"Выберите поле для редактирования или сохраните изменения:"
+        )
+
+        from aiogram.types import InlineKeyboardButton
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+        kb = InlineKeyboardBuilder()
+        kb.row(
+            InlineKeyboardButton(
+                text="💰 Общая сумма", callback_data=f"ec_select:total:{order_id}"
+            ),
+            InlineKeyboardButton(text="🧾 Расход", callback_data=f"ec_select:materials:{order_id}"),
+        )
+        kb.row(
+            InlineKeyboardButton(
+                text="⭐ Отзыв: да", callback_data=f"ec_set_review:yes:{order_id}"
+            ),
+            InlineKeyboardButton(
+                text="⭐ Отзыв: нет", callback_data=f"ec_set_review:no:{order_id}"
+            ),
+        )
+        kb.row(
+            InlineKeyboardButton(text="🚗 Выезд: да", callback_data=f"ec_set_out:yes:{order_id}"),
+            InlineKeyboardButton(text="🚗 Выезд: нет", callback_data=f"ec_set_out:no:{order_id}"),
+        )
+        kb.row(InlineKeyboardButton(text="✅ Сохранить", callback_data=f"ec_save:{order_id}"))
+
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=kb.as_markup(),
+        )
+    finally:
+        await db.disconnect()
 
 
 @router.callback_query(F.data.startswith("ec_select:"))
@@ -174,10 +205,14 @@ async def admin_edit_closed_select(callback: CallbackQuery, state: FSMContext, u
     _, field, _order_id = callback.data.split(":", 2)
     if field == "total":
         await state.set_state(EditClosedOrderStates.enter_total_amount)
-        await callback.message.edit_text("💰 Введите общую сумму заказа (число, ₽):", reply_markup=None)
+        await callback.message.edit_text(
+            "💰 Введите общую сумму заказа (число, ₽):", reply_markup=None
+        )
     elif field == "materials":
         await state.set_state(EditClosedOrderStates.enter_materials_cost)
-        await callback.message.edit_text("🧾 Введите сумму расхода (материалы), ₽:", reply_markup=None)
+        await callback.message.edit_text(
+            "🧾 Введите сумму расхода (материалы), ₽:", reply_markup=None
+        )
     await callback.answer()
 
 
@@ -224,24 +259,64 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
             return
 
         # Определяем, какие поля реально редактировались
-        total = float(data["total_amount"]) if "total_amount" in data and data["total_amount"] is not None else None
+        total = (
+            float(data["total_amount"])
+            if "total_amount" in data and data["total_amount"] is not None
+            else None
+        )
         materials = (
-            float(data["materials_cost"]) if "materials_cost" in data and data["materials_cost"] is not None else None
+            float(data["materials_cost"])
+            if "materials_cost" in data and data["materials_cost"] is not None
+            else None
         )
         has_review = data["has_review"] if "has_review" in data else None
         out_of_city = data["out_of_city"] if "out_of_city" in data else None
 
-        # Пересчет прибыли только если менялись total/materials
+        # Определяем значения для расчета прибыли (используем новые, если они есть, иначе текущие)
+        # Важно: если total_amount или materials_cost не были изменены, используем текущие значения из БД
+        new_total_for_calc = total if total is not None else (current.total_amount or 0.0)
+        new_materials_for_calc = (
+            materials if materials is not None else (current.materials_cost or 0.0)
+        )
+        new_has_review_for_calc = (
+            has_review if has_review is not None else (current.has_review or False)
+        )
+        new_out_of_city_for_calc = (
+            out_of_city if out_of_city is not None else (current.out_of_city or False)
+        )
+
+        # Пересчет прибыли ВСЕГДА, если изменилось любое из полей, влияющих на расчет:
+        # total_amount, materials_cost, has_review, out_of_city
+        # Это важно: даже если изменился только has_review или out_of_city, нужно пересчитать прибыль
         master_profit = None
         company_profit = None
-        net = None
-        if total is not None or materials is not None:
-            new_total = total if total is not None else (current.total_amount or 0.0)
-            new_materials = materials if materials is not None else (current.materials_cost or 0.0)
-            net = max(new_total - new_materials, 0)
-            base_split = (0.5, 0.5) if net >= 7000 else (0.4, 0.6)
-            master_profit = round(net * base_split[0], 2)
-            company_profit = round(net * base_split[1], 2)
+
+        # Проверяем, было ли изменено хотя бы одно поле
+        has_changes = (
+            total is not None
+            or materials is not None
+            or has_review is not None
+            or out_of_city is not None
+        )
+
+        # Если есть изменения, пересчитываем прибыль с учетом всех текущих значений
+        if has_changes:
+            master_profit, company_profit = calculate_profit_split(
+                new_total_for_calc,
+                new_materials_for_calc,
+                new_has_review_for_calc,
+                new_out_of_city_for_calc,
+            )
+            # Округляем до 2 знаков после запятой
+            master_profit = round(master_profit, 2)
+            company_profit = round(company_profit, 2)
+
+            logger.info(
+                f"[EDIT_CLOSED] Пересчет прибыли для заказа #{order_id}: "
+                f"total={new_total_for_calc}, materials={new_materials_for_calc}, "
+                f"review={new_has_review_for_calc}, out_of_city={new_out_of_city_for_calc}, "
+                f"master_profit={master_profit}, company_profit={company_profit}"
+            )
 
         await db.update_order_amounts(
             order_id=order_id,
@@ -257,8 +332,16 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
         updated_order = await db.get_order_by_id(order_id)
 
         # Формируем детали для аудита (используем актуальные значения после обновления)
-        final_total = updated_order.total_amount or 0.0 if updated_order else (total if total is not None else current.total_amount or 0.0)
-        final_materials = updated_order.materials_cost or 0.0 if updated_order else (materials if materials is not None else current.materials_cost or 0.0)
+        final_total = (
+            updated_order.total_amount or 0.0
+            if updated_order
+            else (total if total is not None else current.total_amount or 0.0)
+        )
+        final_materials = (
+            updated_order.materials_cost or 0.0
+            if updated_order
+            else (materials if materials is not None else current.materials_cost or 0.0)
+        )
         final_net = final_total - final_materials
 
         await db.add_audit_log(
@@ -277,13 +360,19 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
         try:
             from app.services.order_reports import OrderReportsService
 
-            master_obj = updated_order.assigned_master if hasattr(updated_order, "assigned_master") else None
-            dispatcher_user = updated_order.dispatcher if hasattr(updated_order, "dispatcher") else None
+            master_obj = (
+                updated_order.assigned_master if hasattr(updated_order, "assigned_master") else None
+            )
+            dispatcher_user = (
+                updated_order.dispatcher if hasattr(updated_order, "dispatcher") else None
+            )
 
             reports_service = OrderReportsService()
             await reports_service.upsert_order_report(updated_order, master_obj, dispatcher_user)
         except Exception as e:
-            logger.warning(f"Не удалось обновить отчет по заказу {order_id} после редактирования: {e}")
+            logger.warning(
+                f"Не удалось обновить отчет по заказу {order_id} после редактирования: {e}"
+            )
 
         # Формируем итоговый превью из актуальных значений
         final = updated_order
@@ -332,7 +421,9 @@ async def admin_edit_closed_total(message: Message, state: FSMContext, user_role
         return
     await state.update_data(total_amount=total)
     await state.set_state(EditClosedOrderStates.enter_materials_cost)
-    await message.answer("🧾 Введите сумму расхода (материалы), ₽:", reply_markup=get_cancel_keyboard())
+    await message.answer(
+        "🧾 Введите сумму расхода (материалы), ₽:", reply_markup=get_cancel_keyboard()
+    )
 
 
 @router.message(EditClosedOrderStates.enter_materials_cost)
@@ -358,7 +449,13 @@ async def admin_edit_closed_review(message: Message, state: FSMContext, user_rol
     if user_role != UserRole.ADMIN:
         return
     val = (message.text or "").strip().lower()
-    has_review = True if val in {"да", "+", "yes", "y", "1"} else False if val in {"нет", "-", "no", "n", "0"} else None
+    has_review = (
+        True
+        if val in {"да", "+", "yes", "y", "1"}
+        else False
+        if val in {"нет", "-", "no", "n", "0"}
+        else None
+    )
     if has_review is None:
         await message.answer("Ответьте 'да' или 'нет'.")
         return
@@ -373,7 +470,13 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     if user_role != UserRole.ADMIN:
         return
     val = (message.text or "").strip().lower()
-    out_of_city = True if val in {"да", "+", "yes", "y", "1"} else False if val in {"нет", "-", "no", "n", "0"} else None
+    out_of_city = (
+        True
+        if val in {"да", "+", "yes", "y", "1"}
+        else False
+        if val in {"нет", "-", "no", "n", "0"}
+        else None
+    )
     if out_of_city is None:
         await message.answer("Ответьте 'да' или 'нет'.")
         return
@@ -383,10 +486,15 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     order_id = int(data["order_id"]) if "order_id" in data else None
     total = float(data.get("total_amount", 0))
     materials = float(data.get("materials_cost", 0))
-    net = max(total - materials, 0)
-    base_split = (0.5, 0.5) if net >= 7000 else (0.4, 0.6)
-    master_profit = round(net * base_split[0], 2)
-    company_profit = round(net * base_split[1], 2)
+    has_review = data.get("has_review", False)
+
+    # Используем функцию calculate_profit_split для правильного расчета с учетом has_review и out_of_city
+    master_profit, company_profit = calculate_profit_split(
+        total, materials, has_review, out_of_city
+    )
+    # Округляем до 2 знаков после запятой
+    master_profit = round(master_profit, 2)
+    company_profit = round(company_profit, 2)
 
     # Сохраняем
     from app.database.orm_database import ORMDatabase
@@ -400,37 +508,38 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
             materials_cost=materials,
             master_profit=master_profit,
             company_profit=company_profit,
-            has_review=data.get("has_review"),
+            has_review=has_review,
             out_of_city=out_of_city,
         )
+        net_profit = max(total - materials, 0)
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="ADMIN_EDIT_CLOSED_ORDER",
             details=(
-                f"order_id={order_id}; total={total}; materials={materials}; net={net}; "
+                f"order_id={order_id}; total={total}; materials={materials}; net={net_profit:.2f}; "
                 f"master_profit={master_profit}; company_profit={company_profit}; "
-                f"review={data.get('has_review')}; out_of_city={out_of_city}"
+                f"review={has_review}; out_of_city={out_of_city}"
             ),
         )
     finally:
         await db.disconnect()
 
     await state.clear()
+    net_profit = max(total - materials, 0)
     await message.answer(
         (
             "✅ Изменения сохранены.\n\n"
             f"Заявка #{order_id}\n"
             f"• Сумма: {total:.2f} ₽\n"
             f"• Расход: {materials:.2f} ₽\n"
-            f"• Чистая: {net:.2f} ₽\n"
+            f"• Чистая: {net_profit:.2f} ₽\n"
             f"• Ваша прибыль: {master_profit:.2f} ₽\n"
             f"• Прибыль компании: {company_profit:.2f} ₽\n"
-            f"• Отзыв: {'да' if data.get('has_review') else 'нет'}\n"
+            f"• Отзыв: {'да' if has_review else 'нет'}\n"
             f"• Выезд за город: {'да' if out_of_city else 'нет'}"
         ),
         parse_mode="HTML",
     )
-
 
 
 # ==================== СОЗДАНИЕ ЗАЯВКИ ====================
