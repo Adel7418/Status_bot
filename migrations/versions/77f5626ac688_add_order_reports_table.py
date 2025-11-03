@@ -100,112 +100,112 @@ def upgrade() -> None:
 
     if inspector.has_table('financial_reports'):
         with op.batch_alter_table('financial_reports', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('report_type',
+            batch_op.alter_column('report_type',
                existing_type=sa.TEXT(),
                type_=sa.String(length=50),
                existing_nullable=False)
-        batch_op.alter_column('period_start',
+            batch_op.alter_column('period_start',
                existing_type=sa.TEXT(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.alter_column('period_end',
+            batch_op.alter_column('period_end',
                existing_type=sa.TEXT(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.alter_column('total_amount',
+            batch_op.alter_column('total_amount',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_materials_cost',
+            batch_op.alter_column('total_materials_cost',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_net_profit',
+            batch_op.alter_column('total_net_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_company_profit',
+            batch_op.alter_column('total_company_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_master_profit',
+            batch_op.alter_column('total_master_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('average_check',
+            batch_op.alter_column('average_check',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('created_at',
+            batch_op.alter_column('created_at',
                existing_type=sa.TEXT(),
                type_=sa.DateTime(),
                nullable=False)
-        batch_op.drop_index('idx_financial_reports_period')
-        batch_op.drop_index('idx_financial_reports_type')
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+            batch_op.drop_index('idx_financial_reports_period')
+            batch_op.drop_index('idx_financial_reports_type')
+            batch_op.drop_column('version')
+            batch_op.drop_column('deleted_at')
 
     if inspector.has_table('master_financial_reports'):
         with op.batch_alter_table('master_financial_reports', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('master_id',
+            batch_op.alter_column('master_id',
                existing_type=sa.INTEGER(),
                nullable=True)
-        batch_op.alter_column('master_name',
+            batch_op.alter_column('master_name',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=False)
-        batch_op.alter_column('total_amount',
+            batch_op.alter_column('total_amount',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_materials_cost',
+            batch_op.alter_column('total_materials_cost',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_net_profit',
+            batch_op.alter_column('total_net_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_master_profit',
+            batch_op.alter_column('total_master_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('total_company_profit',
+            batch_op.alter_column('total_company_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.alter_column('average_check',
+            batch_op.alter_column('average_check',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-        batch_op.drop_index('idx_master_reports_master_id')
-        batch_op.drop_index('idx_master_reports_report_id')
-        batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'financial_reports', ['report_id'], ['id'])
-        batch_op.create_foreign_key(None, 'masters', ['master_id'], ['id'])
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+            batch_op.drop_index('idx_master_reports_master_id')
+            batch_op.drop_index('idx_master_reports_report_id')
+            batch_op.drop_constraint(None, type_='foreignkey')
+            batch_op.drop_constraint(None, type_='foreignkey')
+            batch_op.create_foreign_key(None, 'financial_reports', ['report_id'], ['id'])
+            batch_op.create_foreign_key(None, 'masters', ['master_id'], ['id'])
+            batch_op.drop_column('version')
+            batch_op.drop_column('deleted_at')
 
     if inspector.has_table('master_report_archives'):
         with op.batch_alter_table('master_report_archives', schema=None) as batch_op:
@@ -214,38 +214,38 @@ def upgrade() -> None:
 
     if inspector.has_table('masters'):
         with op.batch_alter_table('masters', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('phone',
+            batch_op.alter_column('phone',
                existing_type=sa.TEXT(),
                type_=sa.String(length=20),
                existing_nullable=False)
-        batch_op.alter_column('specialization',
+            batch_op.alter_column('specialization',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=False)
-        batch_op.alter_column('is_active',
+            batch_op.alter_column('is_active',
                existing_type=sa.BOOLEAN(),
                nullable=False,
                existing_server_default=sa.text('1'))
-        batch_op.alter_column('is_approved',
+            batch_op.alter_column('is_approved',
                existing_type=sa.BOOLEAN(),
                nullable=False,
                existing_server_default=sa.text('0'))
-        batch_op.alter_column('created_at',
+            batch_op.alter_column('created_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-        batch_op.alter_column('deleted_at',
+            batch_op.alter_column('deleted_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.create_index('idx_masters_active_approved', ['is_active', 'is_approved'], unique=False)
-        batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
-        batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
+            batch_op.create_index('idx_masters_active_approved', ['is_active', 'is_approved'], unique=False)
+            batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
+            batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
 
     if inspector.has_table('order_group_messages'):
         with op.batch_alter_table('order_group_messages', schema=None) as batch_op:
@@ -253,139 +253,139 @@ def upgrade() -> None:
 
     if inspector.has_table('order_status_history'):
         with op.batch_alter_table('order_status_history', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('old_status',
+            batch_op.alter_column('old_status',
                existing_type=sa.TEXT(),
                type_=sa.String(length=50),
                existing_nullable=True)
-        batch_op.alter_column('new_status',
+            batch_op.alter_column('new_status',
                existing_type=sa.TEXT(),
                type_=sa.String(length=50),
                existing_nullable=False)
-        batch_op.alter_column('changed_at',
+            batch_op.alter_column('changed_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-        batch_op.create_index('idx_status_history_changed_at', ['changed_at'], unique=False)
-        batch_op.create_index('idx_status_history_changed_by', ['changed_by'], unique=False)
-        batch_op.create_index('idx_status_history_order', ['order_id', 'changed_at'], unique=False)
-        batch_op.drop_column('version')
-        batch_op.drop_column('deleted_at')
+            batch_op.create_index('idx_status_history_changed_at', ['changed_at'], unique=False)
+            batch_op.create_index('idx_status_history_changed_by', ['changed_by'], unique=False)
+            batch_op.create_index('idx_status_history_order', ['order_id', 'changed_at'], unique=False)
+            batch_op.drop_column('version')
+            batch_op.drop_column('deleted_at')
 
     if inspector.has_table('orders'):
         with op.batch_alter_table('orders', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('equipment_type',
+            batch_op.alter_column('equipment_type',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=False)
-        batch_op.alter_column('client_name',
+            batch_op.alter_column('client_name',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=False)
-        batch_op.alter_column('client_phone',
+            batch_op.alter_column('client_phone',
                existing_type=sa.TEXT(),
                type_=sa.String(length=20),
                existing_nullable=False)
-        batch_op.alter_column('status',
+            batch_op.alter_column('status',
                existing_type=sa.TEXT(),
                type_=sa.String(length=50),
                nullable=False,
                existing_server_default=sa.text("'NEW'"))
-        batch_op.alter_column('scheduled_time',
+            batch_op.alter_column('scheduled_time',
                existing_type=sa.TEXT(),
                type_=sa.String(length=100),
                existing_nullable=True)
-        batch_op.alter_column('total_amount',
+            batch_op.alter_column('total_amount',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=True)
-        batch_op.alter_column('materials_cost',
+            batch_op.alter_column('materials_cost',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=True)
-        batch_op.alter_column('master_profit',
+            batch_op.alter_column('master_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=True)
-        batch_op.alter_column('company_profit',
+            batch_op.alter_column('company_profit',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=True)
-        batch_op.alter_column('has_review',
+            batch_op.alter_column('has_review',
                existing_type=sa.INTEGER(),
                type_=sa.Boolean(),
                existing_nullable=True,
                existing_server_default=sa.text('0'))
-        batch_op.alter_column('estimated_completion_date',
+            batch_op.alter_column('estimated_completion_date',
                existing_type=sa.TEXT(),
                type_=sa.String(length=100),
                existing_nullable=True)
-        batch_op.alter_column('prepayment_amount',
+            batch_op.alter_column('prepayment_amount',
                existing_type=sa.REAL(),
                type_=sa.Float(),
                existing_nullable=True)
-        batch_op.alter_column('created_at',
+            batch_op.alter_column('created_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-        batch_op.alter_column('updated_at',
+            batch_op.alter_column('updated_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-        batch_op.alter_column('deleted_at',
+            batch_op.alter_column('deleted_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.create_index('idx_orders_deleted_at', ['deleted_at'], unique=False)
-        batch_op.create_index('idx_orders_financial', ['status', 'total_amount'], unique=False)
-        batch_op.create_index('idx_orders_master_status', ['assigned_master_id', 'status'], unique=False)
-        batch_op.create_index('idx_orders_period', ['updated_at', 'status'], unique=False)
-        batch_op.create_index('idx_orders_review', ['has_review', 'status'], unique=False)
-        batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
+            batch_op.create_index('idx_orders_deleted_at', ['deleted_at'], unique=False)
+            batch_op.create_index('idx_orders_financial', ['status', 'total_amount'], unique=False)
+            batch_op.create_index('idx_orders_master_status', ['assigned_master_id', 'status'], unique=False)
+            batch_op.create_index('idx_orders_period', ['updated_at', 'status'], unique=False)
+            batch_op.create_index('idx_orders_review', ['has_review', 'status'], unique=False)
+            batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
 
     if inspector.has_table('users'):
         with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.alter_column('id',
+            batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
                nullable=False,
                autoincrement=True)
-        batch_op.alter_column('username',
+            batch_op.alter_column('username',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=True)
-        batch_op.alter_column('first_name',
+            batch_op.alter_column('first_name',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=True)
-        batch_op.alter_column('last_name',
+            batch_op.alter_column('last_name',
                existing_type=sa.TEXT(),
                type_=sa.String(length=255),
                existing_nullable=True)
-        batch_op.alter_column('role',
+            batch_op.alter_column('role',
                existing_type=sa.TEXT(),
                type_=sa.String(length=100),
                nullable=False,
                existing_server_default=sa.text("'UNKNOWN'"))
-        batch_op.alter_column('created_at',
+            batch_op.alter_column('created_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-        batch_op.alter_column('deleted_at',
+            batch_op.alter_column('deleted_at',
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-        batch_op.create_index('idx_users_deleted_at', ['deleted_at'], unique=False)
+            batch_op.create_index('idx_users_deleted_at', ['deleted_at'], unique=False)
 
     # ### end Alembic commands ###
 
