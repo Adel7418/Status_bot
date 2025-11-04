@@ -14,7 +14,7 @@ from app.utils.helpers import MOSCOW_TZ, get_now
 logger = logging.getLogger(__name__)
 
 
-def _preprocess_time_text(text: str) -> str:
+def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
     """
     Предобработка текста для лучшего распознавания времени
 
@@ -369,7 +369,7 @@ def validate_parsed_datetime(dt: datetime, original_text: str) -> dict[str, str 
     return {"is_valid": True, "error": None, "warning": None}
 
 
-def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime | None, str]:
+def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime | None, str]:  # noqa: PLR0911
     """
     Парсинг даты/времени из естественного языка на русском
 
@@ -498,9 +498,73 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         user_friendly = f"с {start_hour:02d}:00 до {end_hour:02d}:00"
         return target_time, user_friendly
 
-    # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ ФОРМАТА DD.MM.YYYY
+    # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ ФОРМАТА DD.MM.YYYY HH:MM
     # dateparser неправильно парсит DD.MM.YYYY (переставляет день и месяц)
     # Поэтому парсим такие даты вручную
+    # Сначала проверяем формат с временем
+    date_with_time_pattern = r"^(\d{1,2})[./](\d{1,2})[./](\d{2,4})\s+(\d{1,2}):(\d{2})$"
+    date_with_time_match = re.match(date_with_time_pattern, text)
+
+    if date_with_time_match:
+        day_str, month_str, year_str, hour_str, minute_str = date_with_time_match.groups()
+        day = int(day_str)
+        month = int(month_str)
+        year_int = int(year_str)
+        hour = int(hour_str)
+        minute = int(minute_str)
+
+        # Если год короткий (2 цифры), расширяем до 4
+        if year_int < 100:
+            current_year = get_now().year
+            current_year_short = current_year % 100
+            if year_int <= current_year_short:
+                full_year = (current_year // 100) * 100 + year_int
+            else:
+                full_year = ((current_year // 100) - 1) * 100 + year_int
+
+            if full_year > current_year + 1:
+                full_year = 2000 + year_int
+            year_int = full_year
+
+        try:
+            # Создаем datetime с указанным временем
+            now = get_now().replace(tzinfo=MOSCOW_TZ)
+            parsed_dt = now.replace(
+                year=year_int,
+                month=month,
+                day=day,
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+            )
+
+            # Если дата в прошлом, добавляем год
+            if parsed_dt < now:
+                parsed_dt = parsed_dt.replace(year=year_int + 1)
+
+            # Формируем user-friendly текст
+            user_friendly_text = f"{day:02d}.{month:02d}.{year_int} {hour:02d}:{minute:02d}"
+
+            # Валидация
+            if validate:
+                validation = validate_parsed_datetime(parsed_dt, original_text)
+                if not validation.get("is_valid"):
+                    logger.warning(
+                        f"Валидация не прошла для '{original_text}': {validation.get('error')}"
+                    )
+                    # Возвращаем None, но текстовую часть оставляем
+                    return None, user_friendly_text
+
+            logger.debug(
+                f"Парсинг вручную (с временем): '{original_text}' -> {parsed_dt.strftime('%d.%m.%Y %H:%M')}"
+            )
+            return parsed_dt, user_friendly_text
+        except ValueError as e:
+            logger.warning(f"Не удалось создать дату из '{original_text}': {e}")
+            # Продолжаем с обычным парсингом
+
+    # Теперь проверяем формат без времени
     date_only_pattern = r"^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$"
     match = re.match(date_only_pattern, text)
 
@@ -611,7 +675,7 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     now_for_parsing = get_now()
     if now_for_parsing.tzinfo is None:
         now_for_parsing = now_for_parsing.replace(tzinfo=MOSCOW_TZ)
-    
+
     settings = {
         "TIMEZONE": "Europe/Moscow",
         "RETURN_AS_TIMEZONE_AWARE": True,
@@ -631,7 +695,7 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
             # Убедимся что есть timezone
             if parsed_date.tzinfo is None:
                 parsed_date = parsed_date.replace(tzinfo=MOSCOW_TZ)
-            
+
             # Проверяем и исправляем год, если он слишком далеко в будущем
             # Это может произойти, если dateparser неправильно парсит относительные даты
             current_year = get_now().year
@@ -708,64 +772,64 @@ def _get_days_word(days: int) -> str:
     """Получение правильной формы слова 'день'"""
     if days % 10 == 1 and days % 100 != 11:
         return "день"
-    elif 2 <= days % 10 <= 4 and (days % 100 < 10 or days % 100 >= 20):
+    if 2 <= days % 10 <= 4 and (days % 100 < 10 or days % 100 >= 20):
         return "дня"
-    else:
-        return "дней"
+    return "дней"
 
 
 def format_estimated_completion_with_days(estimated_date_str: str) -> str:
     """
     Форматирование estimated_completion_date с расчетом "Через X дней"
-    
+
     Args:
         estimated_date_str: Строка с датой завершения из БД (формат: "DD.MM.YYYY HH:MM (текст)" или "DD.MM.YYYY HH:MM")
-    
+
     Returns:
         Отформатированная строка с расчетом дней
     """
     if not estimated_date_str:
         return estimated_date_str
-    
+
     # Пытаемся извлечь дату из строки (формат: "DD.MM.YYYY HH:MM")
     date_pattern = r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})"
     match = re.match(date_pattern, estimated_date_str)
-    
+
     if not match:
         return estimated_date_str  # Не удалось распарсить, возвращаем как есть
-    
+
     day, month, year, hour, minute = map(int, match.groups())
-    
+
     try:
         from datetime import datetime
+
         from app.utils.helpers import MOSCOW_TZ, get_now
-        
+
         # Проверяем год - если он слишком далеко в будущем, исправляем
         now = get_now()
         current_year = now.year
         if year > current_year + 1:
-            logger.warning(
-                f"Дата завершения имеет год {year}, исправляем на {current_year}"
-            )
+            logger.warning(f"Дата завершения имеет год {year}, исправляем на {current_year}")
             # Пробуем использовать текущий год
             try:
                 completion_dt = datetime(current_year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
                 # Если дата в прошлом, добавляем год
                 if completion_dt < now:
-                    completion_dt = datetime(current_year + 1, month, day, hour, minute, tzinfo=MOSCOW_TZ)
+                    completion_dt = datetime(
+                        current_year + 1, month, day, hour, minute, tzinfo=MOSCOW_TZ
+                    )
             except ValueError:
                 # Если дата невалидна, используем исходный год
                 completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
         else:
             # Создаем datetime объект
             completion_dt = datetime(year, month, day, hour, minute, tzinfo=MOSCOW_TZ)
-        
+
         # Вычисляем разницу в днях относительно текущей даты
         days_diff = (completion_dt.date() - now.date()).days
-        
+
         # Формируем текст с датой и расчетом дней (всегда используем актуальный расчет)
         date_formatted = completion_dt.strftime("%d.%m.%Y %H:%M")
-        
+
         if days_diff == 0:
             days_text = "(Сегодня)"
         elif days_diff == 1:
@@ -776,13 +840,12 @@ def format_estimated_completion_with_days(estimated_date_str: str) -> str:
             days_text = f"(Через {days_diff} {_get_days_word(days_diff)})"
         else:
             days_text = ""  # Дата в прошлом, не показываем расчет
-        
+
         # Всегда используем актуальный расчет дней, а не оригинальный текст из БД
         if days_text:
             return f"{date_formatted} {days_text}"
-        else:
-            return date_formatted
-            
+        return date_formatted
+
     except (ValueError, TypeError):
         return estimated_date_str  # Ошибка парсинга, возвращаем как есть
 
