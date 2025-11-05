@@ -7,10 +7,12 @@ import sys
 import aiosqlite
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения
-load_dotenv("env.city2")
-
-DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city2/bot_database.db")
+# Сначала проверяем переменную окружения DATABASE_PATH (для Docker)
+# Если не установлена, загружаем из .env файла
+DATABASE_PATH = os.getenv("DATABASE_PATH")
+if not DATABASE_PATH:
+    load_dotenv("env.city2")
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city2/bot_database.db")
 
 async def create_specialization_rates_table():
     """Создает таблицу specialization_rates, если она не существует"""

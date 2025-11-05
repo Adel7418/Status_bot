@@ -17,6 +17,24 @@ from app.database.orm_models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
+# Если установлена переменная окружения DATABASE_PATH (для Docker),
+# используем её вместо пути из alembic.ini
+database_path = os.getenv("DATABASE_PATH")
+if database_path:
+    # Преобразуем путь к БД в SQLAlchemy URL
+    # Если путь уже начинается с sqlite:///, используем как есть
+    if database_path.startswith("sqlite:///"):
+        sqlite_url = database_path
+    else:
+        # Преобразуем путь к файлу в SQLAlchemy URL
+        # Для абсолютных путей используем sqlite://// (4 слеша)
+        if os.path.isabs(database_path):
+            sqlite_url = f"sqlite:///{database_path}"
+        else:
+            # Для относительных путей используем sqlite:/// (3 слеша)
+            sqlite_url = f"sqlite:///{database_path}"
+    config.set_main_option("sqlalchemy.url", sqlite_url)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
