@@ -230,39 +230,53 @@ def upgrade() -> None:
                 batch_op.drop_column('deleted_at')
 
     if inspector.has_table('masters'):
+        masters_columns = {c['name']: c for c in inspector.get_columns('masters')}
+        masters_indexes = {i['name'] for i in inspector.get_indexes('masters')}
         with op.batch_alter_table('masters', schema=None) as batch_op:
-            batch_op.alter_column('id',
-               existing_type=sa.INTEGER(),
-               nullable=False,
-               autoincrement=True)
-            batch_op.alter_column('phone',
-               existing_type=sa.TEXT(),
-               type_=sa.String(length=20),
-               existing_nullable=False)
-            batch_op.alter_column('specialization',
-               existing_type=sa.TEXT(),
-               type_=sa.String(length=255),
-               existing_nullable=False)
-            batch_op.alter_column('is_active',
-               existing_type=sa.BOOLEAN(),
-               nullable=False,
-               existing_server_default=sa.text('1'))
-            batch_op.alter_column('is_approved',
-               existing_type=sa.BOOLEAN(),
-               nullable=False,
-               existing_server_default=sa.text('0'))
-            batch_op.alter_column('created_at',
-               existing_type=sa.TIMESTAMP(),
-               type_=sa.DateTime(),
-               nullable=False,
-               existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-            batch_op.alter_column('deleted_at',
-               existing_type=sa.TIMESTAMP(),
-               type_=sa.DateTime(),
-               existing_nullable=True)
-            batch_op.create_index('idx_masters_active_approved', ['is_active', 'is_approved'], unique=False)
-            batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
-            batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
+            if 'id' in masters_columns:
+                batch_op.alter_column('id',
+                   existing_type=sa.INTEGER(),
+                   nullable=False,
+                   autoincrement=True)
+            if 'phone' in masters_columns:
+                batch_op.alter_column('phone',
+                   existing_type=sa.TEXT(),
+                   type_=sa.String(length=20),
+                   existing_nullable=False)
+            if 'specialization' in masters_columns:
+                batch_op.alter_column('specialization',
+                   existing_type=sa.TEXT(),
+                   type_=sa.String(length=255),
+                   existing_nullable=False)
+            if 'is_active' in masters_columns:
+                batch_op.alter_column('is_active',
+                   existing_type=sa.BOOLEAN(),
+                   nullable=False,
+                   existing_server_default=sa.text('1'))
+            if 'is_approved' in masters_columns:
+                batch_op.alter_column('is_approved',
+                   existing_type=sa.BOOLEAN(),
+                   nullable=False,
+                   existing_server_default=sa.text('0'))
+            if 'created_at' in masters_columns:
+                batch_op.alter_column('created_at',
+                   existing_type=sa.TIMESTAMP(),
+                   type_=sa.DateTime(),
+                   nullable=False,
+                   existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
+            if 'deleted_at' in masters_columns:
+                batch_op.alter_column('deleted_at',
+                   existing_type=sa.TIMESTAMP(),
+                   type_=sa.DateTime(),
+                   existing_nullable=True)
+            if 'work_chat_id' in masters_columns:
+                # Если колонка work_chat_id существует, создаем индекс для неё
+                if 'idx_masters_work_chat' not in masters_indexes:
+                    batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
+            if 'idx_masters_active_approved' not in masters_indexes:
+                batch_op.create_index('idx_masters_active_approved', ['is_active', 'is_approved'], unique=False)
+            if 'idx_masters_deleted_at' not in masters_indexes:
+                batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
 
     if inspector.has_table('order_group_messages'):
         order_group_messages_columns = {c['name'] for c in inspector.get_columns('order_group_messages')}
