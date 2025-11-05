@@ -300,6 +300,7 @@ def upgrade() -> None:
                 batch_op.drop_column('deleted_at')
 
     if inspector.has_table('orders'):
+        orders_indexes = {i['name'] for i in inspector.get_indexes('orders')}
         with op.batch_alter_table('orders', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -369,12 +370,19 @@ def upgrade() -> None:
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-            batch_op.create_index('idx_orders_deleted_at', ['deleted_at'], unique=False)
-            batch_op.create_index('idx_orders_financial', ['status', 'total_amount'], unique=False)
-            batch_op.create_index('idx_orders_master_status', ['assigned_master_id', 'status'], unique=False)
-            batch_op.create_index('idx_orders_period', ['updated_at', 'status'], unique=False)
-            batch_op.create_index('idx_orders_review', ['has_review', 'status'], unique=False)
-            batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
+            # Проверяем существование индексов перед созданием
+            if 'idx_orders_deleted_at' not in orders_indexes:
+                batch_op.create_index('idx_orders_deleted_at', ['deleted_at'], unique=False)
+            if 'idx_orders_financial' not in orders_indexes:
+                batch_op.create_index('idx_orders_financial', ['status', 'total_amount'], unique=False)
+            if 'idx_orders_master_status' not in orders_indexes:
+                batch_op.create_index('idx_orders_master_status', ['assigned_master_id', 'status'], unique=False)
+            if 'idx_orders_period' not in orders_indexes:
+                batch_op.create_index('idx_orders_period', ['updated_at', 'status'], unique=False)
+            if 'idx_orders_review' not in orders_indexes:
+                batch_op.create_index('idx_orders_review', ['has_review', 'status'], unique=False)
+            if 'idx_orders_status_created' not in orders_indexes:
+                batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
 
     if inspector.has_table('users'):
         with op.batch_alter_table('users', schema=None) as batch_op:
