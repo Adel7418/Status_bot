@@ -5,6 +5,7 @@
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -168,8 +169,8 @@ class MasterReportsService:
         ws,
         orders: list,
         period_name: str,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ):
         """Создание сводного листа"""
         # Стили
@@ -211,7 +212,7 @@ class MasterReportsService:
             cell.border = thin_border
 
         # Группируем заказы по мастерам
-        master_stats = {}
+        master_stats: dict[int | None, dict[str, Any]] = {}
         for order in orders:
             master_id = order.assigned_master_id
             if master_id not in master_stats:
@@ -237,7 +238,7 @@ class MasterReportsService:
         total_amount = 0
         total_handover = 0
 
-        for master_id, stats in sorted_masters:
+        for _master_id, stats in sorted_masters:
             order_count = len(stats["orders"])
             avg_check = stats["total_amount"] / order_count if order_count > 0 else 0
 
@@ -288,8 +289,71 @@ class MasterReportsService:
             cell.alignment = center_alignment
             cell.number_format = "#,##0.00"
 
+        # Статистика по типам техники
+        row += 4  # Пустая строка для разделения
+        equipment_stats: dict[str, int] = {}
+        for order in orders:
+            equipment_type = order.equipment_type or "Не указано"
+            equipment_stats[equipment_type] = equipment_stats.get(equipment_type, 0) + 1
+
+        logger.info(f"Equipment stats for {len(orders)} orders: {equipment_stats}")
+
+        # Показываем статистику всегда, даже если все заказы без типа техники
+        if orders:  # Показываем статистику, если есть заказы
+            # Заголовок секции
+            subheader_font = Font(bold=True, size=12, color="FFFFFF")
+            subheader_fill = PatternFill(
+                start_color="70AD47", end_color="70AD47", fill_type="solid"
+            )
+
+            cell = ws.cell(row=row, column=1, value="По типам техники:")
+            cell.font = subheader_font
+            cell.fill = subheader_fill
+            cell.alignment = left_alignment
+            ws.merge_cells(f"A{row}:E{row}")
+            row += 1
+
+            # Заголовки столбцов
+            equipment_headers = ["Тип техники", "Количество", "Процент", "", ""]
+            for col_idx, header in enumerate(equipment_headers, start=1):
+                if header:  # Пропускаем пустые столбцы
+                    cell = ws.cell(row=row, column=col_idx, value=header)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = center_alignment
+                    cell.border = thin_border
+            row += 1
+
+            # Сортируем по количеству (по убыванию)
+            sorted_equipment = sorted(equipment_stats.items(), key=lambda x: x[1], reverse=True)
+
+            for equipment_type, count in sorted_equipment:
+                percentage = (count / len(orders) * 100) if len(orders) > 0 else 0
+
+                data = [
+                    equipment_type,
+                    count,
+                    percentage,
+                    "",  # Пустой столбец
+                    "",  # Пустой столбец
+                ]
+
+                for col_idx, value in enumerate(data, start=1):
+                    if value != "":  # Пропускаем пустые столбцы
+                        cell = ws.cell(row=row, column=col_idx, value=value)
+                        cell.font = data_font
+                        cell.fill = data_fill
+                        cell.border = thin_border
+                        cell.alignment = left_alignment if col_idx == 1 else center_alignment
+
+                        # Форматируем процент
+                        if col_idx == 3:
+                            cell.number_format = "0.0"
+
+                row += 1
+
         # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
-        column_widths = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
+        column_widths: dict[str, int] = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
         for col, width in column_widths.items():
             ws.column_dimensions[col].width = width
 
@@ -396,6 +460,7 @@ class MasterReportsService:
             row += 1
 
         # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
+        column_widths: dict[str, int]
         if report_type in ["weekly", "monthly"]:
             column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 20, "F": 12, "G": 12}
         else:
