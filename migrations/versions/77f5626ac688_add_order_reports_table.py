@@ -385,6 +385,7 @@ def upgrade() -> None:
                 batch_op.create_index('idx_orders_status_created', ['status', 'created_at'], unique=False)
 
     if inspector.has_table('users'):
+        users_indexes = {i['name'] for i in inspector.get_indexes('users')}
         with op.batch_alter_table('users', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -416,7 +417,9 @@ def upgrade() -> None:
                existing_type=sa.TIMESTAMP(),
                type_=sa.DateTime(),
                existing_nullable=True)
-            batch_op.create_index('idx_users_deleted_at', ['deleted_at'], unique=False)
+            # Проверяем существование индекса перед созданием
+            if 'idx_users_deleted_at' not in users_indexes:
+                batch_op.create_index('idx_users_deleted_at', ['deleted_at'], unique=False)
 
     # ### end Alembic commands ###
 
