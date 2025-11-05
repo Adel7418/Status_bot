@@ -248,15 +248,110 @@ def log_action(user_id: int, action: str, details: str | None = None):
     logger.info(log_msg)
 
 
+async def get_specialization_rate(
+    equipment_type: str | None = None, db_session=None
+) -> tuple[float, float] | None:
+    """
+    Получение процентной ставки для типа техники
+
+    Проверяет тип техники в заявке (equipment_type):
+    - Если содержит "электрик" или "электрика" - используется ставка 50/50
+    - Если содержит "сантехник" или "сантехника" - используется ставка 50/50
+    - Если ничего не найдено, возвращается None (используется стандартная логика)
+
+    Args:
+        equipment_type: Тип техники в заявке (например, "Электрика", "Сантехника")
+        db_session: Сессия базы данных (опционально)
+
+    Returns:
+        Кортеж (master_percentage, company_percentage) или None если не найдено
+    """
+    if not equipment_type:
+        return None
+
+    # Если db_session не передан, создаем новое подключение
+    if db_session is None:
+        from app.database.orm_database import ORMDatabase
+
+        db = ORMDatabase()
+        await db.connect()
+        try:
+            async with db.get_session() as session:
+                from sqlalchemy import select
+
+                from app.database.orm_models import SpecializationRate
+
+                equipment_lower = equipment_type.lower()
+                # Проверяем, содержит ли тип техники ключевые слова
+                if "электрик" in equipment_lower or "электрика" in equipment_lower:
+                    stmt = select(SpecializationRate).where(
+                        SpecializationRate.specialization_name.ilike("%электрик%"),
+                        SpecializationRate.deleted_at.is_(None),
+                    )
+                    result = await session.execute(stmt)
+                    rate = result.scalar_one_or_none()
+                    if rate:
+                        return (rate.master_percentage, rate.company_percentage)
+
+                if "сантехник" in equipment_lower or "сантехника" in equipment_lower:
+                    stmt = select(SpecializationRate).where(
+                        SpecializationRate.specialization_name.ilike("%сантехник%"),
+                        SpecializationRate.deleted_at.is_(None),
+                    )
+                    result = await session.execute(stmt)
+                    rate = result.scalar_one_or_none()
+                    if rate:
+                        return (rate.master_percentage, rate.company_percentage)
+        finally:
+            await db.disconnect()
+    else:
+        # Используем переданную сессию
+        from sqlalchemy import select
+
+        from app.database.orm_models import SpecializationRate
+
+        equipment_lower = equipment_type.lower()
+        # Проверяем, содержит ли тип техники ключевые слова
+        if "электрик" in equipment_lower or "электрика" in equipment_lower:
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.specialization_name.ilike("%электрик%"),
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await db_session.execute(stmt)
+            rate = result.scalar_one_or_none()
+            if rate:
+                return (rate.master_percentage, rate.company_percentage)
+
+        if "сантехник" in equipment_lower or "сантехника" in equipment_lower:
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.specialization_name.ilike("%сантехник%"),
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await db_session.execute(stmt)
+            rate = result.scalar_one_or_none()
+            if rate:
+                return (rate.master_percentage, rate.company_percentage)
+
+    return None
+
+
 def calculate_profit_split(
-    total_amount: float, materials_cost: float, has_review: bool = False, out_of_city: bool = False
+    total_amount: float,
+    materials_cost: float,
+    has_review: bool = False,
+    out_of_city: bool = False,
+    equipment_type: str | None = None,
+    specialization_rate: tuple[float, float] | None = None,
 ) -> tuple[float, float]:
     """
     Расчет распределения прибыли между мастером и компанией
 
-    Правила:
-    - Чистая прибыль >= 7000: 50% мастеру, 50% компании
-    - Чистая прибыль < 7000: 40% мастеру, 60% компании
+    Правила определения процентной ставки:
+    1. Если передана готовая ставка (specialization_rate) - используется она
+    2. Если указан тип техники (equipment_type) и он содержит "электрик" или "сантехник" - используется ставка 50/50
+    3. Если ничего не найдено:
+       - Чистая прибыль >= 7000: 50% мастеру, 50% компании
+       - Чистая прибыль < 7000: 40% мастеру, 60% компании
     - Если взят отзыв: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
     - Если выезд за город: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
 
@@ -265,6 +360,8 @@ def calculate_profit_split(
         materials_cost: Сумма расходного материала
         has_review: Взял ли мастер отзыв у клиента
         out_of_city: Был ли выезд за город
+        equipment_type: Тип техники в заявке (опционально, например "Электрика", "Сантехника")
+        specialization_rate: Готовая процентная ставка (master_percentage, company_percentage) (опционально)
 
     Returns:
         Кортеж (прибыль мастера, прибыль компании)
@@ -272,15 +369,39 @@ def calculate_profit_split(
     # Чистая прибыль
     net_profit = total_amount - materials_cost
 
-    # Определяем процент в зависимости от суммы
-    if net_profit >= 7000:
-        # 50/50
-        master_profit = net_profit * 0.5
-        company_profit = net_profit * 0.5
+    # Определяем базовый процент
+    if specialization_rate:
+        # Используем переданную ставку
+        master_percentage, company_percentage = specialization_rate
+        master_profit = net_profit * (master_percentage / 100)
+        company_profit = net_profit * (company_percentage / 100)
+    elif equipment_type:
+        # Проверяем тип техники
+        equipment_lower = equipment_type.lower()
+        if "электрик" in equipment_lower or "электрика" in equipment_lower:
+            # Используем ставку 50/50 для электрики
+            master_profit = net_profit * 0.5
+            company_profit = net_profit * 0.5
+        elif "сантехник" in equipment_lower or "сантехника" in equipment_lower:
+            # Используем ставку 50/50 для сантехники
+            master_profit = net_profit * 0.5
+            company_profit = net_profit * 0.5
+        else:
+            # Стандартная логика для других типов техники
+            if net_profit >= 7000:
+                master_profit = net_profit * 0.5
+                company_profit = net_profit * 0.5
+            else:
+                master_profit = net_profit * 0.4
+                company_profit = net_profit * 0.6
     else:
-        # 40/60
-        master_profit = net_profit * 0.4
-        company_profit = net_profit * 0.6
+        # Стандартная логика
+        if net_profit >= 7000:
+            master_profit = net_profit * 0.5
+            company_profit = net_profit * 0.5
+        else:
+            master_profit = net_profit * 0.4
+            company_profit = net_profit * 0.6
 
     # Если взят отзыв - добавляем 10% к прибыли мастера
     if has_review:

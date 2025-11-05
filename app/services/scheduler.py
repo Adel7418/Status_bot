@@ -177,9 +177,9 @@ class TaskScheduler:
                 return
 
             # Форматируем дату и время для напоминания
-            date_str = scheduled_datetime.strftime('%d.%m.%Y')
-            time_str = scheduled_datetime.strftime('%H:%M')
-            
+            date_str = scheduled_datetime.strftime("%d.%m.%Y")
+            time_str = scheduled_datetime.strftime("%H:%M")
+
             reminder_text = (
                 f"<b>Напоминание о визите</b> #{order.id}\n"
                 f"{order.equipment_type} в {date_str} {time_str}\n"
@@ -477,6 +477,23 @@ class TaskScheduler:
                         name = OrderStatus.get_status_name(status)
                         count = orders_by_status[status]
                         text += f"{emoji} {name}: {count}\n"
+
+            # Статистика по типам техники за сегодня
+            if new_orders:
+                equipment_stats: dict[str, int] = {}
+                for order in new_orders:
+                    equipment_type = order.equipment_type or "Не указано"
+                    equipment_stats[equipment_type] = equipment_stats.get(equipment_type, 0) + 1
+
+                if equipment_stats:
+                    text += "\n<b>По типам техники (сегодня):</b>\n"
+                    # Сортируем по количеству (по убыванию)
+                    sorted_equipment = sorted(
+                        equipment_stats.items(), key=lambda x: x[1], reverse=True
+                    )
+                    for equipment_type, count in sorted_equipment:
+                        percentage = (count / len(new_orders) * 100) if len(new_orders) > 0 else 0
+                        text += f"🔧 {equipment_type}: {count} ({percentage:.1f}%)\n"
 
             # Отправляем администраторам
             for admin_id in Config.ADMIN_IDS:

@@ -94,6 +94,7 @@ class EditClosedOrderStates(StatesGroup):
     confirm_out_of_city = State()  # Подтверждение выезда за город
     confirm = State()  # Подтверждение изменений
 
+
 class LongRepairStates(StatesGroup):
     """Состояния для перевода заявки в длительный ремонт"""
 
@@ -125,3 +126,9 @@ class SearchOrderStates(StatesGroup):
     enter_phone = State()  # Ввод номера телефона
     enter_address = State()  # Ввод адреса
     enter_phone_and_address = State()  # Ввод телефона и адреса
+
+
+class EditMasterSpecializationStates(StatesGroup):
+    """Состояния для редактирования специализации мастера (только ADMIN)"""
+
+    enter_specialization = State()  # Ввод новой специализации

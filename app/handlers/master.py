@@ -19,6 +19,7 @@ from app.keyboards.inline import (
     get_order_list_keyboard,
     get_yes_no_keyboard,
 )
+from app.keyboards.reply import get_main_menu_keyboard
 from app.states import (
     CompleteOrderStates,
     LongRepairStates,
@@ -201,8 +202,17 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
         if order.status == OrderStatus.CLOSED and order.total_amount:
             net_profit = order.total_amount - (order.materials_cost or 0)
 
-            # Определяем базовую ставку
+            # Определяем базовую ставку с учетом типа техники
             base_rate = "50/50" if net_profit >= 7000 else "40/60"
+            if order.equipment_type:
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
+                if specialization_rate:
+                    base_master_pct, base_company_pct = specialization_rate
+                    master_pct_display = int(round(base_master_pct))
+                    company_pct_display = int(round(base_company_pct))
+                    base_rate = f"{master_pct_display}/{company_pct_display}"
 
             text += "\n💰 <b>Финансовая информация:</b>\n"
             text += f"• Сумма заказа: <b>{order.total_amount:.2f} ₽</b>\n"
@@ -629,19 +639,17 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
         )
 
         # Переходим в состояние запроса общей суммы
+        from app.keyboards.reply import get_cancel_keyboard
         from app.states import CompleteOrderStates
 
         await state.set_state(CompleteOrderStates.enter_total_amount)
-
-        # В ЛС открываем ForceReply, чтобы у пользователя автоматически включился режим ответа
-        from aiogram.types import ForceReply
 
         prompt = await callback.message.answer(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
-            reply_markup=ForceReply(selective=True, input_field_placeholder="Введите сумму…"),
+            reply_markup=get_cancel_keyboard(),
         )
 
         await state.update_data(prompt_message_id=prompt.message_id)
@@ -1051,7 +1059,7 @@ async def btn_my_stats(message: Message, user_role: str):
         await db.disconnect()
 
 
-@router.message(CompleteOrderStates.enter_total_amount)
+@router.message(CompleteOrderStates.enter_total_amount, ~F.text.startswith("/"))
 async def process_total_amount(message: Message, state: FSMContext):
     """
     Обработка ввода общей суммы заказа (работает и в личке, и в группе)
@@ -1060,6 +1068,28 @@ async def process_total_amount(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    # Проверяем, не нажата ли кнопка отмены
+    if message.text == "❌ Отмена":
+        # Получаем роли пользователя для правильной клавиатуры
+        try:
+            from app.database import Database as _LegacyDB
+
+            _db = _LegacyDB()
+            await _db.connect()
+            try:
+                _user = await _db.get_user_by_telegram_id(message.from_user.id)
+                user_roles = _user.role.split(",") if _user and _user.role else ["MASTER"]
+            finally:
+                await _db.disconnect()
+        except Exception:
+            user_roles = ["MASTER"]
+
+        await state.clear()
+        await message.reply(
+            "❌ Завершение заявки отменено.", reply_markup=get_main_menu_keyboard(user_roles)
+        )
+        return
+
     # Добавляем логирование для отладки
     logger.info(
         f"[PROCESS_TOTAL_AMOUNT] Received message: '{message.text}' from user {message.from_user.id} in chat {message.chat.id}"
@@ -1098,8 +1128,8 @@ async def process_total_amount(message: Message, state: FSMContext):
     if not is_sender_allowed:
         # Дополнительный допуск: администратор может вводить сумму из любого чата
         try:
-            from app.database import Database as _LegacyDB
             from app.config import UserRole as _UserRole
+            from app.database import Database as _LegacyDB
 
             _db = _LegacyDB()
             await _db.connect()
@@ -1187,15 +1217,35 @@ async def process_total_amount(message: Message, state: FSMContext):
         await complete_order_as_refusal(message, state, order_id, acting_as_master_id)
         return
 
+    # Удаляем промпт-сообщение сразу после ввода суммы
+    data = await state.get_data()
+    prompt_message_id = data.get("prompt_message_id")
+    allowed_chat_id = data.get("allowed_chat_id") or message.chat.id
+
+    if prompt_message_id:
+        try:
+            from app.utils.retry import safe_delete_message
+
+            await safe_delete_message(message.bot, allowed_chat_id, prompt_message_id)
+            logger.info(f"Deleted prompt message {prompt_message_id} after total amount input")
+        except Exception as e:
+            logger.warning(f"Failed to delete prompt message {prompt_message_id}: {e}")
+
     # Переходим к запросу суммы расходного материала
     await state.set_state(CompleteOrderStates.enter_materials_cost)
 
-    await message.reply(
+    materials_prompt = await message.reply(
         f"✅ Общая сумма заказа: <b>{total_amount:.2f} ₽</b>\n\n"
         f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
         f"Например: 1500 или 1500.50\n\n"
         f"Если расходного материала не было, введите: 0",
         parse_mode="HTML",
+    )
+
+    # Сохраняем ID текущего сообщения для последующего удаления
+    await state.update_data(
+        current_prompt_message_id=materials_prompt.message_id,
+        current_prompt_chat_id=materials_prompt.chat.id,
     )
 
 
@@ -1234,8 +1284,25 @@ async def process_materials_cost(message: Message, state: FSMContext):
     # Сохраняем сумму расходного материала
     await state.update_data(materials_cost=materials_cost)
 
-    # Получаем ID заказа для inline кнопок
+    # Удаляем предыдущее сообщение о запросе суммы материалов
     data = await state.get_data()
+    current_prompt_message_id = data.get("current_prompt_message_id")
+    current_prompt_chat_id = data.get("current_prompt_chat_id") or message.chat.id
+
+    if current_prompt_message_id:
+        try:
+            from app.utils.retry import safe_delete_message
+
+            await safe_delete_message(
+                message.bot, current_prompt_chat_id, current_prompt_message_id
+            )
+            logger.info(f"Deleted materials prompt message {current_prompt_message_id}")
+        except Exception as e:
+            logger.warning(
+                f"Failed to delete materials prompt message {current_prompt_message_id}: {e}"
+            )
+
+    # Получаем ID заказа для inline кнопок
     order_id = data.get("order_id")
 
     # Переходим к подтверждению материалов
@@ -1243,12 +1310,18 @@ async def process_materials_cost(message: Message, state: FSMContext):
 
     from app.keyboards.inline import get_yes_no_keyboard
 
-    await message.reply(
+    materials_confirm = await message.reply(
         f"💰 <b>Подтвердите сумму расходных материалов:</b>\n\n"
         f"Сумма: <b>{materials_cost:.2f} ₽</b>\n\n"
         f"Верно ли указана сумма?",
         parse_mode="HTML",
         reply_markup=get_yes_no_keyboard("confirm_materials", order_id),
+    )
+
+    # Сохраняем ID текущего сообщения для последующего удаления
+    await state.update_data(
+        current_prompt_message_id=materials_confirm.message_id,
+        current_prompt_chat_id=materials_confirm.chat.id,
     )
 
 
@@ -1314,6 +1387,19 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
     )
 
     if answer == "yes":
+        # Удаляем предыдущее сообщение о подтверждении материалов
+        try:
+            from app.utils.retry import safe_delete_message
+
+            await safe_delete_message(
+                callback_query.bot,
+                callback_query.message.chat.id,
+                callback_query.message.message_id,
+            )
+            logger.info(f"Deleted materials confirmation message for order {order_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete materials confirmation message: {e}")
+
         # Подтверждаем сумму материалов и переходим к отзыву
         await state.set_state(CompleteOrderStates.confirm_review)
         logger.info(f"[MATERIALS_CONFIRM] State changed to confirm_review for order {order_id}")
@@ -1324,14 +1410,20 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
             keyboard = get_yes_no_keyboard("confirm_review", order_id)
             logger.info(f"[MATERIALS_CONFIRM] Created keyboard: {keyboard}")
 
-            await callback_query.message.edit_text(
+            # Отправляем новое сообщение вместо редактирования
+            review_message = await callback_query.message.answer(
                 "✅ Сумма расходного материала подтверждена\n\n"
                 "❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
                 "(За отзыв вы получите дополнительно +10% к прибыли)",
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
-            logger.info(f"[MATERIALS_CONFIRM] Message updated successfully for order {order_id}")
+            # Сохраняем ID текущего сообщения
+            await state.update_data(
+                current_prompt_message_id=review_message.message_id,
+                current_prompt_chat_id=review_message.chat.id,
+            )
+            logger.info(f"[MATERIALS_CONFIRM] Message sent successfully for order {order_id}")
         except Exception as e:
             logger.exception(
                 f"[MATERIALS_CONFIRM] Error updating message for order {order_id}: {e}"
@@ -1388,6 +1480,17 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     # Сохраняем ответ об отзыве
     await state.update_data(has_review=has_review)
 
+    # Удаляем предыдущее сообщение об отзыве
+    try:
+        from app.utils.retry import safe_delete_message
+
+        await safe_delete_message(
+            callback_query.bot, callback_query.message.chat.id, callback_query.message.message_id
+        )
+        logger.info("Deleted review confirmation message")
+    except Exception as e:
+        logger.warning(f"Failed to delete review confirmation message: {e}")
+
     # Переходим к запросу выезда за город
     await state.set_state(CompleteOrderStates.confirm_out_of_city)
 
@@ -1399,12 +1502,18 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
 
-    await callback_query.message.edit_text(
+    # Отправляем новое сообщение вместо редактирования
+    out_of_city_message = await callback_query.message.answer(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
         f"(За выезд за город вы получите дополнительно +10% к прибыли)",
         parse_mode="HTML",
         reply_markup=get_yes_no_keyboard("confirm_out_of_city", order_id_from_state),
+    )
+    # Сохраняем ID текущего сообщения
+    await state.update_data(
+        current_prompt_message_id=out_of_city_message.message_id,
+        current_prompt_chat_id=out_of_city_message.chat.id,
     )
 
     await callback_query.answer()
@@ -1481,13 +1590,35 @@ async def process_out_of_city_confirmation_callback(
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
         from app.utils.helpers import calculate_profit_split
 
+        # Получаем ставку для расчета по типу техники
+        specialization_rate = None
+        if order.equipment_type:
+            specialization_rate = await db.get_specialization_rate(
+                equipment_type=order.equipment_type,
+            )
+
         master_profit, company_profit = calculate_profit_split(
-            total_amount, materials_cost, has_review, out_of_city
+            total_amount,
+            materials_cost,
+            has_review,
+            out_of_city,
+            equipment_type=order.equipment_type,
+            specialization_rate=specialization_rate,
         )
         net_profit = total_amount - materials_cost
 
         # Определяем процентную ставку для отображения
-        profit_rate = "50/50" if net_profit >= 7000 else "40/60"
+        # Если есть специальная ставка (например, для электрика/сантехника) - показываем 50/50
+        if specialization_rate:
+            base_master_pct, base_company_pct = specialization_rate
+            # Округляем до целых для отображения
+            master_pct_display = int(round(base_master_pct))
+            company_pct_display = int(round(base_company_pct))
+            profit_rate = f"{master_pct_display}/{company_pct_display}"
+        else:
+            # Стандартная логика: 50/50 если >= 7000, иначе 40/60
+            profit_rate = "50/50" if net_profit >= 7000 else "40/60"
+
         bonus_text = ""
         if has_review:
             bonus_text += " + бонус за отзыв"
@@ -1581,12 +1712,27 @@ async def process_out_of_city_confirmation_callback(
                     f"Dispatcher {order.dispatcher_id} notified about order #{order_id_from_state} completion"
                 )
 
+        # Удаляем предыдущее сообщение о выезде за город
+        try:
+            from app.utils.retry import safe_delete_message
+
+            await safe_delete_message(
+                callback_query.bot,
+                callback_query.message.chat.id,
+                callback_query.message.message_id,
+            )
+            logger.info(
+                f"Deleted out of city confirmation message for order #{order_id_from_state}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete out of city confirmation message: {e}")
+
         # Формируем текст подтверждения
         out_of_city_text = "🚗 Да" if out_of_city else "❌ Нет"
         review_text = "⭐ Да" if has_review else "❌ Нет"
 
-        # Обновляем сообщение с результатами
-        await callback_query.message.edit_text(
+        # Отправляем новое сообщение с результатами вместо редактирования
+        await callback_query.message.answer(
             f"✅ <b>Заявка #{order_id_from_state} завершена!</b>\n\n"
             f"📊 <b>Итоговая информация:</b>\n"
             f"└ Общая сумма: <b>{total_amount:.2f} ₽</b>\n"
@@ -2194,9 +2340,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
 
         # Форматируем дату с расчетом дней для отображения
         from app.utils.date_parser import format_estimated_completion_with_days
-        
+
         completion_date_formatted = format_estimated_completion_with_days(completion_date)
-        
+
         # Формируем сообщение с результатом
         result_text = (
             f"✅ <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
@@ -2230,9 +2376,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
 
             # Форматируем дату с расчетом дней для отображения
             from app.utils.date_parser import format_estimated_completion_with_days
-            
+
             completion_date_formatted = format_estimated_completion_with_days(completion_date)
-            
+
             notification = (
                 f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
                 f"👨‍🔧 {master_name}\n"
@@ -2527,8 +2673,20 @@ async def complete_order_as_refusal(
         out_of_city = False
 
         # Рассчитываем распределение прибыли (все будет 0)
+        # Получаем ставку для расчета по типу техники
+        specialization_rate = None
+        if order.equipment_type:
+            specialization_rate = await db.get_specialization_rate(
+                equipment_type=order.equipment_type,
+            )
+
         master_profit, company_profit = calculate_profit_split(
-            total_amount, materials_cost, has_review, out_of_city
+            total_amount,
+            materials_cost,
+            has_review,
+            out_of_city,
+            equipment_type=order.equipment_type,
+            specialization_rate=specialization_rate,
         )
 
         # Обновляем суммы в базе данных
@@ -2556,6 +2714,40 @@ async def complete_order_as_refusal(
             action="COMPLETE_ORDER_AS_REFUSAL",
             details=f"Order #{order_id} completed as refusal (0 rubles)",
         )
+
+        # Удаляем промпт-сообщение если оно есть
+        try:
+            data = await state.get_data()
+            prompt_message_id = data.get("prompt_message_id")
+            current_prompt_message_id = data.get("current_prompt_message_id")
+            allowed_chat_id = data.get("allowed_chat_id") or message.chat.id
+            current_prompt_chat_id = data.get("current_prompt_chat_id") or message.chat.id
+
+            from app.utils.retry import safe_delete_message
+
+            # Удаляем промпт-сообщение если оно есть
+            if prompt_message_id:
+                try:
+                    await safe_delete_message(message.bot, allowed_chat_id, prompt_message_id)
+                    logger.info(f"Deleted prompt message {prompt_message_id} for order #{order_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete prompt message {prompt_message_id}: {e}")
+
+            # Удаляем текущее промежуточное сообщение если оно есть
+            if current_prompt_message_id:
+                try:
+                    await safe_delete_message(
+                        message.bot, current_prompt_chat_id, current_prompt_message_id
+                    )
+                    logger.info(
+                        f"Deleted current prompt message {current_prompt_message_id} for order #{order_id}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to delete current prompt message {current_prompt_message_id}: {e}"
+                    )
+        except Exception as e:
+            logger.warning(f"Error deleting messages for order #{order_id}: {e}")
 
         # Очищаем состояние FSM
         await state.clear()

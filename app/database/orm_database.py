@@ -27,6 +27,7 @@ from app.database.orm_models import (
     Order,
     OrderGroupMessage,
     OrderStatusHistory,
+    SpecializationRate,
     User,
 )
 from app.domain.order_state_machine import InvalidStateTransitionError, OrderStateMachine
@@ -471,6 +472,28 @@ class ORMDatabase:
             await session.commit()
 
             logger.info(f"Рабочий чат мастера {telegram_id} обновлен на {work_chat_id}")
+            return True
+
+    async def update_master_specialization(self, telegram_id: int, specialization: str) -> bool:
+        """Обновление специализации мастера"""
+        async with self.get_session() as session:
+            stmt = select(Master).where(Master.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            master = result.scalar_one_or_none()
+
+            if not master:
+                logger.error(f"Мастер {telegram_id} не найден")
+                return False
+
+            old_specialization = master.specialization
+            master.specialization = specialization
+            master.version += 1
+            await session.commit()
+
+            logger.info(
+                f"Специализация мастера {telegram_id} обновлена: "
+                f"'{old_specialization}' -> '{specialization}'"
+            )
             return True
 
     async def approve_master(self, telegram_id: int) -> bool:
@@ -1271,3 +1294,148 @@ class ORMDatabase:
             result = await session.execute(stmt)
             orders = result.scalars().all()
             return list(orders)
+
+    # ==================== СПЕЦИАЛИЗАЦИИ И ПРОЦЕНТНЫЕ СТАВКИ ====================
+
+    async def get_specialization_rate(
+        self, equipment_type: str | None = None
+    ) -> tuple[float, float] | None:
+        """
+        Получение процентной ставки для типа техники
+
+        Проверяет тип техники в заявке (equipment_type):
+        - Если содержит "электрик" или "электрика" - используется ставка 50/50
+        - Если содержит "сантехник" или "сантехника" - используется ставка 50/50
+        - Если ничего не найдено, возвращается None (используется стандартная логика)
+
+        Args:
+            equipment_type: Тип техники в заявке (например, "Электрика", "Сантехника")
+
+        Returns:
+            Кортеж (master_percentage, company_percentage) или None если не найдено
+        """
+        if not equipment_type:
+            return None
+
+        async with self.get_session() as session:
+            equipment_lower = equipment_type.lower()
+            # Проверяем, содержит ли тип техники ключевые слова
+            if "электрик" in equipment_lower or "электрика" in equipment_lower:
+                stmt = select(SpecializationRate).where(
+                    SpecializationRate.specialization_name.ilike("%электрик%"),
+                    SpecializationRate.deleted_at.is_(None),
+                )
+                result = await session.execute(stmt)
+                rate = result.scalar_one_or_none()
+                if rate:
+                    return (rate.master_percentage, rate.company_percentage)
+
+            if "сантехник" in equipment_lower or "сантехника" in equipment_lower:
+                stmt = select(SpecializationRate).where(
+                    SpecializationRate.specialization_name.ilike("%сантехник%"),
+                    SpecializationRate.deleted_at.is_(None),
+                )
+                result = await session.execute(stmt)
+                rate = result.scalar_one_or_none()
+                if rate:
+                    return (rate.master_percentage, rate.company_percentage)
+
+        return None
+
+    async def get_all_specialization_rates(self) -> list[SpecializationRate]:
+        """Получение всех процентных ставок для специализаций"""
+        async with self.get_session() as session:
+            stmt = (
+                select(SpecializationRate)
+                .where(SpecializationRate.deleted_at.is_(None))
+                .order_by(SpecializationRate.specialization_name)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_specialization_rate_by_id(self, rate_id: int) -> SpecializationRate | None:
+        """Получение процентной ставки по ID"""
+        async with self.get_session() as session:
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.id == rate_id,
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def create_or_update_specialization_rate(
+        self,
+        specialization_name: str,
+        master_percentage: float,
+        company_percentage: float,
+        is_default: bool = False,
+    ) -> SpecializationRate:
+        """
+        Создание или обновление процентной ставки для специализации
+
+        Args:
+            specialization_name: Название специализации
+            master_percentage: Процент мастера (0-100)
+            company_percentage: Процент компании (0-100)
+            is_default: Является ли ставкой по умолчанию
+
+        Returns:
+            Созданный или обновленный объект SpecializationRate
+        """
+        async with self.get_session() as session:
+            # Проверяем, существует ли уже ставка для этой специализации
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.specialization_name == specialization_name,
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await session.execute(stmt)
+            rate = result.scalar_one_or_none()
+
+            if rate:
+                # Обновляем существующую ставку
+                rate.master_percentage = master_percentage
+                rate.company_percentage = company_percentage
+                rate.is_default = is_default
+                rate.updated_at = get_now()
+            else:
+                # Создаем новую ставку
+                rate = SpecializationRate(
+                    specialization_name=specialization_name,
+                    master_percentage=master_percentage,
+                    company_percentage=company_percentage,
+                    is_default=is_default,
+                )
+                session.add(rate)
+
+            # Если это ставка по умолчанию, снимаем флаг с других ставок
+            if is_default:
+                stmt = select(SpecializationRate).where(
+                    SpecializationRate.is_default == True,
+                    SpecializationRate.id != rate.id if rate.id else True,
+                    SpecializationRate.deleted_at.is_(None),
+                )
+                result = await session.execute(stmt)
+                other_defaults = result.scalars().all()
+                for other_rate in other_defaults:
+                    other_rate.is_default = False
+
+            await session.commit()
+            await session.refresh(rate)
+            return rate
+
+    async def delete_specialization_rate(self, rate_id: int) -> bool:
+        """Удаление процентной ставки (soft delete)"""
+        async with self.get_session() as session:
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.id == rate_id,
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await session.execute(stmt)
+            rate = result.scalar_one_or_none()
+
+            if not rate:
+                return False
+
+            rate.deleted_at = get_now()
+            await session.commit()
+            return True

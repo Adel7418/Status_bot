@@ -457,3 +457,40 @@ class OrderGroupMessage(Base):
         Index("idx_order_group_messages_master", "master_id", "is_active"),
         Index("idx_order_group_messages_chat_msg", "chat_id", "message_id"),
     )
+
+
+class SpecializationRate(Base):
+    """Модель процентных ставок для специализаций"""
+
+    __tablename__ = "specialization_rates"
+
+    # Основные поля
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    specialization_name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    master_percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    company_percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Системные поля
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_specialization_rates_name", "specialization_name"),
+        Index("idx_specialization_rates_default", "is_default"),
+        CheckConstraint(
+            "master_percentage >= 0 AND master_percentage <= 100",
+            name="chk_master_percentage_range",
+        ),
+        CheckConstraint(
+            "company_percentage >= 0 AND company_percentage <= 100",
+            name="chk_company_percentage_range",
+        ),
+        CheckConstraint(
+            "ABS(master_percentage + company_percentage - 100) < 0.01",
+            name="chk_percentages_sum_100",
+        ),
+    )

@@ -36,7 +36,9 @@ async def get_menu_with_counter(user_roles: list[str]) -> ReplyKeyboardMarkup:
 
 @router.message(CommandStart())
 @handle_errors
-async def cmd_start(message: Message, user: User, user_role: str, user_roles: list):
+async def cmd_start(
+    message: Message, user: User, user_role: str, user_roles: list, state: FSMContext
+):
     """
     Обработчик команды /start
 
@@ -45,7 +47,11 @@ async def cmd_start(message: Message, user: User, user_role: str, user_roles: li
         user: Пользователь из БД
         user_role: Основная роль пользователя (для обратной совместимости)
         user_roles: Список всех ролей пользователя
+        state: FSM контекст
     """
+    # Очищаем состояние FSM при команде /start
+    await state.clear()
+
     logger.info(f"START command received from user {message.from_user.id}")
     logger.info(f"User roles: {user_roles}, User: {safe_str_user(user)}")
 
@@ -315,13 +321,17 @@ async def debug_unhandled_message(message: Message, state: FSMContext):
     Обработчик для отладки необработанных сообщений
     """
     current_state = await state.get_state()
-    logger.info(f"[DEBUG] Необработанное сообщение: '{message.text}' от пользователя {message.from_user.id}")
+    logger.info(
+        f"[DEBUG] Необработанное сообщение: '{message.text}' от пользователя {message.from_user.id}"
+    )
     logger.info(f"[DEBUG] Текущее состояние FSM: {current_state}")
     logger.info(f"[DEBUG] Тип чата: {message.chat.type}")
-    
+
     # Если это номер телефона и мы в состоянии client_phone, это проблема
     if current_state == "CreateOrderStates:client_phone":
-        logger.error(f"[DEBUG] КРИТИЧЕСКАЯ ОШИБКА: Сообщение '{message.text}' не обработано в состоянии client_phone!")
+        logger.error(
+            f"[DEBUG] КРИТИЧЕСКАЯ ОШИБКА: Сообщение '{message.text}' не обработано в состоянии client_phone!"
+        )
 
 
 @router.callback_query(F.data == "cancel")

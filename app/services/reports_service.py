@@ -441,6 +441,40 @@ class ReportsService:
         text += f"• С выездом за город: {orders['out_of_city_orders']}\n"
         text += f"• С отзывами: {orders['review_orders']}\n\n"
 
+        # Статистика по типам техники
+        await self.db.connect()
+        try:
+            # Получаем заказы за период
+            start_date = report.get("start_date")
+            end_date = report.get("end_date")
+            if start_date and end_date:
+                cursor = await self.db.connection.execute(
+                    """
+                    SELECT equipment_type, COUNT(*) as count
+                    FROM orders
+                    WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+                    GROUP BY equipment_type
+                    ORDER BY count DESC
+                    """,
+                    (start_date, end_date),
+                )
+                rows = await cursor.fetchall()
+                if rows:
+                    text += "🔧 <b>По типам техники:</b>\n"
+                    total_orders_for_percent = sum(row["count"] for row in rows)
+                    for row in rows:
+                        equipment_type = row["equipment_type"] or "Не указано"
+                        count = row["count"]
+                        percentage = (
+                            (count / total_orders_for_percent * 100)
+                            if total_orders_for_percent > 0
+                            else 0
+                        )
+                        text += f"• {equipment_type}: {count} ({percentage:.1f}%)\n"
+                    text += "\n"
+        finally:
+            await self.db.disconnect()
+
         # Детальная информация о принятых заказах
         if orders["accepted_orders"] > 0:
             text += "✅ ПРИНЯТЫЕ ЗАКАЗЫ (детали в Excel):\n"

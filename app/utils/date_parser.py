@@ -171,13 +171,27 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
             now = get_now().replace(tzinfo=MOSCOW_TZ)
             current_hour = now.hour
             current_minute = now.minute
-            # Создаем интервал от текущего времени до указанного
+
+            # Определяем начало интервала с учетом рабочего времени (8:00-22:00)
+            # Если текущее время в нерабочее время (22:00-8:00), начинаем с 8:00
+            if current_hour >= 22 or current_hour < 8:
+                start_hour = 8
+                start_minute = 0
+            else:
+                start_hour = current_hour
+                start_minute = current_minute
+
+            # Создаем интервал от начала (рабочего времени) до указанного
             # Если текущее время уже после указанного, ставим на завтра
             end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
-            if end_time <= now:
-                # Если время прошло сегодня, интервал на завтра
-                return f"завтра с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
-            return f"с {current_hour:02d}:{current_minute:02d} до {end_hour:02d}:{end_minute:02d}"
+            start_time_obj = now.replace(
+                hour=start_hour, minute=start_minute, second=0, microsecond=0
+            )
+
+            if end_time <= start_time_obj:
+                # Если время прошло сегодня, интервал на завтра с начала рабочего дня
+                return f"завтра с 08:00 до {end_hour:02d}:{end_minute:02d}"
+            return f"с {start_hour:02d}:{start_minute:02d} до {end_hour:02d}:{end_minute:02d}"
         except (ValueError, IndexError):
             return text  # Возвращаем как есть
 
@@ -202,13 +216,19 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
         end_minute = int(end_minute_str) if end_minute_str else 0
 
         now = get_now().replace(tzinfo=MOSCOW_TZ)
-        # Определяем начало интервала (текущее время или 00:00 для "завтра")
+        # Определяем начало интервала с учетом рабочего времени (8:00-22:00)
         if day_keyword == "завтра":
-            start_time = "00:00"
+            # Для завтра начало интервала - начало рабочего дня (8:00)
+            start_time = "08:00"
         else:
+            # Для сегодня начало интервала - текущее время или 8:00, если сейчас нерабочее время
             current_hour = now.hour
             current_minute = now.minute
-            start_time = f"{current_hour:02d}:{current_minute:02d}"
+            # Если текущее время в нерабочее время (22:00-8:00), начинаем с 8:00
+            if current_hour >= 22 or current_hour < 8:
+                start_time = "08:00"
+            else:
+                start_time = f"{current_hour:02d}:{current_minute:02d}"
 
         # Возвращаем интервал "с X до Y" для завтрашнего дня или сегодняшнего
         return f"{day_keyword} с {start_time} до {end_hour:02d}:{end_minute:02d}"

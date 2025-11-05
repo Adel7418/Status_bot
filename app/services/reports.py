@@ -170,6 +170,20 @@ class ReportsService:
             for master, count in sorted(by_master.items(), key=lambda x: x[1], reverse=True):
                 text += f"👨‍🔧 {master}: {count}\n"
 
+        # Статистика по типам техники
+        equipment_stats: dict[str, int] = {}
+        for order in orders:
+            equipment_type = order.equipment_type or "Не указано"
+            equipment_stats[equipment_type] = equipment_stats.get(equipment_type, 0) + 1
+
+        if equipment_stats:
+            text += "\n<b>По типам техники:</b>\n"
+            # Сортируем по количеству (по убыванию)
+            sorted_equipment = sorted(equipment_stats.items(), key=lambda x: x[1], reverse=True)
+            for equipment_type, count in sorted_equipment:
+                percentage = (count / len(orders) * 100) if len(orders) > 0 else 0
+                text += f"🔧 {equipment_type}: {count} ({percentage:.1f}%)\n"
+
         return text
 
     async def generate_excel_report(

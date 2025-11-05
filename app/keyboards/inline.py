@@ -537,6 +537,14 @@ def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineK
         )
     )
 
+    # Кнопка редактирования специализации
+    builder.row(
+        InlineKeyboardButton(
+            text="🔧 Редактировать специализацию",
+            callback_data=create_callback_data("edit_master_specialization", telegram_id),
+        )
+    )
+
     if is_active:
         builder.row(
             InlineKeyboardButton(

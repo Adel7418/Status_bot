@@ -154,8 +154,21 @@ async def send_edit_closed_menu(message: Message, state: FSMContext):
 
         # Рассчитываем прибыль с учетом текущих значений
         net_profit = (total or 0.0) - (materials or 0.0)
+
+        # Получаем ставку для расчета по типу техники
+        specialization_rate = None
+        if order.equipment_type:
+            specialization_rate = await db.get_specialization_rate(
+                equipment_type=order.equipment_type,
+            )
+
         master_profit, company_profit = calculate_profit_split(
-            total or 0.0, materials or 0.0, has_review or False, out_of_city or False
+            total or 0.0,
+            materials or 0.0,
+            has_review or False,
+            out_of_city or False,
+            equipment_type=order.equipment_type,
+            specialization_rate=specialization_rate,
         )
 
         text = (
@@ -277,22 +290,18 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
             if "materials_cost" in data and data["materials_cost"] is not None
             else None
         )
-        
+
         # Для has_review и out_of_city проверяем, были ли они явно изменены через кнопки
         # Если они присутствуют в FSM, но равны текущим значениям из БД - значит не изменялись
         has_review = data.get("has_review")
         out_of_city = data.get("out_of_city")
-        
+
         # Проверяем, были ли значения явно изменены (отличаются от текущих в БД)
-        has_review_changed = (
-            has_review is not None 
-            and has_review != (current.has_review or False)
+        has_review_changed = has_review is not None and has_review != (current.has_review or False)
+        out_of_city_changed = out_of_city is not None and out_of_city != (
+            current.out_of_city or False
         )
-        out_of_city_changed = (
-            out_of_city is not None 
-            and out_of_city != (current.out_of_city or False)
-        )
-        
+
         # Если значения не были изменены, используем None чтобы не обновлять их в БД
         has_review = has_review if has_review_changed else None
         out_of_city = out_of_city if out_of_city_changed else None
@@ -304,20 +313,20 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
         new_materials_for_calc = (
             materials if materials is not None else (current.materials_cost or 0.0)
         )
-        
+
         # Для has_review и out_of_city используем значения из FSM (если они есть) или из БД
         # Это гарантирует консистентность с предпросмотром
         has_review_from_fsm = data.get("has_review")
         out_of_city_from_fsm = data.get("out_of_city")
-        
+
         new_has_review_for_calc = (
-            has_review_from_fsm 
-            if has_review_from_fsm is not None 
+            has_review_from_fsm
+            if has_review_from_fsm is not None
             else (current.has_review or False)
         )
         new_out_of_city_for_calc = (
-            out_of_city_from_fsm 
-            if out_of_city_from_fsm is not None 
+            out_of_city_from_fsm
+            if out_of_city_from_fsm is not None
             else (current.out_of_city or False)
         )
 
@@ -337,11 +346,20 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
 
         # Если есть изменения, пересчитываем прибыль с учетом всех текущих значений
         if has_changes:
+            # Получаем ставку для расчета по типу техники
+            specialization_rate = None
+            if current.equipment_type:
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=current.equipment_type,
+                )
+
             master_profit, company_profit = calculate_profit_split(
                 new_total_for_calc,
                 new_materials_for_calc,
                 new_has_review_for_calc,
                 new_out_of_city_for_calc,
+                equipment_type=current.equipment_type,
+                specialization_rate=specialization_rate,
             )
             # Округляем до 2 знаков после запятой
             master_profit = round(master_profit, 2)
@@ -351,6 +369,8 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
                 f"[EDIT_CLOSED] Пересчет прибыли для заказа #{order_id}: "
                 f"total={new_total_for_calc}, materials={new_materials_for_calc}, "
                 f"review={new_has_review_for_calc}, out_of_city={new_out_of_city_for_calc}, "
+                f"specialization={current.assigned_master.specialization if current.assigned_master else None}, "
+                f"rate={specialization_rate}, "
                 f"master_profit={master_profit}, company_profit={company_profit}"
             )
 
@@ -524,20 +544,34 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     materials = float(data.get("materials_cost", 0))
     has_review = data.get("has_review", False)
 
-    # Используем функцию calculate_profit_split для правильного расчета с учетом has_review и out_of_city
-    master_profit, company_profit = calculate_profit_split(
-        total, materials, has_review, out_of_city
-    )
-    # Округляем до 2 знаков после запятой
-    master_profit = round(master_profit, 2)
-    company_profit = round(company_profit, 2)
-
     # Сохраняем
     from app.database.orm_database import ORMDatabase
 
     db = ORMDatabase()
     await db.connect()
     try:
+        # Получаем заказ для получения типа техники
+        order = await db.get_order_by_id(order_id) if order_id else None
+
+        # Получаем ставку для расчета по типу техники
+        specialization_rate = None
+        if order and order.equipment_type:
+            specialization_rate = await db.get_specialization_rate(
+                equipment_type=order.equipment_type,
+            )
+
+        # Используем функцию calculate_profit_split для правильного расчета с учетом has_review и out_of_city
+        master_profit, company_profit = calculate_profit_split(
+            total,
+            materials,
+            has_review,
+            out_of_city,
+            equipment_type=order.equipment_type if order else None,
+            specialization_rate=specialization_rate,
+        )
+        # Округляем до 2 знаков после запятой
+        master_profit = round(master_profit, 2)
+        company_profit = round(company_profit, 2)
         await db.update_order_amounts(
             order_id=order_id,
             total_amount=total,
@@ -1820,8 +1854,17 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
         if order.status == OrderStatus.CLOSED and order.total_amount:
             net_profit = order.total_amount - (order.materials_cost or 0)
 
-            # Определяем базовую ставку
+            # Определяем базовую ставку с учетом типа техники
             base_rate = "50/50" if net_profit >= 7000 else "40/60"
+            if order.equipment_type:
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
+                if specialization_rate:
+                    base_master_pct, base_company_pct = specialization_rate
+                    master_pct_display = int(round(base_master_pct))
+                    company_pct_display = int(round(base_company_pct))
+                    base_rate = f"{master_pct_display}/{company_pct_display}"
 
             text += "\n💰 <b>Финансовая информация:</b>\n"
             text += f"• Сумма заказа: <b>{order.total_amount:.2f} ₽</b>\n"
@@ -3124,7 +3167,7 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
 # ==================== FSM: ЗАКРЫТИЕ ЗАЯВКИ С ФИНАНСАМИ ====================
 
 
-@router.message(AdminCloseOrderStates.enter_total_amount)
+@router.message(AdminCloseOrderStates.enter_total_amount, F.text != "❌ Отмена")
 async def admin_process_total_amount(message: Message, state: FSMContext):
     """
     Обработка ввода общей суммы заказа админом/диспетчером
@@ -3137,7 +3180,8 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
     if not message.text:
         await message.reply(
             "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
-            "Введите число (например: 5000, 5000.50 или 0):"
+            "Введите число (например: 5000, 5000.50 или 0):",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -3145,12 +3189,16 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
     try:
         total_amount = float(message.text.replace(",", ".").strip())
         if total_amount < 0:
-            await message.reply("❌ Сумма не может быть отрицательной.\n" "Попробуйте еще раз:")
+            await message.reply(
+                "❌ Сумма не может быть отрицательной.\n" "Попробуйте еще раз:",
+                reply_markup=get_cancel_keyboard(),
+            )
             return
     except ValueError:
         await message.reply(
             "❌ Неверный формат суммы.\n"
-            "Пожалуйста, введите число (например: 5000, 5000.50 или 0):"
+            "Пожалуйста, введите число (например: 5000, 5000.50 или 0):",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -3181,10 +3229,11 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
         f"Например: 1500 или 1500.50\n\n"
         f"Если расходного материала не было, введите: 0",
         parse_mode="HTML",
+        reply_markup=get_cancel_keyboard(),
     )
 
 
-@router.message(AdminCloseOrderStates.enter_materials_cost)
+@router.message(AdminCloseOrderStates.enter_materials_cost, F.text != "❌ Отмена")
 async def admin_process_materials_cost(message: Message, state: FSMContext):
     """
     Обработка ввода суммы расходного материала админом/диспетчером
@@ -3197,7 +3246,8 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
     if not message.text:
         await message.reply(
             "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
-            "Введите число (например: 500, 0):"
+            "Введите число (например: 500, 0):",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -3209,12 +3259,14 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
         if materials_cost < 0:
             await message.reply(
                 "❌ Сумма не может быть отрицательной.\n"
-                "Попробуйте еще раз (или введите 0, если расходов не было):"
+                "Попробуйте еще раз (или введите 0, если расходов не было):",
+                reply_markup=get_cancel_keyboard(),
             )
             return
     except ValueError:
         await message.reply(
-            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):"
+            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):",
+            reply_markup=get_cancel_keyboard(),
         )
         return
 
@@ -3277,10 +3329,10 @@ async def admin_process_materials_confirmation_callback(
         # Возвращаемся к вводу суммы материалов
         await state.set_state(AdminCloseOrderStates.enter_materials_cost)
 
-        await callback_query.message.edit_text(
+        await callback_query.message.answer(
             "💰 <b>Введите сумму расходного материала:</b>\n\n" "Введите число (например: 500, 0):",
             parse_mode="HTML",
-            reply_markup=None,
+            reply_markup=get_cancel_keyboard(),
         )
 
     await callback_query.answer()
@@ -3391,10 +3443,29 @@ async def admin_process_out_of_city_confirmation_callback(
             return
 
         # Расчет прибыли
+        # Получаем ставку для расчета по типу техники
+        # Используем ORMDatabase для получения ставки
+        from app.database.orm_database import ORMDatabase
         from app.utils.helpers import calculate_profit_split
 
+        orm_db = ORMDatabase()
+        await orm_db.connect()
+        specialization_rate = None
+        try:
+            if order.equipment_type:
+                specialization_rate = await orm_db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
+        finally:
+            await orm_db.disconnect()
+
         master_profit, company_profit = calculate_profit_split(
-            total_amount, materials_cost, has_review, out_of_city
+            total_amount,
+            materials_cost,
+            has_review,
+            out_of_city,
+            equipment_type=order.equipment_type,
+            specialization_rate=specialization_rate,
         )
 
         # Обновляем заявку

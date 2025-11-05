@@ -19,7 +19,12 @@ from app.keyboards.inline import (
     get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
-from app.states import AddMasterStates, AdminCloseOrderStates, SetWorkChatStates
+from app.states import (
+    AddMasterStates,
+    AdminCloseOrderStates,
+    EditMasterSpecializationStates,
+    SetWorkChatStates,
+)
 from app.utils import format_phone, log_action, validate_phone
 
 
@@ -635,6 +640,146 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
     await callback.answer("Мастер активирован")
 
 
+@router.callback_query(F.data.startswith("edit_master_specialization:"))
+@handle_errors
+async def callback_edit_master_specialization(
+    callback: CallbackQuery, state: FSMContext, user_role: str
+):
+    """
+    Начало процесса редактирования специализации мастера
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    telegram_id = int(callback.data.split(":")[1])
+
+    db = ORMDatabase()
+    await db.connect()
+
+    try:
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Сохраняем telegram_id мастера в состоянии
+        await state.update_data(master_telegram_id=telegram_id)
+        await state.set_state(EditMasterSpecializationStates.enter_specialization)
+
+        await callback.message.edit_text(
+            f"🔧 <b>Редактирование специализации мастера</b>\n\n"
+            f"👤 Мастер: {master.get_display_name()}\n"
+            f"🔧 Текущая специализация: <b>{master.specialization}</b>\n\n"
+            'Введите новую специализацию (можно несколько через запятую, например: "электрик, сантехник"):',
+            parse_mode="HTML",
+        )
+
+        await callback.message.answer(
+            "Введите новую специализацию или нажмите '❌ Отмена':",
+            reply_markup=get_cancel_keyboard(),
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer()
+
+
+@router.message(EditMasterSpecializationStates.enter_specialization, F.text != "❌ Отмена")
+@handle_errors
+async def process_edit_master_specialization(message: Message, state: FSMContext, user_role: str):
+    """
+    Обработка ввода новой специализации мастера
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    specialization = message.text.strip()
+
+    if len(specialization) < 2:
+        await message.answer(
+            "❌ Специализация слишком короткая. Попробуйте еще раз:",
+            reply_markup=get_cancel_keyboard(),
+        )
+        return
+
+    if len(specialization) > 255:
+        await message.answer(
+            "❌ Специализация слишком длинная (максимум 255 символов). Попробуйте еще раз:",
+            reply_markup=get_cancel_keyboard(),
+        )
+        return
+
+    data = await state.get_data()
+    telegram_id = data.get("master_telegram_id")
+
+    if not telegram_id:
+        await message.answer("❌ Ошибка: не найден ID мастера. Попробуйте снова.")
+        await state.clear()
+        return
+
+    db = ORMDatabase()
+    await db.connect()
+
+    try:
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await message.answer("❌ Мастер не найден.")
+            await state.clear()
+            return
+
+        old_specialization = master.specialization
+
+        # Обновляем специализацию
+        success = await db.update_master_specialization(telegram_id, specialization)
+        if not success:
+            await message.answer("❌ Ошибка при обновлении специализации.")
+            await state.clear()
+            return
+
+        # Добавляем аудит
+        await db.add_audit_log(
+            user_id=message.from_user.id,
+            action="EDIT_MASTER_SPECIALIZATION",
+            details=(
+                f"master_telegram_id={telegram_id}; "
+                f"old='{old_specialization}'; new='{specialization}'"
+            ),
+        )
+
+        # Обновляем информацию о мастере
+        updated_master = await db.get_master_by_telegram_id(telegram_id)
+
+        await message.answer(
+            f"✅ <b>Специализация обновлена</b>\n\n"
+            f"👤 Мастер: {updated_master.get_display_name()}\n"
+            f"🔧 Было: {old_specialization}\n"
+            f"🔧 Стало: <b>{specialization}</b>",
+            parse_mode="HTML",
+        )
+
+        log_action(
+            message.from_user.id,
+            "EDIT_MASTER_SPECIALIZATION",
+            f"Master ID: {telegram_id}, Old: {old_specialization}, New: {specialization}",
+        )
+
+    finally:
+        await db.disconnect()
+
+    await state.clear()
+
+
 @router.callback_query(F.data.startswith("fire_master:"))
 async def callback_fire_master(callback: CallbackQuery, user_role: str):
     """
@@ -1073,6 +1218,40 @@ async def handle_cancel_work_chat(message: Message, state: FSMContext, user_role
         parse_mode="HTML",
         reply_markup=menu_keyboard,
     )
+
+    await state.clear()
+
+
+@router.message(F.text == "❌ Отмена", EditMasterSpecializationStates.enter_specialization)
+@handle_errors
+async def handle_cancel_edit_specialization(message: Message, state: FSMContext, user_role: str):
+    """
+    Отмена редактирования специализации мастера
+
+    Args:
+        message: Сообщение
+        state: FSM контекст
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    data = await state.get_data()
+    telegram_id = data.get("master_telegram_id")
+
+    if telegram_id:
+        # Возвращаемся к меню управления мастером
+        from app.handlers.common import get_menu_with_counter
+
+        menu_keyboard = await get_menu_with_counter([user_role])
+        await message.answer(
+            "❌ <b>Редактирование специализации отменено</b>\n\n"
+            "Вы можете попробовать снова в любое время.",
+            parse_mode="HTML",
+            reply_markup=menu_keyboard,
+        )
+    else:
+        await message.answer("❌ Редактирование отменено", parse_mode="HTML")
 
     await state.clear()
 
@@ -1911,7 +2090,7 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
                 master = await db.get_master_by_id(order.assigned_master_id)
                 if master and master.telegram_id:
                     from app.utils import safe_send_message
-                    
+
                     result = await safe_send_message(
                         callback.bot,
                         master.telegram_id,
