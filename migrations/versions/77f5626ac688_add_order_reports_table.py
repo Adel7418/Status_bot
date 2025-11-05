@@ -94,11 +94,16 @@ def upgrade() -> None:
             batch_op.drop_column('version')
 
     if inspector.has_table('entity_history'):
+        entity_history_columns = {c['name'] for c in inspector.get_columns('entity_history')}
         with op.batch_alter_table('entity_history', schema=None) as batch_op:
-            batch_op.drop_column('version')
-            batch_op.drop_column('deleted_at')
+            if 'version' in entity_history_columns:
+                batch_op.drop_column('version')
+            if 'deleted_at' in entity_history_columns:
+                batch_op.drop_column('deleted_at')
 
     if inspector.has_table('financial_reports'):
+        financial_reports_columns = {c['name'] for c in inspector.get_columns('financial_reports')}
+        financial_reports_indexes = {i['name'] for i in inspector.get_indexes('financial_reports')}
         with op.batch_alter_table('financial_reports', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -150,12 +155,18 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.DateTime(),
                nullable=False)
-            batch_op.drop_index('idx_financial_reports_period')
-            batch_op.drop_index('idx_financial_reports_type')
-            batch_op.drop_column('version')
-            batch_op.drop_column('deleted_at')
+            if 'idx_financial_reports_period' in financial_reports_indexes:
+                batch_op.drop_index('idx_financial_reports_period')
+            if 'idx_financial_reports_type' in financial_reports_indexes:
+                batch_op.drop_index('idx_financial_reports_type')
+            if 'version' in financial_reports_columns:
+                batch_op.drop_column('version')
+            if 'deleted_at' in financial_reports_columns:
+                batch_op.drop_column('deleted_at')
 
     if inspector.has_table('master_financial_reports'):
+        master_financial_reports_columns = {c['name'] for c in inspector.get_columns('master_financial_reports')}
+        master_financial_reports_indexes = {i['name'] for i in inspector.get_indexes('master_financial_reports')}
         with op.batch_alter_table('master_financial_reports', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -198,19 +209,33 @@ def upgrade() -> None:
                type_=sa.Float(),
                existing_nullable=False,
                existing_server_default=sa.text('(0.0)'))
-            batch_op.drop_index('idx_master_reports_master_id')
-            batch_op.drop_index('idx_master_reports_report_id')
-            batch_op.drop_constraint(None, type_='foreignkey')
-            batch_op.drop_constraint(None, type_='foreignkey')
+            if 'idx_master_reports_master_id' in master_financial_reports_indexes:
+                batch_op.drop_index('idx_master_reports_master_id')
+            if 'idx_master_reports_report_id' in master_financial_reports_indexes:
+                batch_op.drop_index('idx_master_reports_report_id')
+            # Пытаемся удалить внешние ключи, если они существуют
+            try:
+                batch_op.drop_constraint(None, type_='foreignkey')
+            except Exception:
+                pass
+            try:
+                batch_op.drop_constraint(None, type_='foreignkey')
+            except Exception:
+                pass
             batch_op.create_foreign_key(None, 'financial_reports', ['report_id'], ['id'])
             batch_op.create_foreign_key(None, 'masters', ['master_id'], ['id'])
-            batch_op.drop_column('version')
-            batch_op.drop_column('deleted_at')
+            if 'version' in master_financial_reports_columns:
+                batch_op.drop_column('version')
+            if 'deleted_at' in master_financial_reports_columns:
+                batch_op.drop_column('deleted_at')
 
     if inspector.has_table('master_report_archives'):
+        master_report_archives_columns = {c['name'] for c in inspector.get_columns('master_report_archives')}
         with op.batch_alter_table('master_report_archives', schema=None) as batch_op:
-            batch_op.drop_column('version')
-            batch_op.drop_column('deleted_at')
+            if 'version' in master_report_archives_columns:
+                batch_op.drop_column('version')
+            if 'deleted_at' in master_report_archives_columns:
+                batch_op.drop_column('deleted_at')
 
     if inspector.has_table('masters'):
         with op.batch_alter_table('masters', schema=None) as batch_op:
@@ -248,10 +273,13 @@ def upgrade() -> None:
             batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
 
     if inspector.has_table('order_group_messages'):
+        order_group_messages_columns = {c['name'] for c in inspector.get_columns('order_group_messages')}
         with op.batch_alter_table('order_group_messages', schema=None) as batch_op:
-            batch_op.drop_column('version')
+            if 'version' in order_group_messages_columns:
+                batch_op.drop_column('version')
 
     if inspector.has_table('order_status_history'):
+        order_status_history_columns = {c['name'] for c in inspector.get_columns('order_status_history')}
         with op.batch_alter_table('order_status_history', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -273,8 +301,10 @@ def upgrade() -> None:
             batch_op.create_index('idx_status_history_changed_at', ['changed_at'], unique=False)
             batch_op.create_index('idx_status_history_changed_by', ['changed_by'], unique=False)
             batch_op.create_index('idx_status_history_order', ['order_id', 'changed_at'], unique=False)
-            batch_op.drop_column('version')
-            batch_op.drop_column('deleted_at')
+            if 'version' in order_status_history_columns:
+                batch_op.drop_column('version')
+            if 'deleted_at' in order_status_history_columns:
+                batch_op.drop_column('deleted_at')
 
     if inspector.has_table('orders'):
         with op.batch_alter_table('orders', schema=None) as batch_op:
