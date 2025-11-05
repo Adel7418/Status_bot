@@ -167,6 +167,32 @@ def upgrade() -> None:
     if inspector.has_table('master_financial_reports'):
         master_financial_reports_columns = {c['name'] for c in inspector.get_columns('master_financial_reports')}
         master_financial_reports_indexes = {i['name'] for i in inspector.get_indexes('master_financial_reports')}
+        
+        # Получаем имена внешних ключей из SQLite (если есть)
+        foreign_keys = []
+        try:
+            conn = op.get_bind()
+            # SQLite хранит имена внешних ключей в таблице sqlite_master
+            result = conn.execute(sa.text("""
+                SELECT sql FROM sqlite_master 
+                WHERE type='table' AND name='master_financial_reports'
+            """))
+            table_sql = result.fetchone()
+            if table_sql and table_sql[0]:
+                # Ищем FOREIGN KEY в CREATE TABLE SQL
+                import re
+                fk_pattern = r'CONSTRAINT\s+(\w+)\s+FOREIGN\s+KEY|FOREIGN\s+KEY[^)]*\)\s+REFERENCES'
+                matches = re.findall(fk_pattern, table_sql[0], re.IGNORECASE)
+                if matches:
+                    # Если нашли CONSTRAINT name, используем его
+                    for match in matches:
+                        if isinstance(match, tuple):
+                            foreign_keys.extend([m for m in match if m])
+                        elif match:
+                            foreign_keys.append(match)
+        except Exception as e:
+            print(f"[WARN] Не удалось получить имена внешних ключей: {e}")
+        
         with op.batch_alter_table('master_financial_reports', schema=None) as batch_op:
             batch_op.alter_column('id',
                existing_type=sa.INTEGER(),
@@ -213,15 +239,8 @@ def upgrade() -> None:
                 batch_op.drop_index('idx_master_reports_master_id')
             if 'idx_master_reports_report_id' in master_financial_reports_indexes:
                 batch_op.drop_index('idx_master_reports_report_id')
-            # Пытаемся удалить внешние ключи, если они существуют
-            try:
-                batch_op.drop_constraint(None, type_='foreignkey')
-            except Exception:
-                pass
-            try:
-                batch_op.drop_constraint(None, type_='foreignkey')
-            except Exception:
-                pass
+            # Не пытаемся удалить внешние ключи без имен - просто создадим новые
+            # SQLite автоматически обработает это при пересоздании таблицы через batch_alter
             batch_op.create_foreign_key(None, 'financial_reports', ['report_id'], ['id'])
             batch_op.create_foreign_key(None, 'masters', ['master_id'], ['id'])
             if 'version' in master_financial_reports_columns:
