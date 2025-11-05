@@ -233,80 +233,32 @@ def upgrade() -> None:
         masters_columns = {c['name']: c for c in inspector.get_columns('masters')}
         masters_indexes = {i['name'] for i in inspector.get_indexes('masters')}
         
-        # Проверяем, нужно ли изменять таблицу masters
-        # Если все нужные индексы уже существуют и колонки имеют правильные типы, пропускаем
-        needs_alter = False
+        # Создаем индексы напрямую, без изменения таблицы
+        # Это безопаснее, так как не требует пересоздания таблицы
         if 'idx_masters_active_approved' not in masters_indexes:
-            needs_alter = True
-        if 'idx_masters_deleted_at' not in masters_indexes:
-            needs_alter = True
-        if 'work_chat_id' in masters_columns and 'idx_masters_work_chat' not in masters_indexes:
-            needs_alter = True
+            if 'is_active' in masters_columns and 'is_approved' in masters_columns:
+                try:
+                    op.create_index('idx_masters_active_approved', 'masters', ['is_active', 'is_approved'], unique=False)
+                    print("[OK] Создан индекс idx_masters_active_approved")
+                except Exception as e:
+                    print(f"[WARN] Не удалось создать индекс idx_masters_active_approved: {e}")
         
-        if needs_alter:
-            with op.batch_alter_table('masters', schema=None) as batch_op:
-                # Обрабатываем только те колонки, которые точно существуют
-                if 'id' in masters_columns:
-                    batch_op.alter_column('id',
-                       existing_type=sa.INTEGER(),
-                       nullable=False,
-                       autoincrement=True)
-                if 'telegram_id' in masters_columns:
-                    # Не изменяем telegram_id, просто указываем его тип
-                    batch_op.alter_column('telegram_id',
-                       existing_type=sa.INTEGER(),
-                       nullable=False)
-                if 'phone' in masters_columns:
-                    batch_op.alter_column('phone',
-                       existing_type=sa.TEXT(),
-                       type_=sa.String(length=20),
-                       existing_nullable=False)
-                if 'specialization' in masters_columns:
-                    batch_op.alter_column('specialization',
-                       existing_type=sa.TEXT(),
-                       type_=sa.String(length=255),
-                       existing_nullable=False)
-                if 'is_active' in masters_columns:
-                    batch_op.alter_column('is_active',
-                       existing_type=sa.BOOLEAN(),
-                       nullable=False,
-                       existing_server_default=sa.text('1'))
-                if 'is_approved' in masters_columns:
-                    batch_op.alter_column('is_approved',
-                       existing_type=sa.BOOLEAN(),
-                       nullable=False,
-                       existing_server_default=sa.text('0'))
-                if 'work_chat_id' in masters_columns:
-                    batch_op.alter_column('work_chat_id',
-                       existing_type=sa.INTEGER(),
-                       nullable=True)
-                if 'created_at' in masters_columns:
-                    batch_op.alter_column('created_at',
-                       existing_type=sa.TIMESTAMP(),
-                       type_=sa.DateTime(),
-                       nullable=False,
-                       existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-                if 'deleted_at' in masters_columns:
-                    batch_op.alter_column('deleted_at',
-                       existing_type=sa.TIMESTAMP(),
-                       type_=sa.DateTime(),
-                       existing_nullable=True)
-                if 'version' in masters_columns:
-                    # Не удаляем version, просто оставляем как есть
-                    batch_op.alter_column('version',
-                       existing_type=sa.INTEGER(),
-                       nullable=False,
-                       existing_server_default=sa.text('1'))
-                
-                # Создаем индексы только если их нет
-                if 'idx_masters_active_approved' not in masters_indexes:
-                    batch_op.create_index('idx_masters_active_approved', ['is_active', 'is_approved'], unique=False)
-                if 'idx_masters_deleted_at' not in masters_indexes:
-                    batch_op.create_index('idx_masters_deleted_at', ['deleted_at'], unique=False)
-                if 'work_chat_id' in masters_columns and 'idx_masters_work_chat' not in masters_indexes:
-                    batch_op.create_index('idx_masters_work_chat', ['work_chat_id'], unique=False)
-        else:
-            print("[SKIP] Таблица masters уже имеет правильную структуру")
+        if 'idx_masters_deleted_at' not in masters_indexes:
+            if 'deleted_at' in masters_columns:
+                try:
+                    op.create_index('idx_masters_deleted_at', 'masters', ['deleted_at'], unique=False)
+                    print("[OK] Создан индекс idx_masters_deleted_at")
+                except Exception as e:
+                    print(f"[WARN] Не удалось создать индекс idx_masters_deleted_at: {e}")
+        
+        if 'work_chat_id' in masters_columns and 'idx_masters_work_chat' not in masters_indexes:
+            try:
+                op.create_index('idx_masters_work_chat', 'masters', ['work_chat_id'], unique=False)
+                print("[OK] Создан индекс idx_masters_work_chat")
+            except Exception as e:
+                print(f"[WARN] Не удалось создать индекс idx_masters_work_chat: {e}")
+        
+        print("[SKIP] Таблица masters - индексы проверены и созданы при необходимости")
 
     if inspector.has_table('order_group_messages'):
         order_group_messages_columns = {c['name'] for c in inspector.get_columns('order_group_messages')}
