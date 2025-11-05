@@ -286,9 +286,14 @@ def upgrade() -> None:
                type_=sa.DateTime(),
                nullable=False,
                existing_server_default=sa.text('(CURRENT_TIMESTAMP)'))
-            batch_op.create_index('idx_status_history_changed_at', ['changed_at'], unique=False)
-            batch_op.create_index('idx_status_history_changed_by', ['changed_by'], unique=False)
-            batch_op.create_index('idx_status_history_order', ['order_id', 'changed_at'], unique=False)
+            # Проверяем существование индексов перед созданием
+            order_status_history_indexes = {i['name'] for i in inspector.get_indexes('order_status_history')}
+            if 'idx_status_history_changed_at' not in order_status_history_indexes:
+                batch_op.create_index('idx_status_history_changed_at', ['changed_at'], unique=False)
+            if 'idx_status_history_changed_by' not in order_status_history_indexes:
+                batch_op.create_index('idx_status_history_changed_by', ['changed_by'], unique=False)
+            if 'idx_status_history_order' not in order_status_history_indexes:
+                batch_op.create_index('idx_status_history_order', ['order_id', 'changed_at'], unique=False)
             if 'version' in order_status_history_columns:
                 batch_op.drop_column('version')
             if 'deleted_at' in order_status_history_columns:
