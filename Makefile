@@ -194,6 +194,8 @@ mb-migrate-city1:  ## Применить миграции для БД city1 (о�
 	@echo "🔄 Применение миграций для city1 (пересборка без кэша)..."
 	@docker compose -f $(MB_COMPOSE) stop bot_city1 || true
 	@docker compose -f $(MB_COMPOSE) build --no-cache bot_city1
+	@echo "🔧 Исправление записи в alembic_version (если необходимо)..."
+	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 python scripts/fix_alembic_version_city1.py || true
 	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 alembic upgrade head
 	@echo "✅ Миграции применены для city1"
 	@echo "💡 Запустите бота: make mb-start-city1"
@@ -202,6 +204,8 @@ mb-migrate-city2:  ## Применить миграции для БД city2 (о�
 	@echo "🔄 Применение миграций для city2 (пересборка без кэша)..."
 	@docker compose -f $(MB_COMPOSE) stop bot_city2 || true
 	@docker compose -f $(MB_COMPOSE) build --no-cache bot_city2
+	@echo "🔧 Исправление записи в alembic_version (если необходимо)..."
+	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 python scripts/fix_alembic_version_city2.py || true
 	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 alembic upgrade head
 	@echo "✅ Миграции применены для city2"
 	@echo "💡 Запустите бота: make mb-start-city2"
