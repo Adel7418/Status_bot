@@ -43,7 +43,7 @@ types-python-dateutil==2.9.0.20241206
 # DATABASE MIGRATIONS
 # ========================================
 
-alembic==1.16.5
+alembic==1.17.1
 
 # ========================================
 # DEBUGGING
