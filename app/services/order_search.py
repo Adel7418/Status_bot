@@ -4,7 +4,6 @@
 
 import logging
 import re
-from typing import Optional
 
 from app.database import Database
 from app.database.models import Order
@@ -78,7 +77,7 @@ class OrderSearchService:
                 if len(word) >= 3:  # Ищем только слова длиннее 3 символов
                     word_orders = await self._search_orders_by_address_in_db(word)
                     orders.extend(word_orders)
-            
+
             # Убираем дубликаты
             orders = self._remove_duplicate_orders(orders)
 
@@ -156,7 +155,7 @@ class OrderSearchService:
 
         return text
 
-    def _normalize_phone(self, phone: str) -> Optional[str]:
+    def _normalize_phone(self, phone: str) -> str | None:
         """
         Нормализация номера телефона для поиска
 
@@ -207,23 +206,23 @@ class OrderSearchService:
 
         # Убираем знаки препинания в конце
         normalized = re.sub(r"[.,;:!?]+$", "", normalized)
-        
+
         # Убираем сокращения и заменяем их на полные формы
         replacements = {
-            'ул.': 'улица',
-            'ул ': 'улица ',
-            'д.': 'дом',
-            'д ': 'дом ',
-            'кв.': 'квартира',
-            'кв ': 'квартира ',
-            'пр.': 'проспект',
-            'пр ': 'проспект ',
-            'пер.': 'переулок',
-            'пер ': 'переулок ',
-            'наб.': 'набережная',
-            'наб ': 'набережная ',
+            "ул.": "улица",
+            "ул ": "улица ",
+            "д.": "дом",
+            "д ": "дом ",
+            "кв.": "квартира",
+            "кв ": "квартира ",
+            "пр.": "проспект",
+            "пр ": "проспект ",
+            "пер.": "переулок",
+            "пер ": "переулок ",
+            "наб.": "набережная",
+            "наб ": "набережная ",
         }
-        
+
         for short, full in replacements.items():
             normalized = normalized.replace(short, full)
         

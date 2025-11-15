@@ -5,8 +5,8 @@
 import logging
 from datetime import datetime
 
-from app.database.orm_database import ORMDatabase
 from app.database.models import Master, Order, User
+from app.database.orm_database import ORMDatabase
 
 
 logger = logging.getLogger(__name__)
@@ -77,8 +77,10 @@ class OrderReportsService:
             # Создаем запись в таблице order_reports
             async with self.db.get_session() as session:
                 from sqlalchemy import text
+
                 await session.execute(
-                    text("""
+                    text(
+                        """
                         INSERT INTO order_reports (
                             order_id, equipment_type, client_name, client_address,
                             master_id, master_name, dispatcher_id, dispatcher_name,
@@ -88,7 +90,8 @@ class OrderReportsService:
                                  :master_id, :master_name, :dispatcher_id, :dispatcher_name,
                                  :total_amount, :materials_cost, :master_profit, :company_profit,
                                  :out_of_city, :has_review, :created_at, :closed_at, :completion_time_hours)
-                    """),
+                    """
+                    ),
                     {
                         "order_id": order.id,
                         "equipment_type": order.equipment_type,
@@ -107,7 +110,7 @@ class OrderReportsService:
                         "created_at": order.created_at,
                         "closed_at": order.updated_at,
                         "completion_time_hours": completion_time_hours,
-                    }
+                    },
                 )
                 await session.commit()
 
@@ -160,6 +163,7 @@ class OrderReportsService:
 
             async with self.db.get_session() as session:
                 from sqlalchemy import text
+
                 result = await session.execute(text(query), params)
                 rows = result.fetchall()
 
@@ -240,8 +244,11 @@ class OrderReportsService:
 
             async with self.db.get_session() as session:
                 from sqlalchemy import text
+
                 # Удаляем существующую запись и вставляем новую (простой UPSERT для SQLite)
-                await session.execute(text("DELETE FROM order_reports WHERE order_id = :oid"), {"oid": order.id})
+                await session.execute(
+                    text("DELETE FROM order_reports WHERE order_id = :oid"), {"oid": order.id}
+                )
                 await session.execute(
                     text(
                         """
@@ -315,6 +322,7 @@ class OrderReportsService:
 
             async with self.db.get_session() as session:
                 from sqlalchemy import text
+
                 result = await session.execute(text(query), params)
                 rows = result.fetchall()
 

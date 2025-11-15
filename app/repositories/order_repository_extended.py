@@ -20,9 +20,7 @@ class OrderRepositoryExtended(OrderRepository):
 
     # ===== SOFT DELETE =====
 
-    async def soft_delete(
-        self, order_id: int, deleted_by: int, reason: str | None = None
-    ) -> bool:
+    async def soft_delete(self, order_id: int, deleted_by: int, reason: str | None = None) -> bool:
         """
         Мягкое удаление заявки
 
@@ -377,10 +375,10 @@ class OrderRepositoryExtended(OrderRepository):
         where_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
 
         # Общее количество
-        total_row = await self._fetch_one(f"SELECT COUNT(*) as total FROM orders {where_clause}")  # nosec: B608
+        total_row = await self._fetch_one(f"SELECT COUNT(*) as total FROM orders {where_clause}")  # nosec B608
 
         # По статусам
-        status_rows = await self._fetch_all(  # nosec: B608
+        status_rows = await self._fetch_all(  # nosec B608
             f"""
             SELECT status, COUNT(*) as count
             FROM orders

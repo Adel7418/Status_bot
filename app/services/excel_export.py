@@ -259,7 +259,6 @@ class ExcelExportService:
                     thin_border,
                     header_font,
                     header_fill,
-                    subheader_font,
                     subheader_fill,
                     center_alignment,
                     left_alignment,
@@ -524,7 +523,6 @@ class ExcelExportService:
         thin_border,
         header_font,
         header_fill,
-        subheader_font,
         subheader_fill,
         center_alignment,
         left_alignment,
@@ -754,12 +752,7 @@ class ExcelExportService:
                         cell.fill = PatternFill(
                             start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
                         )
-                    elif col_idx == 2:  # "Всего:"
-                        cell.alignment = center_alignment
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
-                    elif col_idx == 3:  # "Закрыто:"
+                    elif col_idx == 2 or col_idx == 3:  # "Всего:" or "Закрыто:"
                         cell.alignment = center_alignment
                         cell.fill = PatternFill(
                             start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
@@ -1603,7 +1596,6 @@ class ExcelExportService:
         thin_border,
         header_font,
         header_fill,
-        subheader_font,
         subheader_fill,
         center_alignment,
         left_alignment,
@@ -1759,7 +1751,6 @@ class ExcelExportService:
         thin_border,
         header_font,
         header_fill,
-        subheader_font,
         subheader_fill,
         center_alignment,
         left_alignment,

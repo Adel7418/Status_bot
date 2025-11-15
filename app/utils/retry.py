@@ -71,7 +71,7 @@ def retry_on_telegram_error(
 
     def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T | None]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T | None:
+        async def wrapper(*args: Any, **kwargs: Any) -> T | None:  # noqa: PLR0911
             last_exception = None
 
             for attempt in range(1, max_attempts + 1):

@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -21,7 +20,7 @@ class MasterArchiveService:
 
     async def archive_master_orders(
         self, master_id: int, reason: str = "deactivation"
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Архивирование всех заявок мастера
 
