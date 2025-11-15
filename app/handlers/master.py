@@ -37,7 +37,7 @@ router = Router(name="master")
 
 @router.message(F.text == "📋 Мои заявки")
 @handle_errors
-async def btn_my_orders(message: Message, state: FSMContext, user_role: str):
+async def btn_my_orders(message: Message, state: FSMContext, user_role: str, user_roles: list):
     """
     Просмотр заявок мастера
 
@@ -50,8 +50,8 @@ async def btn_my_orders(message: Message, state: FSMContext, user_role: str):
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    # Проверяем, что это не личное сообщение (только для чистых мастеров)
-    if message.chat.type == "private" and user_role == UserRole.MASTER:
+    # Проверяем, что это не личное сообщение (только для чистых мастеров, админ может работать в приватном чате)
+    if message.chat.type == "private" and user_role == UserRole.MASTER and UserRole.ADMIN not in user_roles:
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
@@ -128,8 +128,8 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
         callback: Callback query
         user_roles: Список ролей пользователя
     """
-    # Проверяем роль мастера
-    if UserRole.MASTER not in user_roles:
+    # Проверяем роль мастера или админа
+    if UserRole.MASTER not in user_roles and UserRole.ADMIN not in user_roles:
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
         return
 
@@ -981,7 +981,7 @@ async def process_dr_info(  # noqa: PLR0911
 
 @router.message(F.text == "📊 Моя статистика")
 @handle_errors
-async def btn_my_stats(message: Message, user_role: str):
+async def btn_my_stats(message: Message, user_role: str, user_roles: list):
     """
     Статистика мастера
 
@@ -993,8 +993,8 @@ async def btn_my_stats(message: Message, user_role: str):
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    # Проверяем, что это не личное сообщение (только для чистых мастеров)
-    if message.chat.type == "private" and user_role == UserRole.MASTER:
+    # Проверяем, что это не личное сообщение (только для чистых мастеров, админ может работать в приватном чате)
+    if message.chat.type == "private" and user_role == UserRole.MASTER and UserRole.ADMIN not in user_roles:
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
