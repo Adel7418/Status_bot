@@ -200,7 +200,9 @@ class ORMDatabase:
                         f"(ID найден в DISPATCHER_IDS={Config.DISPATCHER_IDS})"
                     )
                 # Убираем роль DISPATCHER, если пользователя нет в DISPATCHER_IDS
-                elif telegram_id not in Config.DISPATCHER_IDS and user.has_role(UserRole.DISPATCHER):
+                elif telegram_id not in Config.DISPATCHER_IDS and user.has_role(
+                    UserRole.DISPATCHER
+                ):
                     user.remove_role(UserRole.DISPATCHER)
                     updated = True
                     logger.info(
@@ -217,8 +219,16 @@ class ORMDatabase:
                 if updated:
                     user.version += 1
                     await session.commit()
+                    # Обновляем объект из базы данных, чтобы убедиться, что изменения сохранены
+                    await session.refresh(user)
+                    final_roles = user.get_roles()
                     logger.info(
-                        f"Роль пользователя {telegram_id} обновлена: {current_roles} -> {user.get_roles()}"
+                        f"Роль пользователя {telegram_id} обновлена: {current_roles} -> {final_roles}"
+                    )
+                    logger.info(
+                        f"Проверка сохранения роли для пользователя {telegram_id}: "
+                        f"role в БД='{user.role}', roles={final_roles}, "
+                        f"has DISPATCHER={user.has_role(UserRole.DISPATCHER)}"
                     )
 
                 return user
