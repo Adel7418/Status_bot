@@ -51,7 +51,11 @@ async def btn_my_orders(message: Message, state: FSMContext, user_role: str, use
         return
 
     # Проверяем, что это не личное сообщение (только для чистых мастеров, админ может работать в приватном чате)
-    if message.chat.type == "private" and user_role == UserRole.MASTER and UserRole.ADMIN not in user_roles:
+    if (
+        message.chat.type == "private"
+        and user_role == UserRole.MASTER
+        and UserRole.ADMIN not in user_roles
+    ):
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
@@ -994,7 +998,11 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list):
         return
 
     # Проверяем, что это не личное сообщение (только для чистых мастеров, админ может работать в приватном чате)
-    if message.chat.type == "private" and user_role == UserRole.MASTER and UserRole.ADMIN not in user_roles:
+    if (
+        message.chat.type == "private"
+        and user_role == UserRole.MASTER
+        and UserRole.ADMIN not in user_roles
+    ):
         await message.answer(
             "⚠️ <b>Работа только в рабочей группе!</b>\n\n"
             "Для мастеров взаимодействие с ботом доступно только в рабочей группе.",
@@ -2205,6 +2213,46 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                 logger.info(f"Reschedule notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
+
+        # Уведомляем мастера, если перенос выполнен из админ-панели
+        initiator_user = await db.get_user_by_telegram_id(initiated_by)
+        is_admin_reschedule = initiator_user and initiator_user.has_role(UserRole.ADMIN)
+
+        if is_admin_reschedule and order.assigned_master_id:
+            # Получаем мастера по ID
+            assigned_master = await db.get_master_by_id(order.assigned_master_id)
+            if assigned_master and assigned_master.telegram_id:
+                from app.utils import safe_send_message
+
+                master_notification = (
+                    f"📅 <b>Визит перенесен</b>\n\n"
+                    f"Заявка #{order_id}\n"
+                    f"👤 Клиент: {order.client_name}\n"
+                    f"📍 Адрес: {order.client_address}\n"
+                    f"🔧 Техника: {order.equipment_type}\n\n"
+                    f"Было: {old_time}\n"
+                    f"<b>Стало: {new_time}</b>\n"
+                )
+
+                if reason:
+                    master_notification += f"\n📝 Причина: {reason}"
+
+                result = await safe_send_message(
+                    message.bot,
+                    assigned_master.telegram_id,
+                    master_notification,
+                    parse_mode="HTML",
+                )
+                if result:
+                    logger.info(
+                        f"Reschedule notification sent to master {assigned_master.telegram_id} "
+                        f"(order #{order_id})"
+                    )
+                else:
+                    logger.error(
+                        f"Не удалось уведомить мастера {assigned_master.telegram_id} "
+                        f"о переносе заявки #{order_id} после повторных попыток"
+                    )
 
         log_action(message.from_user.id, "RESCHEDULE_ORDER", f"Order #{order_id}")
         logger.info(f"✅ Order #{order_id} successfully rescheduled to '{new_time}'")
