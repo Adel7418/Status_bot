@@ -170,7 +170,7 @@ def retry_on_telegram_error(
                 )
             return None
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator
 

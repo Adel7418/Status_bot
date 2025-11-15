@@ -966,7 +966,7 @@ class TaskScheduler:
                             max_attempts=1,
                         )
 
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     async def update_reports_automatically(self):

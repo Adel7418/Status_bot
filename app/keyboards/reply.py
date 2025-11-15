@@ -20,8 +20,21 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
     """
     builder = ReplyKeyboardBuilder()
 
-    # Преобразуем в список ролей
-    roles = [role] if isinstance(role, str) else role
+    # Преобразуем в список ролей (поддержка строк с перечислением ролей через запятую)
+    if isinstance(role, str):
+        roles = [r.strip() for r in role.split(",") if r.strip()]
+    elif role is None:
+        roles = []
+    else:
+        roles = []
+        for r in role:
+            if isinstance(r, str):
+                value = r.strip()
+                if value:
+                    roles.append(value)
+
+    if not roles:
+        roles = [UserRole.UNKNOWN]
 
     # Определяем, какие кнопки добавить
     has_admin = UserRole.ADMIN in roles

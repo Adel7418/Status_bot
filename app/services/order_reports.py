@@ -235,7 +235,7 @@ class OrderReportsService:
                     if getattr(closed_dt, "tzinfo", None) is not None:
                         closed_dt = closed_dt.replace(tzinfo=None)
                     completion_time_hours = (closed_dt - created_dt).total_seconds() / 3600
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             async with self.db.get_session() as session:

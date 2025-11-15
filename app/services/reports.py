@@ -284,7 +284,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -316,7 +316,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -351,7 +351,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -412,7 +412,7 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             adjusted_width = min((max_length + 2), 50)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width

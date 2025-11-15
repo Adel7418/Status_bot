@@ -171,21 +171,54 @@ class ORMDatabase:
                 # Если пользователь больше не мастер, но роль MASTER есть - не удаляем её,
                 # так как это может быть временное состояние
 
+                # Проверяем и обновляем роль на основе конфигурации
+                current_roles = user.get_roles()
+
+                # Добавляем роль ADMIN, если пользователь в ADMIN_IDS
+                if telegram_id in Config.ADMIN_IDS and not user.has_role(UserRole.ADMIN):
+                    user.add_role(UserRole.ADMIN)
+                    updated = True
+                    logger.info(f"Автоматически добавлена роль ADMIN пользователю {telegram_id}")
+                # Убираем роль ADMIN, если пользователя нет в ADMIN_IDS
+                elif telegram_id not in Config.ADMIN_IDS and user.has_role(UserRole.ADMIN):
+                    user.remove_role(UserRole.ADMIN)
+                    updated = True
+                    logger.info(f"Автоматически удалена роль ADMIN у пользователя {telegram_id}")
+
+                # Добавляем роль DISPATCHER, если пользователь в DISPATCHER_IDS
+                if telegram_id in Config.DISPATCHER_IDS and not user.has_role(UserRole.DISPATCHER):
+                    user.add_role(UserRole.DISPATCHER)
+                    updated = True
+                    logger.info(f"Автоматически добавлена роль DISPATCHER пользователю {telegram_id}")
+                # Убираем роль DISPATCHER, если пользователя нет в DISPATCHER_IDS
+                elif telegram_id not in Config.DISPATCHER_IDS and user.has_role(UserRole.DISPATCHER):
+                    user.remove_role(UserRole.DISPATCHER)
+                    updated = True
+                    logger.info(f"Автоматически удалена роль DISPATCHER у пользователя {telegram_id}")
+
                 if updated:
                     user.version += 1
                     await session.commit()
+                    logger.info(
+                        f"Роль пользователя {telegram_id} обновлена: {current_roles} -> {user.get_roles()}"
+                    )
 
                 return user
 
-            # Определяем роль
-            role = UserRole.UNKNOWN
+            # Определяем роли (может быть несколько ролей)
+            roles = []
             if telegram_id in Config.ADMIN_IDS:
-                role = UserRole.ADMIN
-            elif telegram_id in Config.DISPATCHER_IDS:
-                role = UserRole.DISPATCHER
-            elif is_master:
+                roles.append(UserRole.ADMIN)
+            if telegram_id in Config.DISPATCHER_IDS:
+                roles.append(UserRole.DISPATCHER)
+            if is_master:
                 # Если пользователь новый, но уже есть в таблице masters - назначаем роль MASTER
-                role = UserRole.MASTER
+                roles.append(UserRole.MASTER)
+            if not roles:
+                roles = [UserRole.UNKNOWN]
+
+            # Формируем строку ролей
+            role_str = ",".join(sorted(roles))
 
             # Создаем нового пользователя
             user = User(
@@ -193,14 +226,14 @@ class ORMDatabase:
                 username=username,
                 first_name=first_name,
                 last_name=last_name,
-                role=role,
+                role=role_str,
                 created_at=get_now(),
             )
 
             session.add(user)
             await session.flush()  # Получаем ID
 
-            logger.info(f"Создан новый пользователь: {telegram_id} с ролью {role}")
+            logger.info(f"Создан новый пользователь: {telegram_id} с ролями {roles}")
             return user
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:

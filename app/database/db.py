@@ -291,14 +291,53 @@ class Database:
                 user.username = username
                 user.first_name = first_name
                 user.last_name = last_name
+
+            # Проверяем и обновляем роль на основе конфигурации
+            roles_updated = False
+            current_roles = user.get_roles()
+
+            # Добавляем роль ADMIN, если пользователь в ADMIN_IDS
+            if telegram_id in Config.ADMIN_IDS and not user.has_role(UserRole.ADMIN):
+                user.add_role(UserRole.ADMIN)
+                roles_updated = True
+            # Убираем роль ADMIN, если пользователя нет в ADMIN_IDS
+            elif telegram_id not in Config.ADMIN_IDS and user.has_role(UserRole.ADMIN):
+                user.remove_role(UserRole.ADMIN)
+                roles_updated = True
+
+            # Добавляем роль DISPATCHER, если пользователь в DISPATCHER_IDS
+            if telegram_id in Config.DISPATCHER_IDS and not user.has_role(UserRole.DISPATCHER):
+                user.add_role(UserRole.DISPATCHER)
+                roles_updated = True
+            # Убираем роль DISPATCHER, если пользователя нет в DISPATCHER_IDS
+            elif telegram_id not in Config.DISPATCHER_IDS and user.has_role(UserRole.DISPATCHER):
+                user.remove_role(UserRole.DISPATCHER)
+                roles_updated = True
+
+            # Обновляем роль в базе данных, если она изменилась
+            if roles_updated:
+                await self.connection.execute(
+                    "UPDATE users SET role = ? WHERE telegram_id = ?",
+                    (user.role, telegram_id),
+                )
+                await self.connection.commit()
+                logger.info(
+                    f"Роль пользователя {telegram_id} обновлена: {current_roles} -> {user.get_roles()}"
+                )
+
             return user
 
-        # Определяем роль
-        role = UserRole.UNKNOWN
+        # Определяем роли (может быть несколько ролей)
+        roles = []
         if telegram_id in Config.ADMIN_IDS:
-            role = UserRole.ADMIN
-        elif telegram_id in Config.DISPATCHER_IDS:
-            role = UserRole.DISPATCHER
+            roles.append(UserRole.ADMIN)
+        if telegram_id in Config.DISPATCHER_IDS:
+            roles.append(UserRole.DISPATCHER)
+        if not roles:
+            roles = [UserRole.UNKNOWN]
+
+        # Формируем строку ролей
+        role_str = ",".join(sorted(roles))
 
         # Создаем нового пользователя
         cursor = await self.connection.execute(
@@ -306,7 +345,7 @@ class Database:
             INSERT INTO users (telegram_id, username, first_name, last_name, role)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (telegram_id, username, first_name, last_name, role),
+            (telegram_id, username, first_name, last_name, role_str),
         )
         await self.connection.commit()
 
@@ -316,11 +355,11 @@ class Database:
             username=username,
             first_name=first_name,
             last_name=last_name,
-            role=role,
+            role=role_str,
             created_at=get_now(),
         )
 
-        logger.info("Создан новый пользователь: %s с ролью %s", telegram_id, role)
+        logger.info("Создан новый пользователь: %s с ролями %s", telegram_id, roles)
         return user
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:

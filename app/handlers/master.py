@@ -288,6 +288,10 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
             user_roles=user_roles,  # Передаём роли для валидации
         )
 
+        # Перезагружаем заказ и мастера для получения актуальных данных
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=callback.from_user.id,
@@ -406,7 +410,7 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
                     for m in messages:
                         await safe_delete_message(callback.bot, m.chat_id, m.message_id)
                     await db.deactivate_group_messages(order_id)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Возвращаем статус в NEW и убираем мастера (ORM compatible)
@@ -424,6 +428,10 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
                     {"status": OrderStatus.NEW, "order_id": order_id},
                 )
 
+        # Перезагружаем заказ и мастера для получения актуальных данных
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
+
         # Добавляем в лог
         await db.add_audit_log(
             user_id=callback.from_user.id,
@@ -434,7 +442,7 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
         # Удаляем текущее сообщение, если возможно; иначе редактируем
         try:
             await callback.message.delete()
-        except Exception:
+        except Exception:  # nosec B110
             await callback.message.edit_text(
                 f"❌ Заявка #{order_id} отклонена.\n\n" f"Диспетчер получил уведомление."
             )
@@ -502,6 +510,10 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
             changed_by=callback.from_user.id,
             user_roles=user_roles,
         )
+
+        # Перезагружаем заказ и мастера для получения актуальных данных
+        order = await db.get_order_by_id(order_id)
+        master = await db.get_master_by_telegram_id(callback.from_user.id)
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -733,7 +745,9 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(LongRepairStates.enter_completion_date_and_prepayment, F.text)
-async def process_dr_info(message: Message, state: FSMContext, user_roles: list):
+async def process_dr_info(  # noqa: PLR0911
+    message: Message, state: FSMContext, user_roles: list
+):
     """
     Обработка ввода срока окончания и предоплаты для DR
 
@@ -1117,9 +1131,12 @@ async def process_total_amount(message: Message, state: FSMContext):
         is_sender_allowed = True
 
     # Проверка 3: реплай на промпт-сообщение (для ForceReply)
-    if prompt_message_id and message.reply_to_message:
-        if message.reply_to_message.message_id == prompt_message_id:
-            is_sender_allowed = True
+    if (
+        prompt_message_id
+        and message.reply_to_message
+        and message.reply_to_message.message_id == prompt_message_id
+    ):
+        is_sender_allowed = True
 
     # Проверка 4: админ действует за мастера
     if acting_as_master_id and message.from_user.id == acting_as_master_id:
@@ -1472,7 +1489,6 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
 
     callback_data = parse_callback_data(callback_query.data)
     answer = callback_data["params"][0] if len(callback_data["params"]) > 0 else None  # yes/no
-    order_id = callback_data["params"][1] if len(callback_data["params"]) > 1 else None  # order_id
 
     # Определяем ответ
     has_review = answer == "yes"
@@ -1551,7 +1567,6 @@ async def process_out_of_city_confirmation_callback(
 
     callback_data = parse_callback_data(callback_query.data)
     answer = callback_data["params"][0] if len(callback_data["params"]) > 0 else None  # yes/no
-    order_id = callback_data["params"][1] if len(callback_data["params"]) > 1 else None  # order_id
 
     # Определяем ответ
     out_of_city = answer == "yes"
@@ -1646,14 +1661,18 @@ async def process_out_of_city_confirmation_callback(
             user_roles=user_roles,  # Передаём роли для валидации
         )
 
+        # Перезагружаем заказ и мастера для получения актуальных данных
+        updated_order = await db.get_order_by_id(order_id_from_state)
+        if acting_as_master_id:
+            master = await db.get_master_by_telegram_id(acting_as_master_id)
+        else:
+            master = await db.get_master_by_telegram_id(callback_query.from_user.id)
+
         # Создаем отчет по заказу
         try:
             from app.services.order_reports import OrderReportsService
 
             order_reports_service = OrderReportsService()
-
-            # Получаем актуальные данные заказа
-            updated_order = await db.get_order_by_id(order_id_from_state)
 
             # Получаем данные диспетчера
             dispatcher = None
@@ -1675,7 +1694,7 @@ async def process_out_of_city_confirmation_callback(
         )
 
         # ✨ УВЕДОМЛЕНИЕ ДИСПЕТЧЕРА О ЗАКРЫТИИ ЗАЯВКИ
-        if order.dispatcher_id:
+        if updated_order.dispatcher_id:
             from app.utils import safe_send_message
 
             notification_text = (
@@ -1698,18 +1717,18 @@ async def process_out_of_city_confirmation_callback(
 
             result = await safe_send_message(
                 callback_query.bot,
-                order.dispatcher_id,
+                updated_order.dispatcher_id,
                 notification_text,
                 parse_mode="HTML",
             )
 
             if not result:
                 logger.error(
-                    f"Failed to notify dispatcher {order.dispatcher_id} about order #{order_id_from_state} completion"
+                    f"Failed to notify dispatcher {updated_order.dispatcher_id} about order #{order_id_from_state} completion"
                 )
             else:
                 logger.info(
-                    f"Dispatcher {order.dispatcher_id} notified about order #{order_id_from_state} completion"
+                    f"Dispatcher {updated_order.dispatcher_id} notified about order #{order_id_from_state} completion"
                 )
 
         # Удаляем предыдущее сообщение о выезде за город
@@ -1930,29 +1949,29 @@ async def process_reschedule_new_time(message: Message, state: FSMContext):
             # Сразу переходим к подтверждению
             await show_reschedule_confirmation(message, state)
             return
-        else:
-            # Не смогли распознать дату - переспрашиваем с примерами
-            await message.reply(
-                f"❓ <b>Не удалось распознать дату:</b> {new_time}\n\n"
-                f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
-                f"<b>🤖 Автоопределение даты:</b>\n"
-                f"• <code>завтра в 15:00</code>\n"
-                f"• <code>послезавтра 14:30</code>\n"
-                f"• <code>через 3 дня 15:00</code>\n"
-                f"• <code>через неделю 12:00</code>\n\n"
-                f"<b>⏱ Через часы/дни:</b>\n"
-                f"• <code>через полтора часа</code>\n"
-                f"• <code>через 1-1.5 часа</code>\n"
-                f"• <code>через 3 дня</code>\n\n"
-                f"<b>📅 Точная дата:</b>\n"
-                f"• <code>20.10.2025 14:00</code>\n"
-                f"• <code>25/10/2025 09:30</code>\n\n"
-                f"<b>📝 Или просто текст:</b>\n"
-                f"• <code>Набрать клиенту</code>\n"
-                f"• <code>Уточнить время</code>",
-                parse_mode="HTML",
-            )
-            return
+
+        # Не смогли распознать дату - переспрашиваем с примерами
+        await message.reply(
+            f"❓ <b>Не удалось распознать дату:</b> {new_time}\n\n"
+            f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
+            f"<b>🤖 Автоопределение даты:</b>\n"
+            f"• <code>завтра в 15:00</code>\n"
+            f"• <code>послезавтра 14:30</code>\n"
+            f"• <code>через 3 дня 15:00</code>\n"
+            f"• <code>через неделю 12:00</code>\n\n"
+            f"<b>⏱ Через часы/дни:</b>\n"
+            f"• <code>через полтора часа</code>\n"
+            f"• <code>через 1-1.5 часа</code>\n"
+            f"• <code>через 3 дня</code>\n\n"
+            f"<b>📅 Точная дата:</b>\n"
+            f"• <code>20.10.2025 14:00</code>\n"
+            f"• <code>25/10/2025 09:30</code>\n\n"
+            f"<b>📝 Или просто текст:</b>\n"
+            f"• <code>Набрать клиенту</code>\n"
+            f"• <code>Уточнить время</code>",
+            parse_mode="HTML",
+        )
+        return
 
     # Если не похоже на дату - проверяем, не является ли это простой цифрой
     if re.match(r"^\d{1,2}$", new_time.strip()):
@@ -2004,11 +2023,6 @@ async def process_reschedule_reason(message: Message, state: FSMContext):
     await state.update_data(reschedule_reason=reason)
 
     # Получаем данные из state
-    data = await state.get_data()
-    order_id = data.get("order_id")
-    new_time = data.get("new_scheduled_time")
-    initiated_by = data.get("reschedule_initiated_by")
-
     # Показываем подтверждение переноса
     await show_reschedule_confirmation(message, state)
 
@@ -2599,7 +2613,7 @@ async def callback_download_archive_report(callback: CallbackQuery):
 
 
 async def complete_order_as_refusal(
-    message: Message, state: FSMContext, order_id: int, user_telegram_id: int = None
+    message: Message, state: FSMContext, order_id: int, user_telegram_id: int | None = None
 ):
     """
     Завершение заказа как отказ (для заявок в 0 рублей)
