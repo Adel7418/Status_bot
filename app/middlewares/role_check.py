@@ -47,6 +47,8 @@ class RoleCheckMiddleware(BaseMiddleware):
         """
         # Получаем пользователя из события
         user = event.from_user
+        
+        logger.info(f"RoleCheckMiddleware: __call__ вызван, user={user.id if user else None}")
 
         if user:
             # Получаем или создаем пользователя в БД
