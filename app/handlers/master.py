@@ -2221,7 +2221,7 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
         if is_admin_reschedule and order.assigned_master_id:
             # Получаем мастера по ID
             assigned_master = await db.get_master_by_id(order.assigned_master_id)
-            if assigned_master and assigned_master.telegram_id:
+            if assigned_master:
                 from app.utils import safe_send_message
 
                 master_notification = (
@@ -2237,21 +2237,29 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                 if reason:
                     master_notification += f"\n📝 Причина: {reason}"
 
+                # Отправляем в группу, если есть work_chat_id, иначе в личные сообщения
+                target_chat_id = (
+                    assigned_master.work_chat_id
+                    if assigned_master.work_chat_id
+                    else assigned_master.telegram_id
+                )
+
                 result = await safe_send_message(
                     message.bot,
-                    assigned_master.telegram_id,
+                    target_chat_id,
                     master_notification,
                     parse_mode="HTML",
                 )
                 if result:
+                    chat_type = "group" if assigned_master.work_chat_id else "private"
                     logger.info(
                         f"Reschedule notification sent to master {assigned_master.telegram_id} "
-                        f"(order #{order_id})"
+                        f"({chat_type} chat {target_chat_id}, order #{order_id})"
                     )
                 else:
                     logger.error(
                         f"Не удалось уведомить мастера {assigned_master.telegram_id} "
-                        f"о переносе заявки #{order_id} после повторных попыток"
+                        f"(chat {target_chat_id}) о переносе заявки #{order_id} после повторных попыток"
                     )
 
         log_action(message.from_user.id, "RESCHEDULE_ORDER", f"Order #{order_id}")
