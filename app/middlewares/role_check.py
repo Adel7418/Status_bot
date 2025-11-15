@@ -50,6 +50,10 @@ class RoleCheckMiddleware(BaseMiddleware):
 
         if user:
             # Получаем или создаем пользователя в БД
+            logger.info(
+                f"RoleCheckMiddleware: обработка пользователя {user.id}, "
+                f"вызов get_or_create_user..."
+            )
             db_user = await self.db.get_or_create_user(
                 telegram_id=user.id,
                 username=user.username,
@@ -59,12 +63,15 @@ class RoleCheckMiddleware(BaseMiddleware):
 
             # Добавляем пользователя и его роли в данные
             data["user"] = db_user
-            data[
-                "user_role"
-            ] = db_user.get_primary_role()  # Основная роль для обратной совместимости
-            data["user_roles"] = db_user.get_roles()  # Список всех ролей
+            final_roles = db_user.get_roles()
+            primary_role = db_user.get_primary_role()
+            data["user_role"] = primary_role  # Основная роль для обратной совместимости
+            data["user_roles"] = final_roles  # Список всех ролей
 
-            logger.debug("User %s with roles %s processed", user.id, db_user.get_roles())
+            logger.info(
+                f"RoleCheckMiddleware: пользователь {user.id} обработан, "
+                f"роли={final_roles}, основная роль={primary_role}"
+            )
 
         # Вызываем следующий handler
         return await handler(event, data)
