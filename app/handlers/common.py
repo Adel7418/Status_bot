@@ -54,6 +54,11 @@ async def cmd_start(
 
     logger.info(f"START command received from user {message.from_user.id}")
     logger.info(f"User roles: {user_roles}, User: {safe_str_user(user)}")
+    logger.info(
+        f"DEBUG: user.role (raw from DB)='{user.role}', "
+        f"user.get_roles()={user.get_roles()}, "
+        f"user_roles from middleware={user_roles}"
+    )
 
     # Проверяем, если это личное сообщение и пользователь ТОЛЬКО мастер
     is_private = message.chat.type == "private"
