@@ -173,6 +173,12 @@ class ORMDatabase:
 
                 # Проверяем и обновляем роль на основе конфигурации
                 current_roles = user.get_roles()
+                logger.info(
+                    f"Проверка ролей для пользователя {telegram_id}: "
+                    f"текущие роли={current_roles}, "
+                    f"ADMIN_IDS={Config.ADMIN_IDS}, "
+                    f"DISPATCHER_IDS={Config.DISPATCHER_IDS}"
+                )
 
                 # Добавляем роль ADMIN, если пользователь в ADMIN_IDS
                 if telegram_id in Config.ADMIN_IDS and not user.has_role(UserRole.ADMIN):
@@ -189,12 +195,24 @@ class ORMDatabase:
                 if telegram_id in Config.DISPATCHER_IDS and not user.has_role(UserRole.DISPATCHER):
                     user.add_role(UserRole.DISPATCHER)
                     updated = True
-                    logger.info(f"Автоматически добавлена роль DISPATCHER пользователю {telegram_id}")
+                    logger.info(
+                        f"Автоматически добавлена роль DISPATCHER пользователю {telegram_id} "
+                        f"(ID найден в DISPATCHER_IDS={Config.DISPATCHER_IDS})"
+                    )
                 # Убираем роль DISPATCHER, если пользователя нет в DISPATCHER_IDS
                 elif telegram_id not in Config.DISPATCHER_IDS and user.has_role(UserRole.DISPATCHER):
                     user.remove_role(UserRole.DISPATCHER)
                     updated = True
-                    logger.info(f"Автоматически удалена роль DISPATCHER у пользователя {telegram_id}")
+                    logger.info(
+                        f"Автоматически удалена роль DISPATCHER у пользователя {telegram_id} "
+                        f"(ID не найден в DISPATCHER_IDS={Config.DISPATCHER_IDS})"
+                    )
+                else:
+                    logger.info(
+                        f"Роль DISPATCHER для пользователя {telegram_id} не изменилась: "
+                        f"в DISPATCHER_IDS={telegram_id in Config.DISPATCHER_IDS}, "
+                        f"имеет роль={user.has_role(UserRole.DISPATCHER)}"
+                    )
 
                 if updated:
                     user.version += 1
