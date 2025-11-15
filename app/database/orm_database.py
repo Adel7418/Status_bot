@@ -136,6 +136,10 @@ class ORMDatabase:
         last_name: str | None = None,
     ) -> User:
         """Получение или создание пользователя"""
+        logger.info(
+            f"get_or_create_user вызван для telegram_id={telegram_id}, "
+            f"username={username}, first_name={first_name}, last_name={last_name}"
+        )
         async with self.get_session() as session:
             # Ищем существующего пользователя
             stmt = select(User).where(

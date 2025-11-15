@@ -269,6 +269,10 @@ class Database:
         Returns:
             Объект User
         """
+        logger.info(
+            f"get_or_create_user вызван для telegram_id={telegram_id}, "
+            f"username={username}, first_name={first_name}, last_name={last_name}"
+        )
         # Проверяем существование пользователя
         user = await self.get_user_by_telegram_id(telegram_id)
 
