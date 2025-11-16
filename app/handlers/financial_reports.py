@@ -489,56 +489,51 @@ async def callback_generate_monthly_report(callback: CallbackQuery, user_role: s
 @router.callback_query(F.data == "reports_list")
 @require_role([UserRole.ADMIN, UserRole.DISPATCHER])
 @handle_errors
-async def callback_reports_list(callback: CallbackQuery, user_role: str):
+async def callback_reports_list(callback: CallbackQuery, user_role: str, db: Database):
     """Список последних отчетов"""
-    db = Database()
-    await db.connect()
+    reports = await db.get_latest_reports(limit=10)
 
-    try:
-        reports = await db.get_latest_reports(limit=10)
-
-        if not reports:
-            await safe_edit_message(
-                callback,
-                "📋 <b>Последние отчеты</b>\n\n" "❌ Отчетов пока нет.",
-                reply_markup=get_reports_menu_keyboard(),
-            )
-            return
-
-        text = "📋 <b>Последние отчеты:</b>\n\n"
-        keyboard = []
-
-        for i, report in enumerate(reports[:5], 1):
-            period_text = ""
-            if report.report_type == "DAILY":
-                period_text = report.period_start.strftime("%d.%m.%Y")
-            elif report.report_type == "WEEKLY":
-                period_text = f"{report.period_start.strftime('%d.%m')} - {report.period_end.strftime('%d.%m.%Y')}"
-            elif report.report_type == "MONTHLY":
-                period_text = report.period_start.strftime("%B %Y")
-
-            text += f"{i}. {report.report_type.lower()} ({period_text}) - {report.total_orders} заказов\n"
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"{report.report_type.lower()} {period_text}",
-                        callback_data=f"view_report_{report.id}",
-                    )
-                ]
-            )
-
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
-
+    if not reports:
         await safe_edit_message(
             callback,
-            text,
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=keyboard,
-            ),
+            "📋 <b>Последние отчеты</b>\n\n" "❌ Отчетов пока нет.",
+            reply_markup=get_reports_menu_keyboard(),
+        )
+        return
+
+    text = "📋 <b>Последние отчеты:</b>\n\n"
+    keyboard = []
+
+    for i, report in enumerate(reports[:5], 1):
+        period_text = ""
+        if report.report_type == "DAILY":
+            period_text = report.period_start.strftime("%d.%m.%Y")
+        elif report.report_type == "WEEKLY":
+            period_text = f"{report.period_start.strftime('%d.%m')} - {report.period_end.strftime('%d.%m.%Y')}"
+        elif report.report_type == "MONTHLY":
+            period_text = report.period_start.strftime("%B %Y")
+
+        text += (
+            f"{i}. {report.report_type.lower()} ({period_text}) - {report.total_orders} заказов\n"
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{report.report_type.lower()} {period_text}",
+                    callback_data=f"view_report_{report.id}",
+                )
+            ]
         )
 
-    finally:
-        await db.disconnect()
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
+
+    await safe_edit_message(
+        callback,
+        text,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=keyboard,
+        ),
+    )
 
     await callback.answer()
 
@@ -732,68 +727,59 @@ async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
 @router.callback_query(F.data == "report_masters_stats_excel")
 @require_role([UserRole.ADMIN, UserRole.DISPATCHER])
 @handle_errors
-async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str):
+async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str, db: Database):
     """Показать список мастеров для выбора"""
-    from app.database.db import Database
+    # Получаем всех утвержденных мастеров
+    cursor = await db.connection.execute(
+        """
+        SELECT
+            m.id,
+            u.first_name || ' ' || COALESCE(u.last_name, '') as full_name
+        FROM masters m
+        LEFT JOIN users u ON m.telegram_id = u.telegram_id
+        WHERE m.is_approved = 1 AND m.deleted_at IS NULL
+        ORDER BY u.first_name
+        """
+    )
+    masters = await cursor.fetchall()
 
-    db = Database()
-    await db.connect()
-
-    try:
-        # Получаем всех утвержденных мастеров
-        cursor = await db.connection.execute(
-            """
-            SELECT
-                m.id,
-                u.first_name || ' ' || COALESCE(u.last_name, '') as full_name
-            FROM masters m
-            LEFT JOIN users u ON m.telegram_id = u.telegram_id
-            WHERE m.is_approved = 1 AND m.deleted_at IS NULL
-            ORDER BY u.first_name
-            """
-        )
-        masters = await cursor.fetchall()
-
-        if not masters:
-            await safe_edit_message(
-                callback,
-                "❌ Нет утвержденных мастеров.",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
-                    ]
-                ),
-            )
-            return
-
-        # Создаем клавиатуру с мастерами (по 2 в ряд)
-        keyboard = []
-        for i in range(0, len(masters), 2):
-            row = []
-            for j in range(2):
-                if i + j < len(masters):
-                    master = masters[i + j]
-                    row.append(
-                        InlineKeyboardButton(
-                            text=f"👨‍🔧 {master['full_name']}",
-                            callback_data=f"master_stat:{master['id']}",
-                        )
-                    )
-            keyboard.append(row)
-
-        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
-
+    if not masters:
         await safe_edit_message(
             callback,
-            "👨‍🔧 <b>Выберите мастера:</b>\n\n"
-            "Будет создан отчет со всеми заявками выбранного мастера.",
+            "❌ Нет утвержденных мастеров.",
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=keyboard,
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
             ),
         )
+        return
 
-    finally:
-        await db.disconnect()
+    # Создаем клавиатуру с мастерами (по 2 в ряд)
+    keyboard = []
+    for i in range(0, len(masters), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(masters):
+                master = masters[i + j]
+                row.append(
+                    InlineKeyboardButton(
+                        text=f"👨‍🔧 {master['full_name']}",
+                        callback_data=f"master_stat:{master['id']}",
+                    )
+                )
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")])
+
+    await safe_edit_message(
+        callback,
+        "👨‍🔧 <b>Выберите мастера:</b>\n\n"
+        "Будет создан отчет со всеми заявками выбранного мастера.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=keyboard,
+        ),
+    )
 
     await callback.answer()
 

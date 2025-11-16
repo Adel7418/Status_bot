@@ -19,6 +19,7 @@ from app.config import Config
 from app.database import Database
 from app.handlers import routers
 from app.middlewares import (
+    DependencyInjectionMiddleware,
     LoggingMiddleware,
     RateLimitMiddleware,
     RoleCheckMiddleware,
@@ -252,7 +253,16 @@ async def main():
         dp.message.middleware(role_middleware)
         dp.callback_query.middleware(role_middleware)
 
-        # 4. Validation handler middleware (обрабатывает ошибки State Machine)
+        # 4. Dependency Injection middleware (инжектирует Database и services в handlers)
+        # Позволяет handlers получать db через параметры вместо прямого создания Database()
+        di_middleware = DependencyInjectionMiddleware(db)
+        dp.message.middleware(di_middleware)
+        dp.callback_query.middleware(di_middleware)
+        logger.info(
+            "✅ Dependency Injection middleware activated - handlers can now use db parameter"
+        )
+
+        # 5. Validation handler middleware (обрабатывает ошибки State Machine)
         validation_middleware = ValidationHandlerMiddleware()
         dp.message.middleware(validation_middleware)
         dp.callback_query.middleware(validation_middleware)

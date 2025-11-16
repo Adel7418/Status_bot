@@ -13,6 +13,7 @@ from app.config import OrderStatus
 from app.database import Database
 from app.filters import IsGroupChat, IsMasterInGroup
 from app.keyboards.inline import get_group_order_keyboard
+from app.presenters import OrderPresenter
 from app.states import RescheduleOrderStates
 from app.utils import format_datetime, get_now, log_action
 
@@ -675,32 +676,15 @@ async def cmd_order_in_group(message: Message):
                 await message.reply(f"❌ Заявка #{order_id} назначена другому мастеру.")
                 return
 
-        # Формируем сообщение
-        text = f"📋 <b>Заявка #{order.id}</b>\n\n"
-        text += f"📊 <b>Статус:</b> {OrderStatus.get_status_name(order.status)}\n"
-        text += f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-        text += f"📝 <b>Описание:</b> {order.description}\n\n"
-        text += f"👤 <b>Клиент:</b> {order.client_name}\n"
-        text += f"📍 <b>Адрес:</b> {order.client_address}\n"
+        # Используем OrderPresenter с режимом conditional (показывает телефон в зависимости от статуса)
+        text = OrderPresenter.format_order_details(
+            order, phone_visibility_mode="conditional", master=master, escape_html=False
+        )
 
-        # Показываем номер телефона только после прибытия на объект
-        if order.status in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
-            text += f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
-        elif order.status == OrderStatus.ACCEPTED:
-            text += "📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-        else:
-            text += "📞 <b>Телефон:</b> <i>Недоступно</i>\n\n"
-
-        if order.notes:
-            text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-
-        if order.assigned_master_id and master:
-            text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n"
-
+        # Добавляем дополнительную информацию для группового чата
         if order.dispatcher_name:
             text += f"📞 <b>Диспетчер:</b> {order.dispatcher_name}\n"
 
-        text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
         text += f"🔄 <b>Обновлена:</b> {format_datetime(order.updated_at)}"
 
         # Отправляем сообщение с клавиатурой, если это заявка мастера

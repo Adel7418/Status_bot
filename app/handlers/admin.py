@@ -19,6 +19,7 @@ from app.keyboards.inline import (
     get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_cancel_keyboard
+from app.presenters import MasterPresenter, OrderPresenter
 from app.states import (
     AddMasterStates,
     AdminCloseOrderStates,
@@ -234,18 +235,7 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
             await callback.answer()
             return
 
-        text = "👥 <b>Все мастера:</b>\n\n"
-
-        for master in masters:
-            status = "✅" if master.is_approved else "⏳"
-            active = "🟢" if master.is_active else "🔴"
-            display_name = master.get_display_name()
-
-            text += (
-                f"{status} {active} <b>{display_name}</b>\n"
-                f"   📞 {master.phone}\n"
-                f"   🔧 {master.specialization}\n\n"
-            )
+        text = MasterPresenter.format_master_list(masters, "Все мастера")
 
         # Клавиатура со списком для управления
         keyboard = get_masters_list_keyboard(masters, action="manage_master")
@@ -515,23 +505,23 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
-        display_name = master.get_display_name()
-        status = "✅ Одобрен" if master.is_approved else "⏳ Ожидает одобрения"
-        active = "🟢 Активен" if master.is_active else "🔴 Неактивен"
+        # Используем MasterPresenter для базового форматирования
+        text = MasterPresenter.format_master_details(master, include_stats=False)
 
-        # Получаем статистику мастера
+        # Добавляем Telegram ID (специфично для админа)
+        text = text.replace(
+            f"👨‍🔧 <b>Мастер: {master.get_display_name()}</b>\n\n",
+            f"👨‍🔧 <b>Мастер: {master.get_display_name()}</b>\n\n"
+            f"🆔 Telegram ID: <code>{telegram_id}</code>\n",
+        )
+
+        # Получаем и добавляем статистику мастера
         orders = await db.get_orders_by_master(master.id, exclude_closed=False)
         total_orders = len(orders)
         completed_orders = len([o for o in orders if o.status == OrderStatus.CLOSED])
 
-        text = (
-            f"👤 <b>{display_name}</b>\n\n"
-            f"🆔 Telegram ID: <code>{telegram_id}</code>\n"
-            f"📞 Телефон: {master.phone}\n"
-            f"🔧 Специализация: {master.specialization}\n"
-            f"📊 Статус: {status}\n"
-            f"🔄 Активность: {active}\n\n"
-            f"📈 <b>Статистика:</b>\n"
+        text += (
+            f"\n📈 <b>Статистика:</b>\n"
             f"• Всего заявок: {total_orders}\n"
             f"• Завершено: {completed_orders}\n"
         )
@@ -1331,26 +1321,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
         # Обновляем сообщение
         from app.keyboards.inline import get_order_actions_keyboard
 
-        status_emoji = OrderStatus.get_status_emoji(OrderStatus.ACCEPTED)
-        status_name = OrderStatus.get_status_name(OrderStatus.ACCEPTED)
-
-        text = (
-            f"📋 <b>Заявка #{order.id}</b>\n\n"
-            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
-            f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-            f"👤 <b>Клиент:</b> {order.client_name}\n"
-            f"📍 <b>Адрес:</b> {order.client_address}\n"
-            f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-        )
-
-        if order.notes:
-            text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
-
-        if order.scheduled_time:
-            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
-
+        text = OrderPresenter.format_order_details(order, include_client_phone=False, master=master)
         text += "<i>✅ Заявка принята администратором от имени мастера</i>"
 
         keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
@@ -1439,26 +1410,7 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         # Обновляем сообщение
         from app.keyboards.inline import get_order_actions_keyboard
 
-        status_emoji = OrderStatus.get_status_emoji(OrderStatus.ONSITE)
-        status_name = OrderStatus.get_status_name(OrderStatus.ONSITE)
-
-        text = (
-            f"📋 <b>Заявка #{order.id}</b>\n\n"
-            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
-            f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-            f"👤 <b>Клиент:</b> {order.client_name}\n"
-            f"📍 <b>Адрес:</b> {order.client_address}\n"
-            f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
-        )
-
-        if order.notes:
-            text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
-
-        if order.scheduled_time:
-            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
-
+        text = OrderPresenter.format_order_details(order, include_client_phone=True, master=master)
         text += "<i>🏠 Статус обновлен администратором от имени мастера</i>"
 
         keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)

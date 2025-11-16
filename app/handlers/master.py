@@ -20,12 +20,13 @@ from app.keyboards.inline import (
     get_yes_no_keyboard,
 )
 from app.keyboards.reply import get_main_menu_keyboard
+from app.presenters import OrderPresenter
 from app.states import (
     CompleteOrderStates,
     LongRepairStates,
     RescheduleOrderStates,
 )
-from app.utils import format_datetime, get_now, log_action
+from app.utils import get_now, log_action
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,9 @@ router = Router(name="master")
 
 @router.message(F.text == "📋 Мои заявки")
 @handle_errors
-async def btn_my_orders(message: Message, state: FSMContext, user_role: str, user_roles: list):
+async def btn_my_orders(
+    message: Message, state: FSMContext, user_role: str, user_roles: list, db: Database
+):
     """
     Просмотр заявок мастера
 
@@ -45,6 +48,8 @@ async def btn_my_orders(message: Message, state: FSMContext, user_role: str, use
         message: Сообщение
         state: FSM контекст
         user_role: Роль пользователя
+        user_roles: Список ролей пользователя
+        db: Database instance (injected by DependencyInjectionMiddleware)
     """
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
@@ -65,72 +70,66 @@ async def btn_my_orders(message: Message, state: FSMContext, user_role: str, use
 
     await state.clear()
 
-    db = Database()
-    await db.connect()
+    # ✅ DI: Database injected, no need for connect/disconnect
+    # Получаем мастера
+    master = await db.get_master_by_telegram_id(message.from_user.id)
 
-    try:
-        # Получаем мастера
-        master = await db.get_master_by_telegram_id(message.from_user.id)
+    if not master:
+        await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
+        return
 
-        if not master:
-            await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
-            return
+    # Получаем заявки мастера
+    orders = await db.get_orders_by_master(master.id, exclude_closed=True)
 
-        # Получаем заявки мастера
-        orders = await db.get_orders_by_master(master.id, exclude_closed=True)
+    if not orders:
+        await message.answer(
+            "📭 У вас пока нет активных заявок.\n\n" "Заявки будут назначаться диспетчером."
+        )
+        return
 
-        if not orders:
-            await message.answer(
-                "📭 У вас пока нет активных заявок.\n\n" "Заявки будут назначаться диспетчером."
-            )
-            return
+    text = "📋 <b>Ваши заявки:</b>\n\n"
 
-        text = "📋 <b>Ваши заявки:</b>\n\n"
+    # Группируем по статусам
+    by_status = {}
+    for order in orders:
+        if order.status not in by_status:
+            by_status[order.status] = []
+        by_status[order.status].append(order)
 
-        # Группируем по статусам
-        by_status = {}
-        for order in orders:
-            if order.status not in by_status:
-                by_status[order.status] = []
-            by_status[order.status].append(order)
+    # Порядок отображения статусов
+    status_order = [
+        OrderStatus.ASSIGNED,
+        OrderStatus.ACCEPTED,
+        OrderStatus.ONSITE,
+        OrderStatus.DR,
+    ]
 
-        # Порядок отображения статусов
-        status_order = [
-            OrderStatus.ASSIGNED,
-            OrderStatus.ACCEPTED,
-            OrderStatus.ONSITE,
-            OrderStatus.DR,
-        ]
+    for status in status_order:
+        if status in by_status:
+            status_emoji = OrderStatus.get_status_emoji(status)
+            status_name = OrderStatus.get_status_name(status)
 
-        for status in status_order:
-            if status in by_status:
-                status_emoji = OrderStatus.get_status_emoji(status)
-                status_name = OrderStatus.get_status_name(status)
+            text += f"\n<b>{status_emoji} {status_name}:</b>\n"
 
-                text += f"\n<b>{status_emoji} {status_name}:</b>\n"
+            for order in by_status[status]:
+                text += f"  • {OrderPresenter.format_order_short(order)}\n"
 
-                for order in by_status[status]:
-                    scheduled_time = f" ({order.scheduled_time})" if order.scheduled_time else ""
-                    text += f"  • Заявка #{order.id} - {order.equipment_type}{scheduled_time}\n"
+            text += "\n"
 
-                text += "\n"
+    keyboard = get_order_list_keyboard(orders, for_master=True)
 
-        keyboard = get_order_list_keyboard(orders, for_master=True)
-
-        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
-
-    finally:
-        await db.disconnect()
+    await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
 
 @router.callback_query(F.data.startswith("view_order_master:"))
-async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
+async def callback_view_order_master(callback: CallbackQuery, user_roles: list, db: Database):
     """
     Просмотр детальной информации о заявке для мастера
 
     Args:
         callback: Callback query
         user_roles: Список ролей пользователя
+        db: Database instance (injected by DependencyInjectionMiddleware)
     """
     # Проверяем роль мастера или админа
     if UserRole.MASTER not in user_roles and UserRole.ADMIN not in user_roles:
@@ -139,137 +138,88 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list):
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
-    await db.connect()
+    # ✅ DI: Database injected, no need for connect/disconnect
+    order = await db.get_order_by_id(order_id)
 
-    try:
-        order = await db.get_order_by_id(order_id)
+    if not order:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
 
-        if not order:
-            await callback.answer("Заявка не найдена", show_alert=True)
-            return
+    # Проверяем, что заявка назначена этому мастеру
+    master = await db.get_master_by_telegram_id(callback.from_user.id)
 
-        # Проверяем, что заявка назначена этому мастеру
-        master = await db.get_master_by_telegram_id(callback.from_user.id)
+    if not master:
+        await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
+        return
 
-        if not master:
-            await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
-            return
+    if order.assigned_master_id != master.id:
+        await callback.answer("Это не ваша заявка", show_alert=True)
+        return
 
-        if order.assigned_master_id != master.id:
-            await callback.answer("Это не ваша заявка", show_alert=True)
-            return
+    # Используем OrderPresenter с режимом conditional (показывает телефон в зависимости от статуса)
+    text = OrderPresenter.format_order_details(
+        order, phone_visibility_mode="conditional", escape_html=False
+    )
 
-        status_emoji = OrderStatus.get_status_emoji(order.status)
-        status_name = OrderStatus.get_status_name(order.status)
+    # Показываем детальную финансовую информацию для закрытых заявок (специфично для мастеров)
+    if order.status == OrderStatus.CLOSED and order.total_amount:
+        net_profit = order.total_amount - (order.materials_cost or 0)
 
-        text = (
-            f"📋 <b>Заявка #{order.id}</b>\n\n"
-            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-        )
-
-        # Показываем контактную информацию клиента только после прибытия на объект
-        if order.status in [OrderStatus.ONSITE, OrderStatus.DR, OrderStatus.CLOSED]:
-            text += (
-                f"👤 <b>Клиент:</b> {order.client_name}\n"
-                f"📍 <b>Адрес:</b> {order.client_address}\n"
-                f"📞 <b>Телефон:</b> {order.client_phone}\n\n"
+        # Определяем базовую ставку с учетом типа техники
+        base_rate = "50/50" if net_profit >= 7000 else "40/60"
+        if order.equipment_type:
+            specialization_rate = await db.get_specialization_rate(
+                equipment_type=order.equipment_type,
             )
-        elif order.status == OrderStatus.ACCEPTED:
-            text += (
-                f"👤 <b>Клиент:</b> {order.client_name}\n"
-                f"📍 <b>Адрес:</b> {order.client_address}\n"
-                f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
-            )
-        else:
-            text += (
-                "<i>Контактная информация клиента будет доступна\n" "после принятия заявки.</i>\n\n"
-            )
+            if specialization_rate:
+                base_master_pct, base_company_pct = specialization_rate
+                master_pct_display = int(round(base_master_pct))
+                company_pct_display = int(round(base_company_pct))
+                base_rate = f"{master_pct_display}/{company_pct_display}"
 
-        if order.notes:
-            text += f"📝 <b>Заметки:</b> {order.notes}\n\n"
+        text += "\n💰 <b>Финансовая информация:</b>\n"
+        text += f"• Сумма заказа: <b>{order.total_amount:.2f} ₽</b>\n"
+        text += f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
+        text += f"\n📊 <b>Распределение ({base_rate}):</b>\n"
 
-        if order.scheduled_time:
-            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
+        if order.master_profit:
+            master_percent = (order.master_profit / net_profit * 100) if net_profit > 0 else 0
+            text += f"• Ваша прибыль: <b>{order.master_profit:.2f} ₽</b> ({master_percent:.0f}%)\n"
+        if order.company_profit:
+            company_percent = (order.company_profit / net_profit * 100) if net_profit > 0 else 0
+            text += f"• Прибыль компании: <b>{order.company_profit:.2f} ₽</b> ({company_percent:.0f}%)\n"
 
-        # Показываем информацию о длительном ремонте
-        if order.status == OrderStatus.DR:
-            if order.estimated_completion_date:
-                text += f"⏰ <b>Примерный срок окончания:</b> {order.estimated_completion_date}\n"
-            if order.prepayment_amount:
-                text += f"💰 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
-            text += "\n"
+        # Надбавки и бонусы (показываем только если явно True)
+        bonuses = []
+        if order.has_review is True:
+            bonuses.append("✅ Отзыв (+10% вам)")
+        if order.out_of_city is True:
+            bonuses.append("✅ Выезд за город")
 
-        # Показываем финансовую информацию для закрытых заявок
-        if order.status == OrderStatus.CLOSED and order.total_amount:
-            net_profit = order.total_amount - (order.materials_cost or 0)
+        if bonuses:
+            text += f"\n🎁 <b>Надбавки:</b> {', '.join(bonuses)}\n"
 
-            # Определяем базовую ставку с учетом типа техники
-            base_rate = "50/50" if net_profit >= 7000 else "40/60"
-            if order.equipment_type:
-                specialization_rate = await db.get_specialization_rate(
-                    equipment_type=order.equipment_type,
-                )
-                if specialization_rate:
-                    base_master_pct, base_company_pct = specialization_rate
-                    master_pct_display = int(round(base_master_pct))
-                    company_pct_display = int(round(base_company_pct))
-                    base_rate = f"{master_pct_display}/{company_pct_display}"
+        text += "\n"
 
-            text += "\n💰 <b>Финансовая информация:</b>\n"
-            text += f"• Сумма заказа: <b>{order.total_amount:.2f} ₽</b>\n"
-            text += f"• Чистая прибыль: <b>{net_profit:.2f} ₽</b>\n"
-            text += f"\n📊 <b>Распределение ({base_rate}):</b>\n"
+    # Дата создания уже показана OrderPresenter
 
-            if order.master_profit:
-                master_percent = (order.master_profit / net_profit * 100) if net_profit > 0 else 0
-                text += (
-                    f"• Ваша прибыль: <b>{order.master_profit:.2f} ₽</b> ({master_percent:.0f}%)\n"
-                )
-            if order.company_profit:
-                company_percent = (order.company_profit / net_profit * 100) if net_profit > 0 else 0
-                text += f"• Прибыль компании: <b>{order.company_profit:.2f} ₽</b> ({company_percent:.0f}%)\n"
+    keyboard = get_order_actions_keyboard(order, UserRole.MASTER)
 
-            # Надбавки и бонусы (показываем только если явно True)
-            bonuses = []
-            if order.has_review is True:
-                bonuses.append("✅ Отзыв (+10% вам)")
-            if order.out_of_city is True:
-                bonuses.append("✅ Выезд за город")
-
-            if bonuses:
-                text += f"\n🎁 <b>Надбавки:</b> {', '.join(bonuses)}\n"
-
-            text += "\n"
-
-        if order.created_at:
-            text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
-
-        keyboard = get_order_actions_keyboard(order, UserRole.MASTER)
-
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-
-    finally:
-        await db.disconnect()
-
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("accept_order:"))
-async def callback_accept_order(callback: CallbackQuery, user_roles: list):
+async def callback_accept_order(callback: CallbackQuery, user_roles: list, db: Database):
     """
     Принятие заявки мастером
 
     Args:
         callback: Callback query
         user_roles: Роли пользователя (передаётся из RoleCheckMiddleware)
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -356,8 +306,9 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
 
         log_action(callback.from_user.id, "ACCEPT_ORDER", f"Order #{order_id}")
 
-    finally:
-        await db.disconnect()
+    except Exception as e:
+        logger.exception(f"Error accepting order #{order_id}: {e}")
+        raise
 
     # Защита от двойного клика: 10 секунд для критичной операции
     from app.utils import safe_answer_callback
@@ -366,18 +317,16 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list):
 
 
 @router.callback_query(F.data.startswith("refuse_order_master:"))
-async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list):
+async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list, db: Database):
     """
     Отклонение заявки мастером
 
     Args:
         callback: Callback query
         user_roles: Роли пользователя (передаётся из RoleCheckMiddleware)
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -481,18 +430,16 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
 
 
 @router.callback_query(F.data.startswith("onsite_order:"))
-async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
+async def callback_onsite_order(callback: CallbackQuery, user_roles: list, db: Database):
     """
     Мастер на объекте
 
     Args:
         callback: Callback query
         user_roles: Роли пользователя (передаётся из RoleCheckMiddleware)
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -568,18 +515,16 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list):
 
 
 @router.callback_query(F.data.startswith("refuse_order_complete:"))
-async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMContext):
+async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMContext, db: Database):
     """
     Быстрое завершение заявки как отказ (0 рублей)
 
     Args:
         callback: Callback query
         state: FSM контекст
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -621,18 +566,16 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data.startswith("complete_order:"))
-async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
+async def callback_complete_order(callback: CallbackQuery, state: FSMContext, db: Database):
     """
     Начало процесса завершения заявки мастером
 
     Args:
         callback: Callback query
         state: FSM контекст
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -679,20 +622,18 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("dr_order:"))
-async def callback_dr_order(callback: CallbackQuery, state: FSMContext):
+async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Database):
     """
     ДР - запрос срока окончания и предоплаты
 
     Args:
         callback: Callback query
         state: FSM контекст
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
 
     logger.debug(f"[DR] Starting DR process for order #{order_id} by user {callback.from_user.id}")
-
-    db = Database()
-    await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
@@ -985,13 +926,15 @@ async def process_dr_info(  # noqa: PLR0911
 
 @router.message(F.text == "📊 Моя статистика")
 @handle_errors
-async def btn_my_stats(message: Message, user_role: str, user_roles: list):
+async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: Database):
     """
     Статистика мастера
 
     Args:
         message: Сообщение
         user_role: Роль пользователя
+        user_roles: Список ролей пользователя
+        db: Database instance (injected)
     """
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
@@ -1803,20 +1746,18 @@ async def process_out_of_city_confirmation_fallback(message: Message, state: FSM
 
 @router.message(F.text == "⚙️ Настройки")
 @handle_errors
-async def btn_settings_master(message: Message, user_role: str):
+async def btn_settings_master(message: Message, user_role: str, db: Database):
     """
     Обработчик кнопки настроек для мастеров
 
     Args:
         message: Сообщение
         user_role: Роль пользователя
+        db: Database instance (injected)
     """
     # Проверка роли
     if user_role not in [UserRole.MASTER, UserRole.ADMIN, UserRole.DISPATCHER]:
         return
-
-    db = Database()
-    await db.connect()
 
     try:
         master = await db.get_master_by_telegram_id(message.from_user.id)
@@ -2485,17 +2426,15 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("master_report_excel:"))
-async def callback_master_report_excel(callback: CallbackQuery):
+async def callback_master_report_excel(callback: CallbackQuery, db: Database):
     """
     Генерация и отправка Excel отчета мастеру
 
     Args:
         callback: Callback query
+        db: Database instance (injected)
     """
     master_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         # Проверяем, что мастер запрашивает свой отчет
@@ -2552,17 +2491,15 @@ async def callback_master_report_excel(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("master_reports_archive:"))
-async def callback_master_reports_archive(callback: CallbackQuery):
+async def callback_master_reports_archive(callback: CallbackQuery, db: Database):
     """
     Просмотр архивных отчетов мастера
 
     Args:
         callback: Callback query
+        db: Database instance (injected)
     """
     master_id = int(callback.data.split(":")[1])
-
-    db = Database()
-    await db.connect()
 
     try:
         # Проверяем, что мастер запрашивает свои отчеты
@@ -2606,19 +2543,17 @@ async def callback_master_reports_archive(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("download_archive_report:"))
-async def callback_download_archive_report(callback: CallbackQuery):
+async def callback_download_archive_report(callback: CallbackQuery, db: Database):
     """
     Скачивание архивного отчета
 
     Args:
         callback: Callback query
+        db: Database instance (injected)
     """
     # Парсим данные: report_id_master_id
     data = callback.data.split(":")[1]
     report_id, master_id = map(int, data.split("_"))
-
-    db = Database()
-    await db.connect()
 
     try:
         # Проверяем права

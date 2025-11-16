@@ -26,6 +26,7 @@ from app.keyboards.reply import (
     get_confirm_keyboard,
     get_skip_cancel_keyboard,
 )
+from app.presenters import MasterPresenter, OrderPresenter
 from app.schemas import OrderCreateSchema
 from app.states import AdminCloseOrderStates, CreateOrderStates, EditClosedOrderStates
 from app.utils import (
@@ -1080,8 +1081,6 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     )
 
 
-
-
 @router.message(CreateOrderStates.notes, F.text == "⏭️ Пропустить")
 @handle_errors
 async def skip_notes(message: Message, state: FSMContext, user_role: str):
@@ -1750,39 +1749,20 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
             await callback.answer("Заявка не найдена", show_alert=True)
             return
 
-        status_emoji = OrderStatus.get_status_emoji(order.status)
-        status_name = OrderStatus.get_status_name(order.status)
-
-        text = (
-            f"📋 <b>Заявка #{order.id}</b>\n\n"
-            f"📊 <b>Статус:</b> {status_emoji} {status_name}\n"
-            f"🔧 <b>Тип техники:</b> {escape_html(order.equipment_type)}\n"
-            f"📝 <b>Описание:</b> {escape_html(order.description)}\n\n"
-            f"👤 <b>Клиент:</b> {escape_html(order.client_name)}\n"
-            f"📍 <b>Адрес:</b> {escape_html(order.client_address)}\n"
-            f"📞 <b>Телефон:</b> {escape_html(order.client_phone)}\n\n"
+        text = OrderPresenter.format_order_details(
+            order, include_client_phone=True, escape_html=True
         )
 
+        # Добавляем дополнительную информацию, специфичную для диспетчера
         if order.master_name:
             text += f"👨‍🔧 <b>Мастер:</b> {order.master_name}\n"
 
         if order.dispatcher_name:
             text += f"📋 <b>Диспетчер:</b> {order.dispatcher_name}\n"
 
-        if order.notes:
-            text += f"\n📝 <b>Заметки:</b> {order.notes}\n"
+        # Информация о ДР уже показана OrderPresenter
 
-        if order.scheduled_time:
-            text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n"
-
-        # Показываем информацию о длительном ремонте
-        if order.status == OrderStatus.DR:
-            if order.estimated_completion_date:
-                text += f"⏰ <b>Примерный срок окончания:</b> {escape_html(order.estimated_completion_date)}\n"
-            if order.prepayment_amount:
-                text += f"💰 <b>Предоплата:</b> {order.prepayment_amount:.2f} ₽\n"
-
-        # Показываем финансовую информацию для закрытых заявок
+        # Показываем детальную финансовую информацию для закрытых заявок
         if order.status == OrderStatus.CLOSED and order.total_amount:
             net_profit = order.total_amount - (order.materials_cost or 0)
 
@@ -1952,21 +1932,11 @@ async def callback_select_master_for_order(
         logger.info(f"Attempting to send notification to group {target_chat_id}")
 
         notification_text = (
-            f"🔔 <b>Новая заявка назначена!</b>\n\n"
-            f"📋 <b>Заявка #{order.id}</b>\n"
-            f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-            f"👤 <b>Клиент:</b> {order.client_name}\n"
-            f"📍 <b>Адрес:</b> {order.client_address}\n"
-            f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+            "🔔 <b>Новая заявка назначена!</b>\n\n"
+            + OrderPresenter.format_order_details(
+                order, include_client_phone=False, escape_html=False
+            )
         )
-
-        if order.notes:
-            notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-
-        if order.scheduled_time:
-            notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
         # Упоминаем мастера в группе (ORM: через master.user)
         master_username = master.user.username if hasattr(master, "user") and master.user else None
@@ -2183,21 +2153,11 @@ async def callback_select_new_master_for_order(
         target_chat_id = new_master.work_chat_id
 
         notification_text = (
-            f"🔔 <b>Новая заявка назначена!</b>\n\n"
-            f"📋 <b>Заявка #{order.id}</b>\n"
-            f"📊 <b>Статус:</b> {OrderStatus.get_status_name(OrderStatus.ASSIGNED)}\n"
-            f"🔧 <b>Тип техники:</b> {order.equipment_type}\n"
-            f"📝 <b>Описание:</b> {order.description}\n\n"
-            f"👤 <b>Клиент:</b> {order.client_name}\n"
-            f"📍 <b>Адрес:</b> {order.client_address}\n"
-            f"📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+            "🔔 <b>Новая заявка назначена!</b>\n\n"
+            + OrderPresenter.format_order_details(
+                order, include_client_phone=False, escape_html=False
+            )
         )
-
-        if order.notes:
-            notification_text += f"📄 <b>Заметки:</b> {order.notes}\n\n"
-
-        if order.scheduled_time:
-            notification_text += f"⏰ <b>Время прибытия:</b> {order.scheduled_time}\n\n"
 
         # Упоминаем мастера в группе (ORM: через master.user)
         new_master_username = (
@@ -3039,15 +2999,7 @@ async def btn_masters_dispatcher(message: Message, user_role: str):
             )
             return
 
-        text = "👥 <b>Доступные мастера:</b>\n\n"
-
-        for master in masters:
-            display_name = master.get_display_name()
-            text += (
-                f"👤 <b>{display_name}</b>\n"
-                f"   📞 {master.phone}\n"
-                f"   🔧 {master.specialization}\n\n"
-            )
+        text = MasterPresenter.format_master_list(masters, "Доступные мастера")
 
         await message.answer(text, parse_mode="HTML")
 

@@ -27,7 +27,7 @@ class TestOrderCreateSchema:
     def test_phone_formatting(self):
         """Тест автоматического форматирования телефона"""
         order_data = {
-            "equipment_type": "Духовой шкаф",
+            "equipment_type": "ДШ/ВП",
             "description": "Не работает духовка, не нагревается",
             "client_name": "Петров Петр",
             "client_address": "пр. Мира, 25, кв. 10",
@@ -58,15 +58,19 @@ class TestOrderCreateSchema:
         """Тест слишком короткого описания"""
         order_data = {
             "equipment_type": "Стиральные машины",
-            "description": "Сломана",  # слишком короткое
+            "description": "Сло",  # слишком короткое (меньше 4 символов)
             "client_name": "Иванов Иван",
             "client_address": "ул. Ленина, 10, кв. 5",
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
         }
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
+        
+        # Проверяем, что ошибка связана с длиной описания (description)
+        error_str = str(exc_info.value).lower()
+        assert ("description" in error_str and ("at least 4" in error_str or "string_too_short" in error_str))
 
     def test_sql_injection_protection(self):
         """Тест защиты от SQL injection в описании"""
@@ -87,9 +91,9 @@ class TestOrderCreateSchema:
     def test_invalid_client_name(self):
         """Тест невалидного имени (слишком короткое)"""
         order_data = {
-            "equipment_type": "Духовой шкаф",
+            "equipment_type": "ДШ/ВП",
             "description": "Не включается духовка",
-            "client_name": "Иван",  # меньше 5 символов
+            "client_name": "И",  # меньше 2 символов (минимум 2 по схеме)
             "client_address": "ул. Ленина, 10",
             "client_phone": "+79001234567",
             "dispatcher_id": 123456789,
@@ -98,7 +102,9 @@ class TestOrderCreateSchema:
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
 
-        assert "минимум 5 символов" in str(exc_info.value).lower()
+        # Проверяем, что ошибка связана с именем клиента (client_name)
+        error_str = str(exc_info.value).lower()
+        assert ("client_name" in error_str and ("at least 2" in error_str or "string_too_short" in error_str))
 
     def test_valid_single_name(self):
         """Тест валидного имени (одно слово, 5+ символов)"""

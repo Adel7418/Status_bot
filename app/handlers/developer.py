@@ -55,12 +55,13 @@ async def cmd_dev(message: Message, user_role: str):
 
 @router.callback_query(lambda c: c.data == "dev_create_test_order")
 @handle_errors
-async def callback_create_test_order(callback: CallbackQuery):
+async def callback_create_test_order(callback: CallbackQuery, db: Database):
     """
     Создание тестовой заявки
 
     Args:
         callback: Callback query
+        db: Database instance (injected)
     """
     await callback.answer("Создаю тестовую заявку...")
 
@@ -101,9 +102,6 @@ async def callback_create_test_order(callback: CallbackQuery):
     description = f"{equipment}: {random.choice(test_problems)}"  # noqa: S311
 
     # Создание заявки в БД
-    db = Database()
-    await db.connect()
-
     try:
         order = await db.create_order(
             equipment_type=equipment,
@@ -138,8 +136,6 @@ async def callback_create_test_order(callback: CallbackQuery):
             parse_mode="HTML",
             reply_markup=get_dev_menu_keyboard(),
         )
-    finally:
-        await db.disconnect()
 
 
 @router.callback_query(lambda c: c.data == "dev_archive_orders")
@@ -175,12 +171,13 @@ async def callback_dev_archive_orders(callback: CallbackQuery):
 
 @router.callback_query(lambda c: c.data.startswith("dev_archive_"))
 @handle_errors
-async def callback_dev_archive_execute(callback: CallbackQuery):
+async def callback_dev_archive_execute(callback: CallbackQuery, db: Database):
     """
     Выполнение архивирования
 
     Args:
         callback: Callback query
+        db: Database instance (injected)
     """
     days = int(callback.data.split("_")[-1])
 
@@ -191,42 +188,35 @@ async def callback_dev_archive_execute(callback: CallbackQuery):
 
     from app.services.archive import ArchiveService
 
-    db = Database()
-    await db.connect()
+    service = ArchiveService(db)
+    result = await service.archive_old_orders(days_old=days)
 
-    try:
-        service = ArchiveService(db)
-        result = await service.archive_old_orders(days_old=days)
-
-        if result.get("error"):
-            await callback.message.edit_text(
-                f"❌ <b>Ошибка архивирования</b>\n\n" f"Ошибка: {result['error']}",
-                parse_mode="HTML",
-                reply_markup=get_dev_menu_keyboard(),
-            )
-        elif result["archived"] == 0:
-            await callback.message.edit_text(
-                f"ℹ️ <b>Архивирование завершено</b>\n\n" f"Заявок старше {days} дней не найдено.",
-                parse_mode="HTML",
-                reply_markup=get_dev_menu_keyboard(),
-            )
-        else:
-            await callback.message.edit_text(
-                f"✅ <b>Архивирование завершено!</b>\n\n"
-                f"📦 Заархивировано заявок: <b>{result['archived']}</b>\n"
-                f"📅 Старше: {days} дней\n"
-                f"📁 Файл: <code>{result.get('archive_file', 'N/A')}</code>\n\n"
-                f"Заявки удалены из базы данных и сохранены в архив.",
-                parse_mode="HTML",
-                reply_markup=get_dev_menu_keyboard(),
-            )
-
-        logger.info(
-            f"Archive executed by {callback.from_user.id}: {result['archived']} orders archived"
+    if result.get("error"):
+        await callback.message.edit_text(
+            f"❌ <b>Ошибка архивирования</b>\n\n" f"Ошибка: {result['error']}",
+            parse_mode="HTML",
+            reply_markup=get_dev_menu_keyboard(),
+        )
+    elif result["archived"] == 0:
+        await callback.message.edit_text(
+            f"ℹ️ <b>Архивирование завершено</b>\n\n" f"Заявок старше {days} дней не найдено.",
+            parse_mode="HTML",
+            reply_markup=get_dev_menu_keyboard(),
+        )
+    else:
+        await callback.message.edit_text(
+            f"✅ <b>Архивирование завершено!</b>\n\n"
+            f"📦 Заархивировано заявок: <b>{result['archived']}</b>\n"
+            f"📅 Старше: {days} дней\n"
+            f"📁 Файл: <code>{result.get('archive_file', 'N/A')}</code>\n\n"
+            f"Заявки удалены из базы данных и сохранены в архив.",
+            parse_mode="HTML",
+            reply_markup=get_dev_menu_keyboard(),
         )
 
-    finally:
-        await db.disconnect()
+    logger.info(
+        f"Archive executed by {callback.from_user.id}: {result['archived']} orders archived"
+    )
 
     await callback.answer()
 

@@ -1,4 +1,6 @@
 @echo off
-REM Запуск только первого бота (city1)
-docker-compose -f docker\docker-compose.multibot.yml up -d --build bot_city1
-echo bot_city1 started
+chcp 65001 >nul
+set ENV_FILE=env.city1
+cd /d "C:\Bot_test\telegram_repair_bot"
+python bot.py
+

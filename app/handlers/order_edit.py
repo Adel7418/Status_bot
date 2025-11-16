@@ -155,7 +155,9 @@ def can_edit_order(order, user_role: str, allow_closed: bool = False) -> tuple[b
 
 @router.callback_query(F.data.startswith("edit_order:"))
 @handle_errors
-async def callback_edit_order(callback: CallbackQuery, state: FSMContext, user_role: str):
+async def callback_edit_order(
+    callback: CallbackQuery, state: FSMContext, user_role: str, db: Database
+):
     """
     Начало редактирования заявки - выбор поля
 
@@ -163,67 +165,63 @@ async def callback_edit_order(callback: CallbackQuery, state: FSMContext, user_r
         callback: Callback query
         state: FSM контекст
         user_role: Роль пользователя
+        db: Database instance (injected)
     """
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
-    await db.connect()
+    order = await db.get_order_by_id(order_id)
 
-    try:
-        order = await db.get_order_by_id(order_id)
+    if not order:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
 
-        if not order:
-            await callback.answer("Заявка не найдена", show_alert=True)
-            return
+    # Проверка прав
+    can_edit, error_msg = can_edit_order(order, user_role, allow_closed=False)
+    if not can_edit:
+        await callback.answer(error_msg, show_alert=True)
+        return
 
-        # Проверка прав
-        can_edit, error_msg = can_edit_order(order, user_role, allow_closed=False)
-        if not can_edit:
-            await callback.answer(error_msg, show_alert=True)
-            return
+    # Сохраняем order_id в state
+    await state.update_data(order_id=order_id)
+    await state.set_state(EditOrderStates.select_field)
 
-        # Сохраняем order_id в state
-        await state.update_data(order_id=order_id)
-        await state.set_state(EditOrderStates.select_field)
+    # Создаем клавиатуру с полями для редактирования
+    builder = InlineKeyboardBuilder()
 
-        # Создаем клавиатуру с полями для редактирования
-        builder = InlineKeyboardBuilder()
-
-        for field_key, field_name in EDITABLE_FIELDS.items():
-            # Показываем поля DR только для заявок в статусе DR
-            if field_key in ["estimated_completion_date", "prepayment_amount"]:
-                if order.status != OrderStatus.DR:
-                    continue  # Пропускаем DR поля для других статусов
-
-            builder.row(
-                InlineKeyboardButton(
-                    text=field_name,
-                    callback_data=f"edit_field:{field_key}",
-                )
-            )
+    for field_key, field_name in EDITABLE_FIELDS.items():
+        # Показываем поля DR только для заявок в статусе DR
+        if field_key in ["estimated_completion_date", "prepayment_amount"]:
+            if order.status != OrderStatus.DR:
+                continue  # Пропускаем DR поля для других статусов
 
         builder.row(
             InlineKeyboardButton(
-                text="❌ Отмена",
-                callback_data=f"view_order:{order_id}",
+                text=field_name,
+                callback_data=f"edit_field:{field_key}",
             )
         )
 
-        await callback.message.edit_text(
-            f"✏️ <b>Редактирование заявки #{order_id}</b>\n\n" f"Выберите поле для редактирования:",
-            parse_mode="HTML",
-            reply_markup=builder.as_markup(),
+    builder.row(
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data=f"view_order:{order_id}",
         )
+    )
 
-    finally:
-        await db.disconnect()
+    await callback.message.edit_text(
+        f"✏️ <b>Редактирование заявки #{order_id}</b>\n\n" f"Выберите поле для редактирования:",
+        parse_mode="HTML",
+        reply_markup=builder.as_markup(),
+    )
 
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("edit_field:"), EditOrderStates.select_field)
 @handle_errors
-async def callback_select_field(callback: CallbackQuery, state: FSMContext, user_role: str):
+async def callback_select_field(
+    callback: CallbackQuery, state: FSMContext, user_role: str, db: Database
+):
     """
     Выбор поля для редактирования
 
@@ -231,6 +229,7 @@ async def callback_select_field(callback: CallbackQuery, state: FSMContext, user
         callback: Callback query
         state: FSM контекст
         user_role: Роль пользователя
+        db: Database instance (injected)
     """
     field = callback.data.split(":")[1]
     data = await state.get_data()
@@ -246,78 +245,71 @@ async def callback_select_field(callback: CallbackQuery, state: FSMContext, user
     await state.set_state(EditOrderStates.enter_value)
 
     # Получаем текущее значение поля
-    db = Database()
-    await db.connect()
+    order = await db.get_order_by_id(order_id)
+    current_value = getattr(order, field, "Не указано")
 
-    try:
-        order = await db.get_order_by_id(order_id)
-        current_value = getattr(order, field, "Не указано")
+    field_name = EDITABLE_FIELDS.get(field, field)
 
-        field_name = EDITABLE_FIELDS.get(field, field)
+    # Формируем подсказку в зависимости от поля
+    prompt = f"✏️ <b>Редактирование: {field_name}</b>\n\n"
+    prompt += f"<b>Текущее значение:</b>\n{escape_html(str(current_value)) if current_value else 'Не указано'}\n\n"
+    prompt += "<b>Введите новое значение:</b>\n\n"
 
-        # Формируем подсказку в зависимости от поля
-        prompt = f"✏️ <b>Редактирование: {field_name}</b>\n\n"
-        prompt += f"<b>Текущее значение:</b>\n{escape_html(str(current_value)) if current_value else 'Не указано'}\n\n"
-        prompt += "<b>Введите новое значение:</b>\n\n"
+    # Специфичные подсказки для разных полей
+    if field == "equipment_type":
+        from app.core.constants import EquipmentType
 
-        # Специфичные подсказки для разных полей
-        if field == "equipment_type":
-            from app.core.constants import EquipmentType
+        types = EquipmentType.all_types()
+        prompt += "<b>Доступные типы:</b>\n"
+        for eq_type in types:
+            prompt += f"• {eq_type}\n"
+        prompt += "\n<i>Введите точное название типа техники</i>"
 
-            types = EquipmentType.all_types()
-            prompt += "<b>Доступные типы:</b>\n"
-            for eq_type in types:
-                prompt += f"• {eq_type}\n"
-            prompt += "\n<i>Введите точное название типа техники</i>"
+    elif field == "description":
+        prompt += f"<i>Минимум 4 символа, максимум {MAX_DESCRIPTION_LENGTH}</i>"
 
-        elif field == "description":
-            prompt += f"<i>Минимум 4 символа, максимум {MAX_DESCRIPTION_LENGTH}</i>"
+    elif field == "client_name":
+        prompt += "<i>Минимум 5 символов</i>"
 
-        elif field == "client_name":
-            prompt += "<i>Минимум 5 символов</i>"
+    elif field == "client_address":
+        prompt += "<i>Минимум 4 символа</i>"
 
-        elif field == "client_address":
-            prompt += "<i>Минимум 4 символа</i>"
+    elif field == "client_phone":
+        prompt += "<i>Формат: +7 (xxx) xxx-xx-xx или 8xxxxxxxxxx</i>"
 
-        elif field == "client_phone":
-            prompt += "<i>Формат: +7 (xxx) xxx-xx-xx или 8xxxxxxxxxx</i>"
+    elif field == "notes":
+        prompt += f"<i>Максимум {MAX_NOTES_LENGTH} символов. Для очистки введите '-'</i>"
 
-        elif field == "notes":
-            prompt += f"<i>Максимум {MAX_NOTES_LENGTH} символов. Для очистки введите '-'</i>"
-
-        elif field == "estimated_completion_date":
-            prompt += (
-                "<b>🤖 Примеры:</b>\n"
-                "• <code>завтра в 15:00</code>\n"
-                "• <code>через 3 дня</code>\n"
-                "• <code>через неделю</code>\n"
-                "• <code>20.10.2025</code>\n\n"
-                "<i>Для очистки введите '-'</i>"
-            )
-
-        elif field == "prepayment_amount":
-            prompt += (
-                "<b>Примеры:</b>\n"
-                "• <code>2000</code>\n"
-                "• <code>1500.50</code>\n\n"
-                "<i>Для очистки введите '-' или '0'</i>"
-            )
-
-        elif field == "scheduled_time":
-            prompt += "<i>Для очистки введите '-'</i>"
-
-        await callback.message.edit_text(
-            prompt,
-            parse_mode="HTML",
+    elif field == "estimated_completion_date":
+        prompt += (
+            "<b>🤖 Примеры:</b>\n"
+            "• <code>завтра в 15:00</code>\n"
+            "• <code>через 3 дня</code>\n"
+            "• <code>через неделю</code>\n"
+            "• <code>20.10.2025</code>\n\n"
+            "<i>Для очистки введите '-'</i>"
         )
 
-        await callback.message.answer(
-            "Для отмены нажмите кнопку ниже:",
-            reply_markup=get_cancel_keyboard(),
+    elif field == "prepayment_amount":
+        prompt += (
+            "<b>Примеры:</b>\n"
+            "• <code>2000</code>\n"
+            "• <code>1500.50</code>\n\n"
+            "<i>Для очистки введите '-' или '0'</i>"
         )
 
-    finally:
-        await db.disconnect()
+    elif field == "scheduled_time":
+        prompt += "<i>Для очистки введите '-'</i>"
+
+    await callback.message.edit_text(
+        prompt,
+        parse_mode="HTML",
+    )
+
+    await callback.message.answer(
+        "Для отмены нажмите кнопку ниже:",
+        reply_markup=get_cancel_keyboard(),
+    )
 
     await callback.answer()
 
@@ -350,19 +342,16 @@ async def callback_cancel_edit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     if order_id:
-        await callback.message.edit_text(
-            "❌ Редактирование отменено",
-            reply_markup=None
-        )
+        await callback.message.edit_text("❌ Редактирование отменено", reply_markup=None)
     else:
         await callback.message.edit_text("Редактирование отменено")
-    
+
     await callback.answer()
 
 
 @router.message(EditOrderStates.enter_value, F.text)
 @handle_errors
-async def process_new_value(message: Message, state: FSMContext, user_role: str):
+async def process_new_value(message: Message, state: FSMContext, user_role: str, db: Database):
     """
     Обработка нового значения поля
 
@@ -370,6 +359,7 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str)
         message: Сообщение
         state: FSM контекст
         user_role: Роль пользователя
+        db: Database instance (injected)
     """
     data = await state.get_data()
     order_id = data.get("order_id")
@@ -401,61 +391,54 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str)
         return
 
     # Обновляем заявку в БД
-    db = Database()
-    await db.connect()
+    order = await db.get_order_by_id(order_id)
 
-    try:
-        order = await db.get_order_by_id(order_id)
+    if not order:
+        await message.answer("❌ Ошибка: заявка не найдена")
+        await state.clear()
+        return
 
-        if not order:
-            await message.answer("❌ Ошибка: заявка не найдена")
-            await state.clear()
-            return
+    # Проверяем права еще раз
+    can_edit, error_msg = can_edit_order(order, user_role)
+    if not can_edit:
+        await message.answer(f"❌ {error_msg}")
+        await state.clear()
+        return
 
-        # Проверяем права еще раз
-        can_edit, error_msg = can_edit_order(order, user_role)
-        if not can_edit:
-            await message.answer(f"❌ {error_msg}")
-            await state.clear()
-            return
+    # Сохраняем старое значение для лога
+    old_value = getattr(order, field, None)
 
-        # Сохраняем старое значение для лога
-        old_value = getattr(order, field, None)
-
-        # Обновляем поле
-        if hasattr(db, "update_order_field"):
-            # ORM метод
-            await db.update_order_field(order_id, field, new_value)
-        else:
-            # Прямой SQL
-            await db.connection.execute(
-                f"UPDATE orders SET {field} = ? WHERE id = ?",  # nosec B608
-                (new_value, order_id),
-            )
-            await db.connection.commit()
-
-        # Логируем изменение
-        await db.add_audit_log(
-            user_id=message.from_user.id,
-            action="EDIT_ORDER",
-            details=f"Order #{order_id}: {field} changed from '{old_value}' to '{new_value}'",
+    # Обновляем поле
+    if hasattr(db, "update_order_field"):
+        # ORM метод
+        await db.update_order_field(order_id, field, new_value)
+    else:
+        # Прямой SQL
+        await db.connection.execute(
+            f"UPDATE orders SET {field} = ? WHERE id = ?",  # nosec B608
+            (new_value, order_id),
         )
+        await db.connection.commit()
 
-        field_name = EDITABLE_FIELDS.get(field, field)
+    # Логируем изменение
+    await db.add_audit_log(
+        user_id=message.from_user.id,
+        action="EDIT_ORDER",
+        details=f"Order #{order_id}: {field} changed from '{old_value}' to '{new_value}'",
+    )
 
-        await message.answer(
-            f"✅ <b>Заявка #{order_id} обновлена</b>\n\n"
-            f"<b>Поле:</b> {field_name}\n"
-            f"<b>Старое значение:</b> {escape_html(str(old_value)) if old_value else 'Не указано'}\n"
-            f"<b>Новое значение:</b> {escape_html(str(new_value)) if new_value else 'Не указано'}",
-            parse_mode="HTML",
-            reply_markup={"remove_keyboard": True},
-        )
+    field_name = EDITABLE_FIELDS.get(field, field)
 
-        log_action(message.from_user.id, "EDIT_ORDER", f"Order #{order_id}, field: {field}")
+    await message.answer(
+        f"✅ <b>Заявка #{order_id} обновлена</b>\n\n"
+        f"<b>Поле:</b> {field_name}\n"
+        f"<b>Старое значение:</b> {escape_html(str(old_value)) if old_value else 'Не указано'}\n"
+        f"<b>Новое значение:</b> {escape_html(str(new_value)) if new_value else 'Не указано'}",
+        parse_mode="HTML",
+        reply_markup={"remove_keyboard": True},
+    )
 
-    finally:
-        await db.disconnect()
+    log_action(message.from_user.id, "EDIT_ORDER", f"Order #{order_id}, field: {field}")
 
     await state.clear()
 

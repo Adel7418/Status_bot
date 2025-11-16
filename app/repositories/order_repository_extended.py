@@ -1,6 +1,6 @@
 """
 Расширенный репозиторий для работы с заявками
-Поддержка: soft delete, полная история, расширенный поиск
+Поддержка: soft delete, полная история, расширенный поиск, optimistic locking
 """
 
 import logging
@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from app.database.models import Order
+from app.repositories.exceptions import ConcurrentModificationError, EntityNotFoundError
 from app.repositories.order_repository import OrderRepository
 from app.utils.helpers import get_now
 
@@ -397,3 +398,164 @@ class OrderRepositoryExtended(OrderRepository):
             "by_status": {row["status"]: row["count"] for row in status_rows},
             "deleted": deleted_row["total"] if deleted_row else 0,
         }
+
+    # ===== OPTIMISTIC LOCKING =====
+
+    async def update_order_status_with_version(
+        self, order_id: int, new_status: str, expected_version: int, changed_by: int
+    ) -> Order:
+        """
+        Обновление статуса заявки с optimistic locking
+
+        Args:
+            order_id: ID заявки
+            new_status: Новый статус
+            expected_version: Ожидаемая версия (для проверки конкурентного доступа)
+            changed_by: Telegram ID пользователя, изменяющего статус
+
+        Returns:
+            Обновленный объект Order
+
+        Raises:
+            ConcurrentModificationError: Если версия не совпадает (запись изменена другим процессом)
+            EntityNotFoundError: Если заявка не найдена
+        """
+        now = get_now()
+
+        async with self.transaction():
+            # Проверяем существование и текущую версию
+            row = await self._fetch_one(
+                "SELECT id, status, version FROM orders WHERE id = ? AND deleted_at IS NULL",
+                (order_id,),
+            )
+
+            if not row:
+                raise EntityNotFoundError("Order", order_id)
+
+            current_version = row["version"]
+            if current_version != expected_version:
+                logger.warning(
+                    f"Optimistic locking conflict for Order #{order_id}: "
+                    f"expected version {expected_version}, got {current_version}"
+                )
+                raise ConcurrentModificationError("Order", order_id, expected_version)
+
+            old_status = row["status"]
+
+            # Обновляем с инкрементом версии
+            cursor = await self._execute(
+                """
+                UPDATE orders
+                SET status = ?, version = version + 1, updated_at = ?
+                WHERE id = ? AND version = ?
+                """,
+                (new_status, now.isoformat(), order_id, expected_version),
+            )
+
+            if cursor.rowcount == 0:
+                # Версия изменилась между SELECT и UPDATE (маловероятно, но возможно)
+                raise ConcurrentModificationError("Order", order_id, expected_version)
+
+            # Логируем изменение статуса
+            await self._execute(
+                """
+                INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, changed_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (order_id, old_status, new_status, changed_by, now.isoformat()),
+            )
+
+            # Логируем в audit_log
+            await self._execute(
+                """
+                INSERT INTO audit_log (user_id, action, details, timestamp)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    changed_by,
+                    "ORDER_STATUS_CHANGED",
+                    f"Order #{order_id}: {old_status} → {new_status}",
+                    now.isoformat(),
+                ),
+            )
+
+        logger.info(
+            f"✅ Order #{order_id} status updated: {old_status} → {new_status} "
+            f"(version: {expected_version} → {expected_version + 1})"
+        )
+
+        # Возвращаем обновленную заявку
+        return await self.get_by_id(order_id)
+
+    async def update_order_with_version(
+        self, order_id: int, expected_version: int, updated_by: int, **fields
+    ) -> Order:
+        """
+        Обновление полей заявки с optimistic locking
+
+        Args:
+            order_id: ID заявки
+            expected_version: Ожидаемая версия
+            updated_by: Telegram ID пользователя
+            **fields: Поля для обновления
+
+        Returns:
+            Обновленный объект Order
+
+        Raises:
+            ConcurrentModificationError: Если версия не совпадает
+            EntityNotFoundError: Если заявка не найдена
+        """
+        if not fields:
+            raise ValueError("No fields to update")
+
+        now = get_now()
+
+        async with self.transaction():
+            # Проверяем существование и версию
+            row = await self._fetch_one(
+                "SELECT id, version FROM orders WHERE id = ? AND deleted_at IS NULL",
+                (order_id,),
+            )
+
+            if not row:
+                raise EntityNotFoundError("Order", order_id)
+
+            current_version = row["version"]
+            if current_version != expected_version:
+                raise ConcurrentModificationError("Order", order_id, expected_version)
+
+            # Формируем SQL для обновления
+            set_clause = ", ".join([f"{field} = ?" for field in fields.keys()])
+            values = list(fields.values())
+            values.extend([now.isoformat(), order_id, expected_version])
+
+            cursor = await self._execute(
+                f"""
+                UPDATE orders
+                SET {set_clause}, version = version + 1, updated_at = ?
+                WHERE id = ? AND version = ?
+                """,
+                tuple(values),
+            )
+
+            if cursor.rowcount == 0:
+                raise ConcurrentModificationError("Order", order_id, expected_version)
+
+            # Логируем изменения
+            for field, new_value in fields.items():
+                await self._execute(
+                    """
+                    INSERT INTO entity_history
+                    (table_name, record_id, field_name, new_value, changed_by, changed_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    ("orders", order_id, field, str(new_value), updated_by, now.isoformat()),
+                )
+
+        logger.info(
+            f"✅ Order #{order_id} updated with optimistic locking "
+            f"(version: {expected_version} → {expected_version + 1})"
+        )
+
+        return await self.get_by_id(order_id)
