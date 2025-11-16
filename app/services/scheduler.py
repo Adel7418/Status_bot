@@ -176,6 +176,32 @@ class TaskScheduler:
             if not master:
                 return
 
+            # Если у мастера настроена рабочая группа и по этой заявке уже есть активное групповое сообщение,
+            # не дублируем напоминание в группу (оставляем только DM и уведомления диспетчерам)
+            if master.work_chat_id:
+                try:
+                    if hasattr(self.db, "get_active_group_messages_by_order"):
+                        active_msgs = await self.db.get_active_group_messages_by_order(order.id)
+                        if active_msgs:
+                            logger.info(
+                                f"Skip 2-hour group reminder for order #{order.id}: active group message already exists"
+                            )
+                            # Отправляем как личное напоминание мастеру
+                            target_chat_id_dm = master.telegram_id
+                            date_str_dm = scheduled_datetime.strftime("%d.%m.%Y")
+                            time_str_dm = scheduled_datetime.strftime("%H:%M")
+                            reminder_text_dm = (
+                                f"<b>Напоминание о визите</b> #{order.id}\n"
+                                f"{order.equipment_type} в {date_str_dm} {time_str_dm}\n"
+                                f"Подготовьтесь к выезду"
+                            )
+                            await safe_send_message(
+                                self.bot, target_chat_id_dm, reminder_text_dm, parse_mode="HTML", max_attempts=3
+                            )
+                            return
+                except Exception as e:
+                    logger.warning(f"Failed to check active group messages for scheduled reminder #{order.id}: {e}")
+
             # Форматируем дату и время для напоминания
             date_str = scheduled_datetime.strftime("%d.%m.%Y")
             time_str = scheduled_datetime.strftime("%H:%M")
@@ -565,6 +591,31 @@ class TaskScheduler:
                         )
 
                         if master.work_chat_id:
+                            # Дедупликация отправок в рабочую группу: если по заявке уже есть активное групповое сообщение,
+                            # вторично в группу не отправляем (диспетчерам оставляем напоминания как есть)
+                            try:
+                                if hasattr(self.db, "get_active_group_messages_by_order"):
+                                    active_msgs = await self.db.get_active_group_messages_by_order(order.id)
+                                    if active_msgs:
+                                        logger.info(
+                                            f"Skip group reminder for order #{order.id}: active group message already exists"
+                                        )
+                                        # Можно продублировать мастеру в ЛС, чтобы он получил напоминание
+                                        target_chat_id_dm = master.telegram_id
+                                        await safe_send_message(
+                                            self.bot,
+                                            target_chat_id_dm,
+                                            f"<b>Непринятая заявка</b> #{order.id}\n"
+                                            f"{order.equipment_type} ({minutes}мин)\n"
+                                            f"Примите или отклоните заявку.",
+                                            parse_mode="HTML",
+                                            max_attempts=5,
+                                        )
+                                        # Переходим к уведомлению диспетчера ниже
+                                        continue
+                            except Exception as e:
+                                logger.warning(f"Failed to check active group messages for order #{order.id}: {e}")
+
                             # Отправляем в группу с упоминанием мастера и полной информацией о заявке
                             from app.keyboards.inline import get_group_order_keyboard
 
