@@ -1303,10 +1303,37 @@ class ExcelExportService:
             ).strip()
             filepath = reports_dir / f"master_{master_id}_{safe_name}.xlsx"
 
-            # Создаем workbook
+            # Получаем все заявки мастера для разделения
+            all_orders_cursor = await self.db.connection.execute(
+                """
+                SELECT
+                    id, status, equipment_type, client_name, client_address, client_phone,
+                    created_at, updated_at, total_amount, materials_cost,
+                    master_profit, company_profit, out_of_city, has_review, refuse_reason
+                FROM orders
+                WHERE assigned_master_id = ? AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                """,
+                (master_id,),
+            )
+            all_orders = await all_orders_cursor.fetchall()
+            
+            # Разделяем заявки на активные и завершенные
+            active_orders = [o for o in all_orders if o["status"] not in ["CLOSED", "REFUSED"]]
+            completed_orders = [o for o in all_orders if o["status"] in ["CLOSED", "REFUSED"]]
+            
+            # Создаем workbook с двумя листами
             wb = Workbook()
-            ws = wb.active
-            ws.title = "Заявки мастера"
+            ws_active = wb.create_sheet("Активные заявки", 0)
+            ws_completed = wb.create_sheet("Завершенные заявки", 1)
+            
+            # Удаляем стандартный лист
+            for sheet_name in wb.sheetnames:
+                if sheet_name in ["Sheet", "Sheet1"]:
+                    del wb[sheet_name]
+            
+            # Сначала заполним лист активных заявок
+            ws = ws_active
 
             # Стили
             header_font = Font(bold=True, size=14, color="FFFFFF")
@@ -1432,31 +1459,8 @@ class ExcelExportService:
 
             row += 1
 
-            # Получаем все заявки мастера
-            orders_cursor = await self.db.connection.execute(
-                """
-                SELECT
-                    id, status, equipment_type, client_name, client_address, client_phone,
-                    created_at, updated_at, total_amount, materials_cost,
-                    master_profit, company_profit, out_of_city, has_review, refuse_reason
-                FROM orders
-                WHERE assigned_master_id = ? AND deleted_at IS NULL
-                ORDER BY
-                    CASE status
-                        WHEN 'IN_PROGRESS' THEN 1
-                        WHEN 'ACCEPTED' THEN 2
-                        WHEN 'ASSIGNED' THEN 3
-                        WHEN 'COMPLETED' THEN 4
-                        WHEN 'CLOSED' THEN 5
-                        WHEN 'REFUSED' THEN 6
-                        ELSE 7
-                    END,
-                    created_at DESC
-                """,
-                (master_id,),
-            )
-
-            orders = await orders_cursor.fetchall()
+            # Используем активные заявки для первого листа
+            orders = active_orders
 
             if not orders:
                 ws[f"A{row}"] = "У мастера пока нет заявок"
@@ -1571,7 +1575,7 @@ class ExcelExportService:
                     cell.alignment = right_alignment
                     cell.border = thin_border
 
-            # Ширина столбцов
+            # Ширина столбцов для активных заявок
             widths = {
                 "A": 20,  # ID - делаем шире для полного отображения названий статистики
                 "B": 15,
@@ -1592,9 +1596,196 @@ class ExcelExportService:
             for col, width in widths.items():
                 ws.column_dimensions[col].width = width
 
+            # ==============================================
+            # ВТОРОЙ ЛИСТ - ЗАВЕРШЕННЫЕ ЗАЯВКИ
+            # ==============================================
+            ws = ws_completed
+            row = 1
+            
+            # Заголовок
+            cell_a1 = ws.cell(row=row, column=1)
+            cell_a1.value = "ЗАВЕРШЕННЫЕ ЗАЯВКИ:"
+            cell_a1.font = header_font
+            cell_a1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+            cell_a1.alignment = center_alignment
+            
+            cell_b1 = ws.cell(row=row, column=2)
+            cell_b1.value = master_name
+            cell_b1.font = header_font
+            cell_b1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+            cell_b1.alignment = center_alignment
+            
+            for col in range(3, 16):
+                ws.cell(row=row, column=col).fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+            
+            ws.row_dimensions[row].height = 25
+            
+            row += 1
+            ws.merge_cells(f"A{row}:O{row}")
+            cell = ws[f"A{row}"]
+            cell.value = f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
+            cell.font = Font(bold=True, size=10)
+            cell.alignment = center_alignment
+            
+            row += 2
+            
+            # Заголовки колонок для завершенных заявок
+            headers_completed = [
+                "ID",
+                "Статус",
+                "Тип техники",
+                "Клиент",
+                "Адрес",
+                "Телефон",
+                "Создана",
+                "Обновлена",
+                "Сумма",
+                "Материалы",
+                "Прибыль мастера",
+                "Прибыль компании",
+                "Выезд",
+                "Отзыв",
+                "Причина отказа",
+            ]
+            
+            for col_idx, header in enumerate(headers_completed, start=1):
+                cell = ws.cell(row=row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = subheader_fill
+                cell.alignment = center_alignment
+                cell.border = thin_border
+            
+            row += 1
+            
+            # Данные завершенных заявок
+            if not completed_orders:
+                ws[f"A{row}"] = "Нет завершенных заявок"
+                ws[f"A{row}"].font = Font(italic=True)
+                ws.merge_cells(f"A{row}:O{row}")
+            else:
+                for order in completed_orders:
+                    status_emoji = {
+                        "CLOSED": "🔒",
+                        "REFUSED": "❌",
+                    }.get(order["status"], "❓")
+                    
+                    data = [
+                        order["id"],
+                        f"{status_emoji} {order['status']}",
+                        order["equipment_type"],
+                        order["client_name"],
+                        order["client_address"][:30] + "..."
+                        if len(order["client_address"] or "") > 30
+                        else (order["client_address"] or ""),
+                        order["client_phone"],
+                        order["created_at"][:16] if order["created_at"] else "",
+                        order["updated_at"][:16] if order["updated_at"] else "",
+                        float(order["total_amount"] or 0),
+                        float(order["materials_cost"] or 0),
+                        float(order["master_profit"] or 0),
+                        float(order["company_profit"] or 0),
+                        "Да" if order["out_of_city"] else "",
+                        "Да" if order["has_review"] else "",
+                        order["refuse_reason"] or "",
+                    ]
+                    
+                    for col_idx, value in enumerate(data, start=1):
+                        cell = ws.cell(row=row, column=col_idx, value=value)
+                        cell.border = thin_border
+                        
+                        if col_idx == 1:  # ID
+                            cell.alignment = center_alignment
+                            cell.font = Font(bold=True)
+                        elif col_idx == 2:  # Статус
+                            cell.alignment = center_alignment
+                            if order["status"] == "CLOSED":
+                                cell.fill = PatternFill(
+                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                                )
+                            elif order["status"] == "REFUSED":
+                                cell.fill = PatternFill(
+                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
+                                )
+                        elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
+                            cell.alignment = left_alignment
+                        elif col_idx == 15:  # Причина отказа
+                            cell.alignment = left_alignment
+                            from openpyxl.styles import Alignment
+                            cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
+                        else:
+                            cell.alignment = center_alignment if col_idx >= 13 else right_alignment
+                            if col_idx >= 9 and col_idx <= 12:  # Денежные поля
+                                cell.number_format = "#,##0.00 ₽"
+                    
+                    row += 1
+                
+                # Итоги для завершенных
+                row += 1
+                ws[f"A{row}"] = "ИТОГО:"
+                ws[f"A{row}"].font = Font(bold=True, size=11)
+                ws.merge_cells(f"A{row}:H{row}")
+                
+                # Статистика по отказам
+                refused_count = sum(1 for o in completed_orders if o["status"] == "REFUSED")
+                refused_with_reason = sum(1 for o in completed_orders if o["status"] == "REFUSED" and o.get("refuse_reason"))
+                closed_count = sum(1 for o in completed_orders if o["status"] == "CLOSED")
+                
+                row += 1
+                ws[f"A{row}"] = f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
+                ws[f"A{row}"].font = Font(italic=True, size=10)
+                ws.merge_cells(f"A{row}:H{row}")
+                
+                total_sum_completed = sum(
+                    float(o["total_amount"] or 0) for o in completed_orders if o["status"] == "CLOSED"
+                )
+                total_materials_completed = sum(
+                    float(o["materials_cost"] or 0) for o in completed_orders if o["status"] == "CLOSED"
+                )
+                total_master_profit_completed = sum(
+                    float(o["master_profit"] or 0) for o in completed_orders if o["status"] == "CLOSED"
+                )
+                total_company_profit_completed = sum(
+                    float(o["company_profit"] or 0) for o in completed_orders if o["status"] == "CLOSED"
+                )
+                
+                row += 1
+                for col, val in [
+                    (f"I{row}", total_sum_completed),
+                    (f"J{row}", total_materials_completed),
+                    (f"K{row}", total_master_profit_completed),
+                    (f"L{row}", total_company_profit_completed),
+                ]:
+                    cell = ws[col]
+                    cell.value = val
+                    cell.font = Font(bold=True, size=11)
+                    cell.number_format = "#,##0.00 ₽"
+                    cell.alignment = right_alignment
+                    cell.border = thin_border
+            
+            # Ширина столбцов для завершенных заявок
+            widths_completed = {
+                "A": 12,
+                "B": 12,
+                "C": 20,
+                "D": 20,
+                "E": 30,
+                "F": 15,
+                "G": 18,
+                "H": 18,
+                "I": 15,
+                "J": 15,
+                "K": 18,
+                "L": 18,
+                "M": 10,
+                "N": 10,
+                "O": 35,  # Причина отказа
+            }
+            for col, width in widths_completed.items():
+                ws.column_dimensions[col].width = width
+
             # Сохраняем файл
             wb.save(filepath)
-            logger.info(f"Master orders Excel saved: {filepath}")
+            logger.info(f"Master orders Excel saved with 2 sheets: {filepath}")
 
             return str(filepath)
 
