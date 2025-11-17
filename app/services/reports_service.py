@@ -172,46 +172,58 @@ class ReportsService:
 
     async def _get_masters_stats(self, start_date, end_date) -> list[dict[str, Any]]:
         """Получает статистику по мастерам за период"""
-        cursor = await self.db.connection.execute(
-            """
-            SELECT
-                m.id,
-                u.first_name || ' ' || COALESCE(u.last_name, '') as master_name,
-                COUNT(o.id) as orders_count,
-                SUM(CASE WHEN o.status = 'CLOSED' THEN 1 ELSE 0 END) as closed_orders,
-                SUM(CASE WHEN o.out_of_city = 1 THEN 1 ELSE 0 END) as out_of_city_count,
-                SUM(CASE WHEN o.has_review = 1 THEN 1 ELSE 0 END) as reviews_count,
-                SUM(CASE WHEN o.status = 'CLOSED' THEN o.master_profit ELSE 0 END) as total_profit,
-                AVG(CASE WHEN o.status = 'CLOSED' THEN o.total_amount ELSE NULL END) as avg_order_amount
-            FROM masters m
-            LEFT JOIN users u ON m.telegram_id = u.telegram_id
-            LEFT JOIN orders o ON m.id = o.assigned_master_id
-                AND DATE(o.created_at) >= ? AND DATE(o.created_at) <= ?
-            WHERE m.is_active = 1
-            GROUP BY m.id, u.first_name, u.last_name
-            ORDER BY total_profit DESC
-        """,
-            (start_date, end_date),
-        )
+        from datetime import datetime
 
-        rows = await cursor.fetchall()
+        # Преобразуем даты в datetime для корректного сравнения
+        if isinstance(start_date, str):
+            start_date = datetime.fromisoformat(start_date)
+        if isinstance(end_date, str):
+            end_date = datetime.fromisoformat(end_date)
 
-        masters = []
-        for row in rows:
-            masters.append(
+        # Получаем всех активных мастеров
+        from app.config import OrderStatus
+
+        masters = await self.db.get_all_masters(only_active=True, only_approved=True)
+
+        result = []
+        for master in masters:
+            # Получаем все заявки мастера
+            orders = await self.db.get_orders_by_period(
+                start_date=start_date, end_date=end_date, master_id=master.id
+            )
+
+            # Подсчитываем статистику
+            orders_count = len(orders)
+            closed_orders = len([o for o in orders if o.status == OrderStatus.CLOSED])
+            out_of_city_count = sum(1 for o in orders if o.out_of_city is True)
+            reviews_count = sum(1 for o in orders if o.has_review is True)
+            total_profit = sum(
+                o.master_profit or 0 for o in orders if o.status == OrderStatus.CLOSED
+            )
+
+            # Средний чек по закрытым заявкам
+            closed_amounts = [
+                o.total_amount for o in orders if o.status == OrderStatus.CLOSED and o.total_amount
+            ]
+            avg_order_amount = sum(closed_amounts) / len(closed_amounts) if closed_amounts else 0
+
+            result.append(
                 {
-                    "id": row["id"],
-                    "name": row["master_name"],
-                    "orders_count": row["orders_count"] or 0,
-                    "closed_orders": row["closed_orders"] or 0,
-                    "out_of_city_count": row["out_of_city_count"] or 0,
-                    "reviews_count": row["reviews_count"] or 0,
-                    "total_profit": float(row["total_profit"] or 0),
-                    "avg_order_amount": float(row["avg_order_amount"] or 0),
+                    "id": master.id,
+                    "name": master.get_display_name(),
+                    "orders_count": orders_count,
+                    "closed_orders": closed_orders,
+                    "out_of_city_count": out_of_city_count,
+                    "reviews_count": reviews_count,
+                    "total_profit": float(total_profit),
+                    "avg_order_amount": float(avg_order_amount),
                 }
             )
 
-        return masters
+        # Сортируем по прибыли
+        result.sort(key=lambda x: x["total_profit"], reverse=True)
+
+        return result
 
     async def _get_accepted_orders_details(self, start_date, end_date) -> list[dict[str, Any]]:
         """Получает детальную информацию о принятых заказах за период"""

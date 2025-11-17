@@ -1806,55 +1806,66 @@ class ExcelExportService:
             if not master_id:
                 continue
 
-            # Получаем расширенную статистику по мастеру
-            cursor = await self.db.connection.execute(
-                """
-                SELECT
-                    COUNT(*) as total_orders,
-                    SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
-                    SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
-                    SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
-                    SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN master_profit ELSE 0 END) as master_profit_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
-                    SUM(CASE WHEN status = 'CLOSED' AND out_of_city = 1 THEN 1 ELSE 0 END) as out_of_city,
-                    SUM(CASE WHEN status = 'CLOSED' AND has_review = 1 THEN 1 ELSE 0 END) as reviews,
-                    AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
-                FROM orders
-                WHERE assigned_master_id = ?
-                    AND deleted_at IS NULL
-                """,
-                (master_id,),
+            # Получаем расширенную статистику по мастеру через ORM
+            from app.core.constants import OrderStatus
+
+            orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
+
+            # Подсчитываем статистику
+            total_orders = len(orders)
+            closed = len([o for o in orders if o.status == OrderStatus.CLOSED])
+            in_work = len(
+                [
+                    o
+                    for o in orders
+                    if o.status
+                    in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]
+                ]
+            )
+            refused = len([o for o in orders if o.status == OrderStatus.REFUSED])
+
+            total_sum = sum(o.total_amount or 0 for o in orders if o.status == OrderStatus.CLOSED)
+            materials_sum = sum(
+                o.materials_cost or 0 for o in orders if o.status == OrderStatus.CLOSED
+            )
+            company_profit_sum = sum(
+                o.company_profit or 0 for o in orders if o.status == OrderStatus.CLOSED
             )
 
-            stats_row = await cursor.fetchone()
+            out_of_city_count = sum(
+                1 for o in orders if o.status == OrderStatus.CLOSED and o.out_of_city is True
+            )
+            reviews_count = sum(
+                1 for o in orders if o.status == OrderStatus.CLOSED and o.has_review is True
+            )
 
-            if not stats_row:
-                continue
+            # Средний чек
+            closed_amounts = [
+                o.total_amount for o in orders if o.status == OrderStatus.CLOSED and o.total_amount
+            ]
+            avg_check = sum(closed_amounts) / len(closed_amounts) if closed_amounts else 0
 
             # Вычисляем данные
-            total_sum = float(stats_row["total_sum"] or 0)
-            materials = float(stats_row["materials_sum"] or 0)
+            materials = float(materials_sum)
             net_profit = total_sum - materials
-            cash_to_company = float(stats_row["company_profit_sum"] or 0)
+            cash_to_company = float(company_profit_sum)
 
             # Данные по мастеру
             master_data = [
                 master_id,
                 master_name,
-                stats_row["total_orders"] or 0,
-                stats_row["closed"] or 0,
-                stats_row["in_work"] or 0,
-                stats_row["refused"] or 0,
+                total_orders,
+                closed,
+                in_work,
+                refused,
                 total_sum,
                 materials,
                 net_profit,
                 cash_to_company,
                 cash_to_company,  # Сдача в кассу = прибыль компании
-                float(stats_row["avg_check"] or 0),
-                stats_row["out_of_city"] or 0,
-                stats_row["reviews"] or 0,
+                float(avg_check),
+                out_of_city_count,
+                reviews_count,
             ]
 
             for col_idx, value in enumerate(master_data, start=1):
