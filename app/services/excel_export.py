@@ -1524,8 +1524,6 @@ class ExcelExportService:
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
                         elif col_idx == 15:  # Причина отказа
-                            cell.alignment = left_alignment
-                            from openpyxl.styles import Alignment
                             cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
                         else:
                             cell.alignment = center_alignment if col_idx >= 13 else right_alignment
@@ -1709,8 +1707,6 @@ class ExcelExportService:
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
                         elif col_idx == 15:  # Причина отказа
-                            cell.alignment = left_alignment
-                            from openpyxl.styles import Alignment
                             cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
                         else:
                             cell.alignment = center_alignment if col_idx >= 13 else right_alignment
