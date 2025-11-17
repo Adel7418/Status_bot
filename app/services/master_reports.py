@@ -93,6 +93,11 @@ class MasterReportsService:
         filename = f"master_{master_id}_report.xlsx"
         file_path = self.reports_dir / filename
 
+        # Удаляем старый файл если существует (для принудительного обновления)
+        if file_path.exists():
+            file_path.unlink()
+            logger.info(f"Старый отчет удален: {filename}")
+
         # Сохраняем/обновляем файл на диске
         wb.save(file_path)
         logger.info(f"Отчет для мастера {master_id} обновлен: {filename}")
