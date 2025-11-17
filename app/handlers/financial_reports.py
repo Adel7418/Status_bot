@@ -729,19 +729,14 @@ async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
 @handle_errors
 async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str, db: Database):
     """Показать список мастеров для выбора"""
-    # Получаем всех утвержденных мастеров
-    cursor = await db.connection.execute(
-        """
-        SELECT
-            m.id,
-            u.first_name || ' ' || COALESCE(u.last_name, '') as full_name
-        FROM masters m
-        LEFT JOIN users u ON m.telegram_id = u.telegram_id
-        WHERE m.is_approved = 1 AND m.deleted_at IS NULL
-        ORDER BY u.first_name
-        """
-    )
-    masters = await cursor.fetchall()
+    # Получаем всех утвержденных мастеров через ORM
+    masters_data = await db.get_all_masters(only_approved=True, only_active=True)
+    
+    # Преобразуем в формат для совместимости
+    masters = [
+        {"id": master.id, "full_name": master.get_display_name()}
+        for master in masters_data
+    ]
 
     if not masters:
         await safe_edit_message(
