@@ -749,9 +749,9 @@ async def process_refuse_reason_on_complete(message: Message, state: FSMContext)
         materials_cost=0.0, has_review=False, out_of_city=False, refuse_reason=refuse_reason
     )
 
-    # Завершаем заказ как отказ с указанной причиной
+    # Завершаем заказ как отказ с указанной причиной и суммой
     await complete_order_as_refusal(
-        message, state, order_id, acting_as_master_id, refuse_reason=refuse_reason
+        message, state, order_id, acting_as_master_id, refuse_reason=refuse_reason, total_amount=float(total_amount)
     )
 
 
@@ -2922,6 +2922,7 @@ async def complete_order_as_refusal(
     order_id: int,
     user_telegram_id: int | None = None,
     refuse_reason: str | None = None,
+    total_amount: float = 0.0,
 ):
     """
     Завершение заказа как отказ (для заявок в 0 рублей или с суммой <1000р)
@@ -2932,6 +2933,7 @@ async def complete_order_as_refusal(
         order_id: ID заказа
         user_telegram_id: ID мастера, если админ действует от его имени
         refuse_reason: Причина отказа
+        total_amount: Сумма которую ввел мастер (по умолчанию 0)
     """
     from app.config import OrderStatus
     from app.utils.helpers import calculate_profit_split
@@ -2989,8 +2991,7 @@ async def complete_order_as_refusal(
             await message.reply("❌ Ошибка: заявка не назначена на этого мастера.")
             return
 
-        # Устанавливаем все суммы в 0
-        total_amount = 0.0
+        # Устанавливаем все суммы (total_amount берем из параметра)
         materials_cost = 0.0
         has_review = False
         out_of_city = False
@@ -3098,12 +3099,12 @@ async def complete_order_as_refusal(
         # Отправляем подтверждение
         confirmation_text = (
             f"❌ <b>Заявка #{order_id} завершена как отказ</b>\n\n"
-            f"💰 Сумма заказа: 0.00 ₽\n"
+            f"💰 Сумма заказа: {total_amount:.2f} ₽\n"
             f"📋 Статус: Отказ\n"
         )
         if refuse_reason:
             confirmation_text += f"\n📝 Причина отказа: {refuse_reason}"
-        else:
+        elif total_amount == 0:
             confirmation_text += "\nЗаявка автоматически помечена как отказ, так как сумма составляет 0 рублей."
         
         await message.reply(confirmation_text, parse_mode="HTML")
@@ -3113,12 +3114,18 @@ async def complete_order_as_refusal(
             from app.utils import safe_send_message
 
             dispatcher_reason = refuse_reason if refuse_reason else "Сумма заказа 0 рублей"
+            dispatcher_text = (
+                f"❌ Заявка #{order_id} завершена как отказ\n"
+                f"Мастер: {master.get_display_name()}\n"
+            )
+            if total_amount > 0:
+                dispatcher_text += f"💰 Сумма: {total_amount:.2f} ₽\n"
+            dispatcher_text += f"Причина: {dispatcher_reason}"
+            
             result = await safe_send_message(
                 message.bot,
                 order.dispatcher_id,
-                f"❌ Заявка #{order_id} завершена как отказ\n"
-                f"Мастер: {master.get_display_name()}\n"
-                f"Причина: {dispatcher_reason}",
+                dispatcher_text,
                 parse_mode="HTML",
             )
             if not result:
@@ -3136,7 +3143,7 @@ async def complete_order_as_refusal(
                     f"👤 Клиент: {order.client_name}\n"
                     f"🔧 Техника: {order.equipment_type}\n"
                     f"📝 {order.description}\n\n"
-                    f"💰 Сумма заказа: 0.00 ₽\n"
+                    f"💰 Сумма заказа: {total_amount:.2f} ₽\n"
                     f"📋 Причина: {group_reason}"
                 )
 
