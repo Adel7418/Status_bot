@@ -2380,6 +2380,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
             )
 
+        # Получаем данные о том, кто инициировал перевод в DR
+        acting_as_master_id = data.get("acting_as_master_id")
+        
         # Уведомляем диспетчера
         if order.dispatcher_id:
             master = await db.get_master_by_telegram_id(message.from_user.id)
@@ -2408,6 +2411,41 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 logger.info(f"DR notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
+        
+        # Уведомляем мастера в рабочую группу, если перевод сделан админом от его имени
+        if acting_as_master_id and order.assigned_master_id:
+            master = await db.get_master_by_id(order.assigned_master_id)
+            if master and master.telegram_id != message.from_user.id and master.work_chat_id:
+                # Форматируем дату с расчетом дней для отображения
+                from app.utils.date_parser import format_estimated_completion_with_days
+                from app.utils import safe_send_message
+
+                completion_date_formatted = format_estimated_completion_with_days(completion_date)
+
+                master_notification = (
+                    f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
+                    f"<i>Администратор изменил статус от имени мастера {master.get_display_name()}</i>\n\n"
+                    f"👤 Клиент: {order.client_name}\n"
+                    f"🔧 Техника: {order.equipment_type}\n"
+                    f"📝 {order.description}\n\n"
+                    f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
+                )
+
+                if prepayment_amount:
+                    master_notification += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+
+                result = await safe_send_message(
+                    message.bot,
+                    master.work_chat_id,
+                    master_notification,
+                    parse_mode="HTML",
+                )
+                if result:
+                    logger.info(f"DR notification sent to master's work group {master.work_chat_id}")
+                else:
+                    logger.error(f"Failed to notify master's work group {master.work_chat_id} about DR status")
+            elif master and master.telegram_id != message.from_user.id:
+                logger.warning(f"Master {master.telegram_id} has no work_chat_id, DR notification not sent")
 
         log_action(message.from_user.id, "LONG_REPAIR_ORDER", f"Order #{order_id}")
         logger.info(f"✅ Order #{order_id} successfully translated to long repair")
@@ -2780,6 +2818,34 @@ async def complete_order_as_refusal(
             )
             if not result:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id} об отказе")
+
+        # Уведомляем мастера в рабочую группу, если админ действует от его имени
+        if user_telegram_id and user_telegram_id != message.from_user.id:
+            if master.work_chat_id:
+                from app.utils import safe_send_message
+
+                master_notification = (
+                    f"❌ <b>Заявка #{order_id} завершена как отказ</b>\n\n"
+                    f"<i>Администратор {message.from_user.full_name} изменил статус от имени мастера {master.get_display_name()}</i>\n\n"
+                    f"👤 Клиент: {order.client_name}\n"
+                    f"🔧 Техника: {order.equipment_type}\n"
+                    f"📝 {order.description}\n\n"
+                    f"💰 Сумма заказа: 0.00 ₽\n"
+                    f"📋 Причина: Отказ от заявки"
+                )
+
+                result = await safe_send_message(
+                    message.bot,
+                    master.work_chat_id,
+                    master_notification,
+                    parse_mode="HTML",
+                )
+                if result:
+                    logger.info(f"REFUSED notification sent to master's work group {master.work_chat_id}")
+                else:
+                    logger.error(f"Failed to notify master's work group {master.work_chat_id} about REFUSED status")
+            else:
+                logger.warning(f"Master {master.telegram_id} has no work_chat_id, REFUSED notification not sent")
 
         logger.info(f"Order #{order_id} completed as refusal by master {master.id}")
 

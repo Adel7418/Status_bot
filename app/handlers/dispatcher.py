@@ -634,11 +634,13 @@ async def btn_create_order(message: Message, state: FSMContext, user_role: str):
     await state.clear()
     await state.set_state(CreateOrderStates.equipment_type)
 
-    await message.answer(
-        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/8: Выберите тип техники:",
+    sent_message = await message.answer(
+        "➕ <b>Создание новой заявки</b>\n\n" "Шаг 1/7: Выберите тип техники:",
         parse_mode="HTML",
         reply_markup=get_equipment_types_keyboard(),
     )
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.callback_query(F.data.startswith("equipment:"), CreateOrderStates.equipment_type)
@@ -660,15 +662,20 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await state.update_data(equipment_type=equipment_type)
     await state.set_state(CreateOrderStates.description)
 
-    await callback.message.edit_text(
-        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/8: Опишите проблему:", parse_mode="HTML"
-    )
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
-    await callback.message.answer(
-        "📝 Введите описание проблемы:\n" f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
+    sent_message = await callback.message.answer(
+        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/7: Опишите проблему:\n"
+        f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
     )
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
     await callback.answer()
 
@@ -741,10 +748,23 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     await state.update_data(description=description)
     await state.set_state(CreateOrderStates.client_address)
 
-    await message.answer(
-        "📍 Шаг 3/8: Введите адрес клиента:",
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
+        "📍 Шаг 3/7: Введите адрес клиента:",
         reply_markup=get_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.client_name, F.text != "❌ Отмена")
@@ -809,11 +829,24 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     await state.update_data(client_name=client_name)
     await state.set_state(CreateOrderStates.client_phone)
 
-    await message.answer(
-        "📞 Шаг 5/8: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
+        "📞 Шаг 5/7: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.client_address, F.text != "❌ Отмена")
@@ -879,10 +912,23 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     await state.update_data(client_address=client_address)
     await state.set_state(CreateOrderStates.client_name)
 
-    await message.answer(
-        "👤 Шаг 4/8: Введите имя клиента:",
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
+        "👤 Шаг 4/7: Введите имя клиента:",
         reply_markup=get_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.client_phone, F.text != "❌ Отмена")
@@ -1010,13 +1056,26 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
     await state.update_data(client_phone=phone, master_lead_name=None)
     await state.set_state(CreateOrderStates.notes)
 
-    await message.answer(
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
         "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
         f"<i>(максимум {MAX_NOTES_LENGTH} символов)</i>\n\n"
         "Или нажмите 'Пропустить'.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.confirm_client_data, F.text == "✅ Да, использовать")
@@ -1045,7 +1104,13 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
 
     await state.set_state(CreateOrderStates.notes)
 
-    await message.answer(
+    # Удаляем предыдущее сообщение
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
         "✅ <b>Данные клиента сохранены</b>\n\n"
         f"👤 <b>Имя:</b> {escape_html(data['found_client_name'])}\n"
         f"🏠 <b>Адрес:</b> {escape_html(data['found_client_address'])}\n"
@@ -1056,6 +1121,7 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.confirm_client_data, F.text == "❌ Нет, ввести заново")
@@ -1074,11 +1140,18 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
 
     await state.set_state(CreateOrderStates.client_name)
 
-    await message.answer(
-        "👤 Шаг 4/8: Введите ФИО клиента:\n" "<i>(минимум 2 символа, максимум 200 символов)</i>",
+    # Удаляем предыдущее сообщение
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    sent_message = await message.answer(
+        "👤 Шаг 4/7: Введите ФИО клиента:\n" "<i>(минимум 2 символа, максимум 200 символов)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.notes, F.text == "⏭️ Пропустить")
@@ -1097,15 +1170,28 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
 
     await state.update_data(notes=None)
 
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     # Переходим к вводу времени прибытия (не пропускаем этот шаг!)
     await state.set_state(CreateOrderStates.scheduled_time)
-    await message.answer(
+    sent_message = await message.answer(
         "⏰ <b>Шаг 7/7: Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
         "Или нажмите '⏭️ Пропустить' если не требуется.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.notes, F.text != "❌ Отмена")
@@ -1141,15 +1227,28 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
 
     await state.update_data(notes=notes)
 
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     # Переходим к вводу времени прибытия
     await state.set_state(CreateOrderStates.scheduled_time)
-    await message.answer(
+    sent_message = await message.answer(
         "⏰ <b>Шаг 7/7: Время прибытия к клиенту</b>\n\n"
         "Укажите время или инструкцию для мастера:\n\n"
         "Или нажмите '⏭️ Пропустить' если не требуется.",
         parse_mode="HTML",
         reply_markup=get_skip_cancel_keyboard(),
     )
+    await state.update_data(last_bot_message_id=sent_message.message_id)
 
 
 @router.message(CreateOrderStates.scheduled_time, F.text != "❌ Отмена")
@@ -1243,6 +1342,18 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                     formatted_time = format_datetime_for_storage(parsed_dt, scheduled_time)
                     user_friendly = format_datetime_user_friendly(parsed_dt, scheduled_time)
 
+                # Удаляем предыдущие сообщения перед показом распознанной даты
+                data = await state.get_data()
+                if last_msg_id := data.get("last_bot_message_id"):
+                    try:
+                        await message.bot.delete_message(message.chat.id, last_msg_id)
+                    except Exception:
+                        pass
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+
                 # Формируем сообщение с предупреждением если есть
                 confirmation_text = f"✅ <b>Дата распознана:</b>\n\n{user_friendly}"
 
@@ -1311,6 +1422,18 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
         )
         return
 
+    # Удаляем предыдущие сообщения перед показом подтверждения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     await state.update_data(scheduled_time=scheduled_time)
     await state.set_state(CreateOrderStates.confirm)
     await show_order_confirmation(message, state)
@@ -1329,6 +1452,18 @@ async def skip_scheduled_time(message: Message, state: FSMContext, user_role: st
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
+
+    # Удаляем предыдущие сообщения
+    data = await state.get_data()
+    if last_msg_id := data.get("last_bot_message_id"):
+        try:
+            await message.bot.delete_message(message.chat.id, last_msg_id)
+        except Exception:
+            pass
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
     await state.update_data(scheduled_time=None)
     await show_order_confirmation(message, state)

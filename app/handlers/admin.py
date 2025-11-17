@@ -1314,11 +1314,41 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
             if not result:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
-        # Личных уведомлений мастеру нет — бот работает только в рабочих группах
+        # Уведомляем мастера в рабочую группу о том, что админ принял заявку от его имени
+        if master.work_chat_id:
+            from app.utils import safe_send_message
+
+            master_notification = (
+                f"✅ <b>Заявка #{order_id} принята от имени мастера {master.get_display_name()}</b>\n\n"
+                f"<i>Администратор {callback.from_user.full_name} изменил статус</i>\n\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📍 Адрес: {order.client_address}\n"
+                f"🔧 Техника: {order.equipment_type}\n"
+                f"📝 {order.description}\n"
+            )
+            
+            if order.scheduled_time:
+                master_notification += f"\n⏰ Время прибытия: {order.scheduled_time}"
+
+            result = await safe_send_message(
+                callback.bot,
+                master.work_chat_id,
+                master_notification,
+                parse_mode="HTML",
+            )
+            if result:
+                logger.info(f"ACCEPTED notification sent to master's work group {master.work_chat_id}")
+            else:
+                logger.error(f"Failed to notify master's work group {master.work_chat_id} about ACCEPTED status")
+        else:
+            logger.warning(f"Master {master.telegram_id} has no work_chat_id, notification not sent")
 
         await callback.answer("Заявка принята от имени мастера!")
 
-        # Обновляем сообщение
+        # Получаем обновленную заявку из БД для правильной генерации клавиатуры
+        order = await db.get_order_by_id(order_id)
+        
+        # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
 
         text = OrderPresenter.format_order_details(order, include_client_phone=False, master=master)
@@ -1403,11 +1433,39 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
             if not result:
                 logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
 
-        # Личных уведомлений мастеру нет — бот работает только в рабочих группах
+        # Уведомляем мастера в рабочую группу о том, что админ изменил статус на "На объекте" от его имени
+        if master.work_chat_id:
+            from app.utils import safe_send_message
+
+            master_notification = (
+                f"🏠 <b>Статус заявки #{order_id} изменен: На объекте</b>\n\n"
+                f"<i>Администратор {callback.from_user.full_name} изменил статус от имени мастера {master.get_display_name()}</i>\n\n"
+                f"👤 Клиент: {order.client_name}\n"
+                f"📞 Телефон: {order.client_phone}\n"
+                f"📍 Адрес: {order.client_address}\n"
+                f"🔧 Техника: {order.equipment_type}\n"
+                f"📝 {order.description}"
+            )
+
+            result = await safe_send_message(
+                callback.bot,
+                master.work_chat_id,
+                master_notification,
+                parse_mode="HTML",
+            )
+            if result:
+                logger.info(f"ONSITE notification sent to master's work group {master.work_chat_id}")
+            else:
+                logger.error(f"Failed to notify master's work group {master.work_chat_id} about ONSITE status")
+        else:
+            logger.warning(f"Master {master.telegram_id} has no work_chat_id, notification not sent")
 
         await callback.answer("Статус обновлен от имени мастера!")
 
-        # Обновляем сообщение
+        # Получаем обновленную заявку из БД для правильной генерации клавиатуры
+        order = await db.get_order_by_id(order_id)
+        
+        # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
 
         text = OrderPresenter.format_order_details(order, include_client_phone=True, master=master)
