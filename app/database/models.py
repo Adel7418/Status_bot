@@ -173,6 +173,7 @@ class Order:
     rescheduled_count: int = 0  # Количество переносов заявки
     last_rescheduled_at: datetime | None = None  # Дата последнего переноса
     reschedule_reason: str | None = None  # Причина последнего переноса
+    refuse_reason: str | None = None  # Причина отказа от заявки
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

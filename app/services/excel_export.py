@@ -1818,8 +1818,7 @@ class ExcelExportService:
                 [
                     o
                     for o in orders
-                    if o.status
-                    in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]
+                    if o.status in [OrderStatus.ASSIGNED, OrderStatus.ACCEPTED, OrderStatus.ONSITE]
                 ]
             )
             refused = len([o for o in orders if o.status == OrderStatus.REFUSED])
@@ -1888,6 +1887,32 @@ class ExcelExportService:
 
             row += 1
 
+        # Добавляем новую колонку "Отказов с причиной"
+        ws.cell(row=2, column=15, value="Отказов с причиной")
+        ws.cell(row=2, column=15).font = Font(bold=True)
+        ws.cell(row=2, column=15).fill = subheader_fill
+        ws.cell(row=2, column=15).alignment = center_alignment
+        ws.cell(row=2, column=15).border = thin_border
+        
+        # Пересчитываем для добавления колонки "Отказов с причиной"
+        row_idx = 3
+        for master_report in master_reports:
+            master_id = master_report.master_id
+            if not master_id:
+                continue
+                
+            from app.core.constants import OrderStatus
+            orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
+            
+            # Подсчитываем отказы с причиной
+            refused_with_reason = len([o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason])
+            
+            cell = ws.cell(row=row_idx, column=15, value=refused_with_reason)
+            cell.border = thin_border
+            cell.alignment = center_alignment
+            
+            row_idx += 1
+        
         # ИТОГО по всем мастерам
         row += 1
         ws[f"A{row}"] = "ИТОГО:"
@@ -1967,6 +1992,108 @@ class ExcelExportService:
             "L": 15,
             "M": 10,
             "N": 10,
+            "O": 18,  # Новая колонка
+        }
+        for col, width in widths.items():
+            ws.column_dimensions[col].width = width
+    
+    async def _add_refusals_details_sheet(
+        self,
+        wb,
+        master_reports,
+        thin_border,
+        header_font,
+        header_fill,
+        subheader_fill,
+        center_alignment,
+        left_alignment,
+    ):
+        """Добавляет лист с детальной информацией об отказах и причинах"""
+        ws = wb.create_sheet(title="Причины отказов")
+        
+        # Заголовок
+        row = 1
+        ws.merge_cells(f"A{row}:F{row}")
+        cell = ws[f"A{row}"]
+        cell.value = "ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ОБ ОТКАЗАХ"
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center_alignment
+        ws.row_dimensions[row].height = 25
+        
+        row += 1
+        
+        # Заголовки колонок
+        headers = [
+            "ID заявки",
+            "Мастер",
+            "Клиент",
+            "Адрес",
+            "Дата отказа",
+            "Причина отказа",
+        ]
+        
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=col_idx, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = subheader_fill
+            cell.alignment = center_alignment
+            cell.border = thin_border
+        
+        row += 1
+        
+        # Получаем все отказы с причинами
+        from app.core.constants import OrderStatus
+        
+        for master_report in master_reports:
+            master_id = master_report.master_id
+            master_name = master_report.master_name
+            
+            if not master_id:
+                continue
+            
+            # Получаем отказанные заявки мастера
+            orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
+            refused_orders = [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
+            
+            for order in refused_orders:
+                order_data = [
+                    order.id,
+                    master_name,
+                    order.client_name,
+                    order.client_address,
+                    order.updated_at.strftime("%d.%m.%Y %H:%M") if order.updated_at else "",
+                    order.refuse_reason or "Не указана",
+                ]
+                
+                for col_idx, value in enumerate(order_data, start=1):
+                    cell = ws.cell(row=row, column=col_idx, value=value)
+                    cell.border = thin_border
+                    
+                    # Форматирование
+                    if col_idx == 1:  # ID
+                        cell.alignment = center_alignment
+                    elif col_idx == 6:  # Причина
+                        cell.alignment = left_alignment
+                    else:
+                        cell.alignment = left_alignment
+                
+                row += 1
+        
+        # Если нет отказов с причинами
+        if row == 3:
+            ws.cell(row=row, column=1, value="Нет отказов с указанными причинами")
+            ws.merge_cells(f"A{row}:F{row}")
+            ws.cell(row=row, column=1).alignment = center_alignment
+        
+        # Ширина столбцов
+        widths = {
+            "A": 12,  # ID заявки
+            "B": 25,  # Мастер
+            "C": 25,  # Клиент
+            "D": 35,  # Адрес
+            "E": 18,  # Дата отказа
+            "F": 50,  # Причина отказа
         }
         for col, width in widths.items():
             ws.column_dimensions[col].width = width

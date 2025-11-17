@@ -882,6 +882,15 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
             emoji = OrderStatus.get_status_emoji(status)
             name = OrderStatus.get_status_name(status)
             text += f"{emoji} {name}: {count}\n"
+        
+        # Добавляем информацию об отказах с причинами
+        refused_orders_with_reason = [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
+        if refused_orders_with_reason:
+            text += f"\n<b>📋 Причины отказов ({len(refused_orders_with_reason)}):</b>\n"
+            for order in refused_orders_with_reason[:5]:  # Показываем первые 5
+                text += f"• Заявка #{order.id}: {order.refuse_reason[:50]}...\n" if len(order.refuse_reason) > 50 else f"• Заявка #{order.id}: {order.refuse_reason}\n"
+            if len(refused_orders_with_reason) > 5:
+                text += f"... и еще {len(refused_orders_with_reason) - 5} отказ(ов)\n"
 
         await callback.answer(text, show_alert=True)
 

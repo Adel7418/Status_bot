@@ -195,6 +195,7 @@ class ReportsService:
             # Подсчитываем статистику
             orders_count = len(orders)
             closed_orders = len([o for o in orders if o.status == OrderStatus.CLOSED])
+            refused_orders = len([o for o in orders if o.status == OrderStatus.REFUSED])
             out_of_city_count = sum(1 for o in orders if o.out_of_city is True)
             reviews_count = sum(1 for o in orders if o.has_review is True)
             total_profit = sum(
@@ -213,6 +214,7 @@ class ReportsService:
                     "name": master.get_display_name(),
                     "orders_count": orders_count,
                     "closed_orders": closed_orders,
+                    "refused_orders": refused_orders,
                     "out_of_city_count": out_of_city_count,
                     "reviews_count": reviews_count,
                     "total_profit": float(total_profit),

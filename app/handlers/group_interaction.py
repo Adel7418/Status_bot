@@ -195,13 +195,14 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
 
 
 @router.callback_query(F.data.startswith("group_refuse_order:"))
-async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list):
+async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list, state: FSMContext):
     """
-    Отклонение заявки мастером или админом в группе
+    Начало процесса отклонения заявки в группе (запрос причины)
 
     Args:
         callback: Callback query
         user_roles: Список ролей пользователя
+        state: FSM контекст
     """
     order_id = int(callback.data.split(":")[1])
 
@@ -237,62 +238,37 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list)
         if not master or order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
-
-        # Возвращаем статус в NEW и убираем мастера (ORM compatible)
-        if hasattr(db, "unassign_master_from_order"):
-            await db.unassign_master_from_order(order_id)
-        else:
-            # Legacy: прямой SQL
-            await db.connection.execute(
-                "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
-                (OrderStatus.NEW, order_id),
-            )
-            await db.connection.commit()
-
-        # Добавляем в лог
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="REFUSE_ORDER_GROUP",
-            details=f"Master refused order #{order_id} in group",
+        
+        # Сохраняем данные в state для последующей обработки
+        await state.update_data(
+            order_id=order_id,
+            group_chat_id=callback.message.chat.id,
+            group_message_id=callback.message.message_id,
+            master_id=master.id
         )
-
-        # Меню обновится автоматически в update_order_status
-
-        # Обновляем сообщение в группе (номер телефона скрыт, т.к. заявка отклонена до прибытия на объект)
-        await callback.message.edit_text(
-            f"❌ <b>Заявка #{order_id} отклонена</b>\n\n"
-            f"👨‍🔧 Мастер: {master.get_display_name()}\n"
-            f"📋 Статус: Требует нового назначения\n"
-            f"⏰ Время отклонения: {format_datetime(get_now())}\n\n"
-            f"🔧 <b>Детали заявки:</b>\n"
-            f"📱 Тип техники: {order.equipment_type}\n"
-            f"📝 Описание: {order.description}\n"
-            f"👤 Клиент: {order.client_name}\n"
-            f"📍 Адрес: {order.client_address}\n\n"
-            f"Диспетчер получил уведомление для назначения другого мастера.",
-            parse_mode="HTML",
+        
+        # Переключаемся в состояние ввода причины отказа
+        from app.states import RefuseOrderStates
+        await state.set_state(RefuseOrderStates.enter_refuse_reason)
+        
+        # Определяем тип действия
+        action_type = "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
+        
+        # Отправляем запрос причины в личку мастеру/админу
+        await callback.bot.send_message(
+            callback.from_user.id,
+            f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
+            f"Например: 'Слишком далеко', 'Нет запчастей', 'Некорректный адрес' и т.д.\n\n"
+            f"⚠️ Отправьте причину в ответ на это сообщение."
         )
-
-        # Уведомляем диспетчера с retry механизмом
-        if order.dispatcher_id:
-            from app.utils import safe_send_message
-
-            result = await safe_send_message(
-                callback.bot,
-                order.dispatcher_id,
-                f"❌ Мастер {master.get_display_name()} отклонил заявку #{order_id} в группе\n"
-                f"Необходимо назначить другого мастера.",
-                parse_mode="HTML",
-            )
-            if not result:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
-
-        log_action(callback.from_user.id, "REFUSE_ORDER_GROUP", f"Order #{order_id}")
-
+        
+        await callback.answer(f"Проверьте личные сообщения - нужно указать причину {action_type}")
+        
+    except Exception as e:
+        logger.error(f"Error in group_refuse_order: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
     finally:
         await db.disconnect()
-
-    await callback.answer("Заявка отклонена")
 
 
 @router.callback_query(F.data.startswith("group_onsite_order:"))

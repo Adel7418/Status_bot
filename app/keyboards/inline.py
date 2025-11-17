@@ -31,7 +31,7 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
                 callback_data=create_callback_data("group_accept_order", order.id),
             ),
             InlineKeyboardButton(
-                text="❌ Отклонить",
+                text="❌ Отмена",
                 callback_data=create_callback_data("group_refuse_order", order.id),
             ),
         )
@@ -200,9 +200,15 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             # Кнопку "Закрыть заявку" убрали - теперь админ завершает через "Завершить (за мастера)"
             # которая запускает правильный процесс с запросом суммы и материалов
 
+            # Динамический текст кнопки: "Отмена" для NEW/ACCEPTED, "Отказ" для остальных
+            refuse_button_text = (
+                "❌ Отмена"
+                if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED]
+                else "❌ Отказ"
+            )
             builder.row(
                 InlineKeyboardButton(
-                    text="❌ Отклонить",
+                    text=refuse_button_text,
                     callback_data=create_callback_data("refuse_order", order.id),
                 ),
             )
@@ -216,7 +222,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                     callback_data=create_callback_data("accept_order", order.id),
                 ),
                 InlineKeyboardButton(
-                    text="❌ Отклонить",
+                    text="❌ Отмена",
                     callback_data=create_callback_data("refuse_order_master", order.id),
                 ),
             )
@@ -231,7 +237,11 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
                 InlineKeyboardButton(
                     text="🏠 Я на объекте",
                     callback_data=create_callback_data("onsite_order", order.id),
-                )
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data=create_callback_data("refuse_order_master", order.id),
+                ),
             )
         elif order.status == OrderStatus.ONSITE:
             builder.row(

@@ -153,3 +153,7 @@ class ExcelStyles:
             "alignment": ExcelStyles.CENTER_ALIGNMENT if centered else ExcelStyles.LEFT_ALIGNMENT,
             "border": ExcelStyles.THIN_BORDER,
         }
+
+
+
+

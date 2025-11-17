@@ -2514,14 +2514,15 @@ async def callback_close_order(callback: CallbackQuery, user_role: str, state: F
 
 
 @router.callback_query(F.data.startswith("refuse_order:"))
-async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_roles: list):
+async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_roles: list, state: FSMContext):
     """
-    Отклонение заявки
+    Начало процесса отклонения заявки админом/диспетчером (запрос причины)
 
     Args:
         callback: Callback query
         user_role: Роль пользователя (основная, для обратной совместимости)
         user_roles: Список ролей пользователя
+        state: FSM контекст
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
@@ -2533,39 +2534,39 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_ro
 
     try:
         order = await db.get_order_by_id(order_id)
-        await db.update_order_status(
+        
+        if not order:
+            await callback.answer("Заявка не найдена", show_alert=True)
+            return
+        
+        # Сохраняем данные в state
+        await state.update_data(
             order_id=order_id,
-            status=OrderStatus.REFUSED,
-            changed_by=callback.from_user.id,
-            user_roles=user_roles,  # Передаём роли для валидации
+            admin_message_id=callback.message.message_id,
+            admin_chat_id=callback.message.chat.id,
+            user_roles=user_roles
         )
-
-        await db.add_audit_log(
-            user_id=callback.from_user.id,
-            action="REFUSE_ORDER",
-            details=f"Refused order #{order_id}",
+        
+        # Переключаемся в состояние ввода причины
+        from app.states import RefuseOrderStates
+        await state.set_state(RefuseOrderStates.enter_refuse_reason)
+        
+        # Определяем тип действия
+        action_type = "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
+        
+        await callback.message.edit_text(
+            f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
+            f"Например: 'Не актуально', 'Дубликат', 'Некорректные данные' и т.д.",
+            reply_markup=None
         )
-
-        # Уведомляем мастера если он был назначен, с retry
-        if order.assigned_master_id:
-            master = await db.get_master_by_id(order.assigned_master_id)
-            if master:
-                await safe_send_message(
-                    callback.bot,
-                    master.telegram_id,
-                    f"ℹ️ Заявка #{order_id} была отклонена диспетчером.",
-                    parse_mode="HTML",
-                    max_attempts=3,
-                )
-
-        await callback.message.edit_text(f"❌ Заявка #{order_id} отклонена.")
-
-        log_action(callback.from_user.id, "REFUSE_ORDER", f"Order #{order_id}")
-
+        
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Error in refuse_order: {e}")
+        await callback.answer("Произошла ошибка", show_alert=True)
     finally:
         await db.disconnect()
-
-    await callback.answer("Заявка отклонена")
 
 
 @router.callback_query(F.data.startswith("client_waiting:"))

@@ -66,6 +66,8 @@ class CompleteOrderStates(StatesGroup):
     """Состояния для завершения заказа"""
 
     enter_total_amount = State()  # Ввод общей суммы заказа
+    confirm_low_amount_refusal = State()  # Подтверждение отказа для сумм <1000р
+    enter_refuse_reason_on_complete = State()  # Ввод причины отказа при завершении
     enter_materials_cost = State()  # Ввод суммы расходного материала
     confirm_materials = State()  # Подтверждение суммы материалов
     confirm_review = State()  # Подтверждение наличия отзыва
@@ -116,6 +118,7 @@ class RescheduleOrderStates(StatesGroup):
 class RefuseOrderStates(StatesGroup):
     """Состояния для отказа от заявки"""
 
+    enter_refuse_reason = State()  # Ввод причины отказа
     confirm_refusal = State()  # Подтверждение отказа
 
 

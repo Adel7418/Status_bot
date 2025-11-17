@@ -261,3 +261,7 @@ class ExcelFormatter:
 
         for cell in ws[row_idx]:
             cell.fill = fill
+
+
+
+

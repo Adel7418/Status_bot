@@ -820,8 +820,13 @@ class ORMDatabase:
             logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
             return True
 
-    async def unassign_master_from_order(self, order_id: int) -> bool:
-        """Снятие мастера с заявки"""
+    async def unassign_master_from_order(self, order_id: int, refuse_reason: str | None = None) -> bool:
+        """Снятие мастера с заявки
+        
+        Args:
+            order_id: ID заявки
+            refuse_reason: Причина отказа/отмены (опционально)
+        """
         async with self.get_session() as session:
             # Получаем заявку
             stmt = select(Order).where(Order.id == order_id)
@@ -837,10 +842,14 @@ class ORMDatabase:
             order.status = OrderStatus.NEW
             order.updated_at = get_now()
             order.version += 1
+            
+            # Сохраняем причину отказа если указана
+            if refuse_reason:
+                order.refuse_reason = refuse_reason
 
             await session.commit()
 
-            logger.info(f"Мастер снят с заявки #{order_id}")
+            logger.info(f"Мастер снят с заявки #{order_id}, причина: {refuse_reason}")
             return True
 
     async def get_order_status_history(self, order_id: int) -> list[OrderStatusHistory]:

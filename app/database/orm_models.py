@@ -210,6 +210,9 @@ class Order(Base):
     last_rescheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reschedule_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Поле для причины отказа
+    refuse_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # Системные поля
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
