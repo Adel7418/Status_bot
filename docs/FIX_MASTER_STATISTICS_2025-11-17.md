@@ -11,6 +11,7 @@
 
 1. `app/services/reports_service.py` - метод `_get_masters_stats()`
 2. `app/services/excel_export.py` - метод `_add_masters_statistics_sheet()`
+3. `app/handlers/financial_reports.py` - метод `callback_masters_stats_excel()` (добавлено позже)
 
 ## Внесенные изменения
 
@@ -128,7 +129,47 @@ python test_master_stats.py
 2. **Тестирование:** После миграции каждого метода необходимо проводить тестирование
 3. **Документирование:** Обновлять документацию по мере внесения изменений
 
+### 3. financial_reports.py - метод callback_masters_stats_excel()
+
+**Было:**
+```python
+cursor = await db.connection.execute(
+    """
+    SELECT
+        m.id,
+        u.first_name || ' ' || COALESCE(u.last_name, '') as full_name
+    FROM masters m
+    LEFT JOIN users u ON m.telegram_id = u.telegram_id
+    WHERE m.is_approved = 1 AND m.deleted_at IS NULL
+    ORDER BY u.first_name
+    """
+)
+masters = await cursor.fetchall()
+```
+
+**Стало:**
+```python
+# Получаем всех утвержденных мастеров через ORM
+masters_data = await db.get_all_masters(only_approved=True, only_active=True)
+
+# Преобразуем в формат для совместимости
+masters = [
+    {"id": master.id, "full_name": master.get_display_name()}
+    for master in masters_data
+]
+```
+
+## Обновления
+
+### 17 ноября 2025 - Дополнительное исправление
+
+После первого исправления была обнаружена еще одна ошибка в `financial_reports.py`:
+- **Commit:** `07304c0`
+- **Ошибка:** `AttributeError: 'ORMDatabase' object has no attribute 'connection'` на строке 733
+- **Решение:** Заменен прямой SQL-запрос на `get_all_masters()` с преобразованием данных
+
 ## Автор изменений
 
-Claude (AI Assistant)
-Дата: 17 ноября 2025
+Claude (AI Assistant)  
+Дата: 17 ноября 2025  
+Обновлено: 17 ноября 2025
