@@ -318,7 +318,9 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list, db: D
 
 
 @router.callback_query(F.data.startswith("refuse_order_master:"))
-async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list, state: FSMContext, db: Database):
+async def callback_refuse_order_master(
+    callback: CallbackQuery, user_roles: list, state: FSMContext, db: Database
+):
     """
     Начало процесса отклонения/отмены заявки мастером (запрос причины)
 
@@ -358,16 +360,18 @@ async def callback_refuse_order_master(callback: CallbackQuery, user_roles: list
         # Сохраняем order_id в state и запрашиваем причину отказа/отмены
         await state.set_state(RefuseOrderStates.enter_refuse_reason)
         await state.update_data(order_id=order_id)
-        
-        action_type = "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
-        
+
+        action_type = (
+            "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
+        )
+
         await callback.message.edit_text(
             f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
             f"Например: 'Слишком далеко', 'Нет запчастей', 'Некорректный адрес' и т.д.",
-            reply_markup=None
+            reply_markup=None,
         )
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"[REFUSE] Error in refuse_order_master: {e}")
         await callback.answer("Произошла ошибка при обработке запроса", show_alert=True)
@@ -383,33 +387,33 @@ async def process_refuse_reason(message: Message, state: FSMContext):
         state: FSM контекст
     """
     refuse_reason = message.text.strip()
-    
+
     if not refuse_reason or len(refuse_reason) < 3:
         await message.reply(
             "❌ Причина слишком короткая. Пожалуйста, укажите более подробную причину (минимум 3 символа):"
         )
         return
-    
+
     # Получаем данные из state
     data = await state.get_data()
     order_id = data.get("order_id")
-    
+
     if not order_id:
         await message.reply("❌ Ошибка: не найден ID заявки. Попробуйте еще раз.")
         await state.clear()
         return
-    
+
     db = Database()
     await db.connect()
-    
+
     try:
         order = await db.get_order_by_id(order_id)
         master = await db.get_master_by_telegram_id(message.from_user.id)
-        
+
         if not order or not master:
             await message.reply("❌ Ошибка: заявка или мастер не найдены.")
             return
-        
+
         # Удаляем карточки заявки в рабочей группе (если были сохранены)
         try:
             if hasattr(db, "get_active_group_messages_by_order"):
@@ -435,7 +439,11 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                     text(
                         "UPDATE orders SET status = :status, assigned_master_id = NULL, refuse_reason = :refuse_reason WHERE id = :order_id"
                     ),
-                    {"status": OrderStatus.NEW, "order_id": order_id, "refuse_reason": refuse_reason},
+                    {
+                        "status": OrderStatus.NEW,
+                        "order_id": order_id,
+                        "refuse_reason": refuse_reason,
+                    },
                 )
 
         # Перезагружаем заказ для получения актуальных данных
@@ -448,15 +456,17 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             details=f"Master refused order #{order_id}, reason: {refuse_reason}",
         )
 
-        action_type = "отменена" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отклонена"
-        
+        action_type = (
+            "отменена" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отклонена"
+        )
+
         # Проверяем, откуда был отказ (группа или админ)
         group_chat_id = data.get("group_chat_id")
         group_message_id = data.get("group_message_id")
         admin_message_id = data.get("admin_message_id")
         admin_chat_id = data.get("admin_chat_id")
         user_roles = data.get("user_roles", [])
-        
+
         if admin_message_id and admin_chat_id:
             # Отказ от админа/диспетчера
             await db.update_order_status(
@@ -465,27 +475,26 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 changed_by=message.from_user.id,
                 user_roles=user_roles,
             )
-            
+
             # Уведомляем мастера если был назначен
             if order.assigned_master_id and order.assigned_master_id != master.id:
                 assigned_master = await db.get_master_by_id(order.assigned_master_id)
                 if assigned_master:
                     from app.utils import safe_send_message
+
                     await safe_send_message(
                         message.bot,
                         assigned_master.telegram_id,
-                        f"ℹ️ Заявка #{order_id} была отклонена.\n"
-                        f"📝 Причина: {refuse_reason}",
+                        f"ℹ️ Заявка #{order_id} была отклонена.\n" f"📝 Причина: {refuse_reason}",
                         parse_mode="HTML",
                         max_attempts=3,
                     )
-            
+
             await message.reply(
-                f"✅ Заявка #{order_id} {action_type}.\n"
-                f"Причина: {refuse_reason}",
-                reply_markup=None
+                f"✅ Заявка #{order_id} {action_type}.\n" f"Причина: {refuse_reason}",
+                reply_markup=None,
             )
-            
+
             # Обновляем исходное сообщение админа
             try:
                 await message.bot.edit_message_text(
@@ -495,13 +504,13 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 )
             except Exception as e:
                 logger.error(f"Failed to update admin message: {e}")
-        
+
         elif group_chat_id and group_message_id:
             # Отказ из группы - обновляем сообщение в группе
             try:
-                from app.utils.helpers import format_datetime
                 from app.utils import get_now
-                
+                from app.utils.helpers import format_datetime
+
                 await message.bot.edit_message_text(
                     chat_id=group_chat_id,
                     message_id=group_message_id,
@@ -522,12 +531,12 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 )
             except Exception as e:
                 logger.error(f"Failed to update group message: {e}")
-            
+
             await message.reply(
                 f"✅ Заявка #{order_id} {action_type}.\n"
                 f"Причина: {refuse_reason}\n\n"
                 f"Сообщение в группе обновлено.",
-                reply_markup=get_main_menu_keyboard([UserRole.MASTER])
+                reply_markup=get_main_menu_keyboard([UserRole.MASTER]),
             )
         else:
             # Отказ из личного чата мастера
@@ -535,7 +544,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 f"✅ Заявка #{order_id} {action_type}.\n"
                 f"Причина: {refuse_reason}\n\n"
                 f"Диспетчер получил уведомление.",
-                reply_markup=get_main_menu_keyboard([UserRole.MASTER])
+                reply_markup=get_main_menu_keyboard([UserRole.MASTER]),
             )
 
         # Уведомляем диспетчера с retry механизмом
@@ -555,7 +564,11 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                     f"Не удалось уведомить диспетчера {order.dispatcher_id} после повторных попыток"
                 )
 
-        log_action(message.from_user.id, "REFUSE_ORDER_MASTER", f"Order #{order_id}, reason: {refuse_reason}")
+        log_action(
+            message.from_user.id,
+            "REFUSE_ORDER_MASTER",
+            f"Order #{order_id}, reason: {refuse_reason}",
+        )
 
     finally:
         await db.disconnect()
@@ -657,42 +670,42 @@ async def callback_low_amount_refusal_confirmation(callback: CallbackQuery, stat
         state: FSM контекст
     """
     answer = callback.data.split(":")[1]  # yes или no
-    
+
     data = await state.get_data()
     total_amount = data.get("total_amount", 0)
     order_id = data.get("order_id")
-    
+
     if answer == "yes":
         # Это отказ - запрашиваем причину
         await state.set_state(CompleteOrderStates.enter_refuse_reason_on_complete)
-        
+
         await callback.message.edit_text(
             f"📝 Укажите причину отказа от заявки #{order_id}:\n\n"
             f"Например: 'Слишком мелкий заказ', 'Клиент отказался', 'Нет смысла' и т.д.",
-            reply_markup=None
+            reply_markup=None,
         )
         await callback.answer()
     else:
         # Не отказ - продолжаем обычный процесс завершения
         await callback.answer("Продолжаем обычное завершение заявки")
         await callback.message.delete()
-        
+
         # Переходим к запросу суммы расходного материала
         await state.set_state(CompleteOrderStates.enter_materials_cost)
-        
+
         # Удаляем промпт-сообщение
         prompt_message_id = data.get("prompt_message_id")
         allowed_chat_id = data.get("allowed_chat_id") or callback.message.chat.id
-        
+
         if prompt_message_id:
             try:
                 from app.utils.retry import safe_delete_message
-                
+
                 await safe_delete_message(callback.bot, allowed_chat_id, prompt_message_id)
                 logger.info(f"Deleted prompt message {prompt_message_id} after total amount input")
             except Exception as e:
                 logger.warning(f"Failed to delete prompt message {prompt_message_id}: {e}")
-        
+
         materials_prompt = await callback.message.answer(
             f"✅ Общая сумма заказа: <b>{total_amount:.2f} ₽</b>\n\n"
             f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
@@ -700,7 +713,7 @@ async def callback_low_amount_refusal_confirmation(callback: CallbackQuery, stat
             f"Если расходного материала не было, введите: 0",
             parse_mode="HTML",
         )
-        
+
         # Сохраняем ID текущего сообщения для последующего удаления
         await state.update_data(
             current_prompt_message_id=materials_prompt.message_id,
@@ -718,29 +731,28 @@ async def process_refuse_reason_on_complete(message: Message, state: FSMContext)
         state: FSM контекст
     """
     refuse_reason = message.text.strip()
-    
+
     if not refuse_reason or len(refuse_reason) < 3:
         await message.reply(
             "❌ Причина слишком короткая. Пожалуйста, укажите более подробную причину (минимум 3 символа):"
         )
         return
-    
+
     # Получаем данные из state
     data = await state.get_data()
     order_id = data.get("order_id")
     acting_as_master_id = data.get("acting_as_master_id")
     total_amount = data.get("total_amount", 0)
-    
+
     # Устанавливаем значения для отказа
     await state.update_data(
-        materials_cost=0.0, 
-        has_review=False, 
-        out_of_city=False,
-        refuse_reason=refuse_reason
+        materials_cost=0.0, has_review=False, out_of_city=False, refuse_reason=refuse_reason
     )
-    
+
     # Завершаем заказ как отказ с указанной причиной
-    await complete_order_as_refusal(message, state, order_id, acting_as_master_id, refuse_reason=refuse_reason)
+    await complete_order_as_refusal(
+        message, state, order_id, acting_as_master_id, refuse_reason=refuse_reason
+    )
 
 
 @router.callback_query(F.data.startswith("refuse_order_complete:"))
@@ -1417,22 +1429,28 @@ async def process_total_amount(message: Message, state: FSMContext):
     # Если сумма до 1000 рублей, спрашиваем - это отказ?
     if total_amount < 1000:
         await state.set_state(CompleteOrderStates.confirm_low_amount_refusal)
-        
+
         # Создаем инлайн-клавиатуру
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="✅ Да, это отказ", callback_data="low_amount_is_refusal:yes"),
-                InlineKeyboardButton(text="❌ Нет, продолжить", callback_data="low_amount_is_refusal:no"),
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Да, это отказ", callback_data="low_amount_is_refusal:yes"
+                    ),
+                    InlineKeyboardButton(
+                        text="❌ Нет, продолжить", callback_data="low_amount_is_refusal:no"
+                    ),
+                ]
             ]
-        ])
-        
+        )
+
         await message.reply(
             f"⚠️ Указана сумма {total_amount:.2f} ₽ (меньше 1000 рублей).\n\n"
             f"<b>Это отказ от заявки?</b>",
             parse_mode="HTML",
-            reply_markup=keyboard
+            reply_markup=keyboard,
         )
         return
 
@@ -2633,7 +2651,7 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
 
         # Получаем данные о том, кто инициировал перевод в DR
         acting_as_master_id = data.get("acting_as_master_id")
-        
+
         # Уведомляем диспетчера
         if order.dispatcher_id:
             master = await db.get_master_by_telegram_id(message.from_user.id)
@@ -2662,14 +2680,14 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 logger.info(f"DR notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
-        
+
         # Уведомляем мастера в рабочую группу, если перевод сделан админом от его имени
         if acting_as_master_id and order.assigned_master_id:
             master = await db.get_master_by_id(order.assigned_master_id)
             if master and master.telegram_id != message.from_user.id and master.work_chat_id:
                 # Форматируем дату с расчетом дней для отображения
-                from app.utils.date_parser import format_estimated_completion_with_days
                 from app.utils import safe_send_message
+                from app.utils.date_parser import format_estimated_completion_with_days
 
                 completion_date_formatted = format_estimated_completion_with_days(completion_date)
 
@@ -2692,11 +2710,17 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                     parse_mode="HTML",
                 )
                 if result:
-                    logger.info(f"DR notification sent to master's work group {master.work_chat_id}")
+                    logger.info(
+                        f"DR notification sent to master's work group {master.work_chat_id}"
+                    )
                 else:
-                    logger.error(f"Failed to notify master's work group {master.work_chat_id} about DR status")
+                    logger.error(
+                        f"Failed to notify master's work group {master.work_chat_id} about DR status"
+                    )
             elif master and master.telegram_id != message.from_user.id:
-                logger.warning(f"Master {master.telegram_id} has no work_chat_id, DR notification not sent")
+                logger.warning(
+                    f"Master {master.telegram_id} has no work_chat_id, DR notification not sent"
+                )
 
         log_action(message.from_user.id, "LONG_REPAIR_ORDER", f"Order #{order_id}")
         logger.info(f"✅ Order #{order_id} successfully translated to long repair")
@@ -2893,7 +2917,11 @@ async def callback_download_archive_report(callback: CallbackQuery, db: Database
 
 
 async def complete_order_as_refusal(
-    message: Message, state: FSMContext, order_id: int, user_telegram_id: int | None = None, refuse_reason: str | None = None
+    message: Message,
+    state: FSMContext,
+    order_id: int,
+    user_telegram_id: int | None = None,
+    refuse_reason: str | None = None,
 ):
     """
     Завершение заказа как отказ (для заявок в 0 рублей или с суммой <1000р)
@@ -3002,7 +3030,7 @@ async def complete_order_as_refusal(
             changed_by=message.from_user.id,
             user_roles=["MASTER"],  # Мастер завершает заказ
         )
-        
+
         # Сохраняем причину отказа если указана
         if refuse_reason:
             if hasattr(db, "update_order_field"):
@@ -3011,16 +3039,19 @@ async def complete_order_as_refusal(
                 # Legacy SQL
                 async with db.get_session() as session:
                     from sqlalchemy import text
+
                     await session.execute(
-                        text("UPDATE orders SET refuse_reason = :refuse_reason WHERE id = :order_id"),
-                        {"refuse_reason": refuse_reason, "order_id": order_id}
+                        text(
+                            "UPDATE orders SET refuse_reason = :refuse_reason WHERE id = :order_id"
+                        ),
+                        {"refuse_reason": refuse_reason, "order_id": order_id},
                     )
 
         # Добавляем в лог
         log_details = f"Order #{order_id} completed as refusal (0 rubles)"
         if refuse_reason:
             log_details += f", reason: {refuse_reason}"
-        
+
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="COMPLETE_ORDER_AS_REFUSAL",
@@ -3065,24 +3096,29 @@ async def complete_order_as_refusal(
         await state.clear()
 
         # Отправляем подтверждение
-        await message.reply(
+        confirmation_text = (
             f"❌ <b>Заявка #{order_id} завершена как отказ</b>\n\n"
             f"💰 Сумма заказа: 0.00 ₽\n"
-            f"📋 Статус: Отказ\n\n"
-            f"Заявка автоматически помечена как отказ, так как сумма составляет 0 рублей.",
-            parse_mode="HTML",
+            f"📋 Статус: Отказ\n"
         )
+        if refuse_reason:
+            confirmation_text += f"\n📝 Причина отказа: {refuse_reason}"
+        else:
+            confirmation_text += "\nЗаявка автоматически помечена как отказ, так как сумма составляет 0 рублей."
+        
+        await message.reply(confirmation_text, parse_mode="HTML")
 
         # Уведомляем диспетчера
         if order.dispatcher_id:
             from app.utils import safe_send_message
 
+            dispatcher_reason = refuse_reason if refuse_reason else "Сумма заказа 0 рублей"
             result = await safe_send_message(
                 message.bot,
                 order.dispatcher_id,
                 f"❌ Заявка #{order_id} завершена как отказ\n"
                 f"Мастер: {master.get_display_name()}\n"
-                f"Причина: Сумма заказа 0 рублей",
+                f"Причина: {dispatcher_reason}",
                 parse_mode="HTML",
             )
             if not result:
@@ -3093,6 +3129,7 @@ async def complete_order_as_refusal(
             if master.work_chat_id:
                 from app.utils import safe_send_message
 
+                group_reason = refuse_reason if refuse_reason else "Отказ от заявки"
                 master_notification = (
                     f"❌ <b>Заявка #{order_id} завершена как отказ</b>\n\n"
                     f"<i>Администратор {message.from_user.full_name} изменил статус от имени мастера {master.get_display_name()}</i>\n\n"
@@ -3100,7 +3137,7 @@ async def complete_order_as_refusal(
                     f"🔧 Техника: {order.equipment_type}\n"
                     f"📝 {order.description}\n\n"
                     f"💰 Сумма заказа: 0.00 ₽\n"
-                    f"📋 Причина: Отказ от заявки"
+                    f"📋 Причина: {group_reason}"
                 )
 
                 result = await safe_send_message(
@@ -3110,11 +3147,17 @@ async def complete_order_as_refusal(
                     parse_mode="HTML",
                 )
                 if result:
-                    logger.info(f"REFUSED notification sent to master's work group {master.work_chat_id}")
+                    logger.info(
+                        f"REFUSED notification sent to master's work group {master.work_chat_id}"
+                    )
                 else:
-                    logger.error(f"Failed to notify master's work group {master.work_chat_id} about REFUSED status")
+                    logger.error(
+                        f"Failed to notify master's work group {master.work_chat_id} about REFUSED status"
+                    )
             else:
-                logger.warning(f"Master {master.telegram_id} has no work_chat_id, REFUSED notification not sent")
+                logger.warning(
+                    f"Master {master.telegram_id} has no work_chat_id, REFUSED notification not sent"
+                )
 
         logger.info(f"Order #{order_id} completed as refusal by master {master.id}")
 
