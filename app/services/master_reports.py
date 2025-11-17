@@ -76,13 +76,14 @@ class MasterReportsService:
         # Создаем Excel workbook
         wb = Workbook()
 
-        # Удаляем стандартный лист
-        if "Sheet" in wb.sheetnames:
-            del wb["Sheet"]
-
         # Создаем листы
         ws_active = wb.create_sheet("Активные заявки", 0)
         ws_completed = wb.create_sheet("Завершенные заявки", 1)
+        
+        # Удаляем стандартный лист (если он есть)
+        for sheet_name in wb.sheetnames:
+            if sheet_name in ["Sheet", "Sheet1"]:
+                del wb[sheet_name]
 
         # Заполняем листы
         await self._fill_active_orders_sheet(ws_active, active_orders, master)
