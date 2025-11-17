@@ -1372,13 +1372,13 @@ class ExcelExportService:
             cell_f1.alignment = center_alignment
 
             # Растягиваем заголовок на остальные столбцы
-            for col in range(7, 16):  # G1:O1
+            for col in range(7, 9):  # G1:H1
                 ws.cell(row=row, column=col).fill = header_fill
 
             ws.row_dimensions[row].height = 25
 
             row += 1
-            ws.merge_cells(f"A{row}:N{row}")
+            ws.merge_cells(f"A{row}:H{row}")
             cell = ws[f"A{row}"]
             cell.value = (
                 f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
@@ -1387,53 +1387,6 @@ class ExcelExportService:
             cell.alignment = center_alignment
 
             row += 2
-
-            # Статистика мастера
-            stats_cursor = await self.db.connection.execute(
-                """
-                SELECT
-                    COUNT(*) as total_orders,
-                    SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
-                    SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
-                    SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
-                    SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
-                    AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
-                FROM orders
-                WHERE assigned_master_id = ? AND deleted_at IS NULL
-                """,
-                (master_id,),
-            )
-            stats = await stats_cursor.fetchone()
-
-            # Блок статистики
-            ws[f"A{row}"] = "СТАТИСТИКА:"
-            ws[f"A{row}"].font = Font(bold=True, size=11)
-            ws.merge_cells(f"A{row}:N{row}")
-            row += 1
-
-            stat_data = [
-                ["Всего заявок:", stats["total_orders"] or 0],
-                ["Завершено:", stats["closed"] or 0],
-                ["В работе:", stats["in_work"] or 0],
-                ["Отказано:", stats["refused"] or 0],
-                ["Общая сумма:", f"{float(stats['total_sum'] or 0):,.2f} ₽"],
-                ["Материалы:", f"{float(stats['materials_sum'] or 0):,.2f} ₽"],
-                ["Сдача в кассу:", f"{float(stats['company_profit_sum'] or 0):,.2f} ₽"],
-                ["Средний чек:", f"{float(stats['avg_check'] or 0):,.2f} ₽"],
-            ]
-
-            for label, value in stat_data:
-                ws[f"A{row}"] = label
-                ws[f"A{row}"].font = Font(bold=True)
-                ws[f"B{row}"] = value
-                ws[f"B{row}"].font = Font(bold=True)
-                ws[f"B{row}"].alignment = right_alignment
-                ws.merge_cells(f"B{row}:C{row}")
-                row += 1
-
-            row += 1
 
             # Заголовки колонок таблицы заявок
             headers = [
@@ -1445,12 +1398,6 @@ class ExcelExportService:
                 "Телефон",
                 "Создана",
                 "Обновлена",
-                "Сумма",
-                "Материалы",
-                "Прибыль мастера",
-                "Прибыль компании",
-                "Выезд",
-                "Отзыв",
             ]
 
             for col_idx, header in enumerate(headers, start=1):
@@ -1466,9 +1413,9 @@ class ExcelExportService:
             orders = active_orders
 
             if not orders:
-                ws[f"A{row}"] = "У мастера пока нет заявок"
+                ws[f"A{row}"] = "У мастера пока нет активных заявок"
                 ws[f"A{row}"].font = Font(italic=True)
-                ws.merge_cells(f"A{row}:N{row}")
+                ws.merge_cells(f"A{row}:H{row}")
             else:
                 # Выводим заявки
                 for order in orders:
@@ -1493,12 +1440,6 @@ class ExcelExportService:
                         order["client_phone"],
                         order["created_at"][:16] if order["created_at"] else "",
                         order["updated_at"][:16] if order["updated_at"] else "",
-                        float(order["total_amount"] or 0),
-                        float(order["materials_cost"] or 0),
-                        float(order["master_profit"] or 0),
-                        float(order["company_profit"] or 0),
-                        "Да" if order["out_of_city"] else "",
-                        "Да" if order["has_review"] else "",
                     ]
 
                     for col_idx, value in enumerate(data, start=1):
@@ -1523,72 +1464,21 @@ class ExcelExportService:
                                 cell.fill = PatternFill(
                                     start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
                                 )
-                        elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
+                        else:  # Текстовые поля
                             cell.alignment = left_alignment
-                        else:
-                            cell.alignment = center_alignment if col_idx >= 13 else right_alignment
-                            if col_idx >= 9 and col_idx <= 12:  # Денежные поля
-                                cell.number_format = "#,##0.00 ₽"
 
                     row += 1
-
-                # Итоги
-                row += 1
-                ws[f"A{row}"] = "ИТОГО:"
-                ws[f"A{row}"].font = Font(bold=True, size=11)
-                ws.merge_cells(f"A{row}:H{row}")
-                
-                # Статистика по отказам
-                refused_count = sum(1 for o in orders if o["status"] == "REFUSED")
-                refused_with_reason = sum(1 for o in orders if o["status"] == "REFUSED" and o["refuse_reason"])
-                if refused_count > 0:
-                    row += 1
-                    ws[f"A{row}"] = f"Отказов: {refused_count} (с причиной: {refused_with_reason})"
-                    ws[f"A{row}"].font = Font(italic=True, size=10, color="FF0000")
-                    ws.merge_cells(f"A{row}:H{row}")
-
-                total_sum = sum(
-                    float(o["total_amount"] or 0) for o in orders if o["status"] == "CLOSED"
-                )
-                total_materials = sum(
-                    float(o["materials_cost"] or 0) for o in orders if o["status"] == "CLOSED"
-                )
-                total_master_profit = sum(
-                    float(o["master_profit"] or 0) for o in orders if o["status"] == "CLOSED"
-                )
-                total_company_profit = sum(
-                    float(o["company_profit"] or 0) for o in orders if o["status"] == "CLOSED"
-                )
-
-                for col, val in [
-                    (f"I{row}", total_sum),
-                    (f"J{row}", total_materials),
-                    (f"K{row}", total_master_profit),
-                    (f"L{row}", total_company_profit),
-                ]:
-                    cell = ws[col]
-                    cell.value = val
-                    cell.font = Font(bold=True, size=11)
-                    cell.number_format = "#,##0.00 ₽"
-                    cell.alignment = right_alignment
-                    cell.border = thin_border
 
             # Ширина столбцов для активных заявок
             widths = {
-                "A": 20,  # ID - делаем шире для полного отображения названий статистики
-                "B": 15,
-                "C": 20,
-                "D": 20,
-                "E": 30,
-                "F": 15,
-                "G": 18,
-                "H": 18,
-                "I": 15,
-                "J": 15,
-                "K": 18,
-                "L": 18,
-                "M": 10,
-                "N": 10,
+                "A": 12,  # ID
+                "B": 15,  # Статус
+                "C": 20,  # Тип техники
+                "D": 20,  # Клиент
+                "E": 35,  # Адрес
+                "F": 15,  # Телефон
+                "G": 18,  # Создана
+                "H": 18,  # Обновлена
             }
             for col, width in widths.items():
                 ws.column_dimensions[col].width = width
