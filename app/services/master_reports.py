@@ -67,11 +67,11 @@ class MasterReportsService:
         if period_start and period_end:
             all_orders = [o for o in all_orders if period_start <= o.created_at <= period_end]
 
-        # Разделяем на активные и завершенные
+        # Разделяем на активные и завершенные (включаем REFUSED в завершенные)
         active_orders = [
             o for o in all_orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]
         ]
-        completed_orders = [o for o in all_orders if o.status == OrderStatus.CLOSED]
+        completed_orders = [o for o in all_orders if o.status in [OrderStatus.CLOSED, OrderStatus.REFUSED]]
 
         # Создаем Excel workbook
         wb = Workbook()
@@ -231,13 +231,13 @@ class MasterReportsService:
         )
 
         # Заголовок
-        ws.merge_cells("A1:J1")
+        ws.merge_cells("A1:L1")
         ws["A1"] = f"ЗАВЕРШЕННЫЕ ЗАЯВКИ - {master.get_display_name()}"
         ws["A1"].font = Font(bold=True, size=14, color="28a745")
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
         # Дата последнего обновления
-        ws.merge_cells("A2:J2")
+        ws.merge_cells("A2:L2")
         ws["A2"] = f"📅 Последнее обновление: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')} (UTC)"
         ws["A2"].alignment = Alignment(horizontal="center")
         ws["A2"].font = Font(italic=True, color="666666")
@@ -245,6 +245,7 @@ class MasterReportsService:
         # Заголовки столбцов
         headers = [
             "№ Заявки",
+            "Статус",
             "Оборудование",
             "Клиент",
             "Телефон",
@@ -254,6 +255,7 @@ class MasterReportsService:
             "Прибыль мастера",
             "Прибыль компании",
             "Дата завершения",
+            "Причина отказа",
         ]
 
         for col_num, header in enumerate(headers, 1):
@@ -273,25 +275,42 @@ class MasterReportsService:
 
         for order in orders:
             ws.cell(row=row_num, column=1, value=order.id).border = border
-            ws.cell(row=row_num, column=2, value=order.equipment_type or "").border = border
-            ws.cell(row=row_num, column=3, value=order.client_name or "").border = border
-            ws.cell(row=row_num, column=4, value=order.client_phone or "").border = border
-            ws.cell(row=row_num, column=5, value=order.client_address or "").border = border
+            
+            # Статус
+            from app.config import OrderStatus
+            status_name = OrderStatus.get_status_name(order.status)
+            status_cell = ws.cell(row=row_num, column=2, value=status_name)
+            status_cell.border = border
+            # Подсветка для отказов
+            if order.status == OrderStatus.REFUSED:
+                status_cell.fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+            
+            ws.cell(row=row_num, column=3, value=order.equipment_type or "").border = border
+            ws.cell(row=row_num, column=4, value=order.client_name or "").border = border
+            ws.cell(row=row_num, column=5, value=order.client_phone or "").border = border
+            ws.cell(row=row_num, column=6, value=order.client_address or "").border = border
 
             amount = order.total_amount or 0
             materials = order.materials_cost or 0
             master_profit = order.master_profit or 0
             company_profit = order.company_profit or 0
 
-            ws.cell(row=row_num, column=6, value=f"{amount:.2f}").border = border
-            ws.cell(row=row_num, column=7, value=f"{materials:.2f}").border = border
-            ws.cell(row=row_num, column=8, value=f"{master_profit:.2f}").border = border
-            ws.cell(row=row_num, column=9, value=f"{company_profit:.2f}").border = border
+            ws.cell(row=row_num, column=7, value=f"{amount:.2f}").border = border
+            ws.cell(row=row_num, column=8, value=f"{materials:.2f}").border = border
+            ws.cell(row=row_num, column=9, value=f"{master_profit:.2f}").border = border
+            ws.cell(row=row_num, column=10, value=f"{company_profit:.2f}").border = border
             ws.cell(
                 row=row_num,
-                column=10,
+                column=11,
                 value=format_datetime(order.updated_at) if order.updated_at else "",
             ).border = border
+            
+            # Причина отказа
+            refuse_reason = order.refuse_reason if hasattr(order, 'refuse_reason') else None
+            refuse_cell = ws.cell(row=row_num, column=12, value=refuse_reason or "")
+            refuse_cell.border = border
+            if refuse_reason:
+                refuse_cell.alignment = Alignment(wrap_text=True)
 
             total_amount += amount
             total_materials += materials
@@ -303,20 +322,22 @@ class MasterReportsService:
         # Итого
         row_num += 1
         ws.cell(row=row_num, column=1, value="ИТОГО:").font = Font(bold=True)
-        ws.cell(row=row_num, column=2, value=f"{len(orders)} завершенных").font = Font(bold=True)
-        ws.cell(row=row_num, column=6, value=f"{total_amount:.2f} ₽").font = Font(bold=True)
-        ws.cell(row=row_num, column=7, value=f"{total_materials:.2f} ₽").font = Font(bold=True)
-        ws.cell(row=row_num, column=8, value=f"{total_master_profit:.2f} ₽").font = Font(
+        ws.cell(row=row_num, column=3, value=f"{len(orders)} завершенных").font = Font(bold=True)
+        ws.cell(row=row_num, column=7, value=f"{total_amount:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=8, value=f"{total_materials:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=9, value=f"{total_master_profit:.2f} ₽").font = Font(
             bold=True, color="28a745"
         )
-        ws.cell(row=row_num, column=9, value=f"{total_company_profit:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=10, value=f"{total_company_profit:.2f} ₽").font = Font(bold=True)
 
         # Автоширина столбцов
-        for col_num in range(1, 11):
+        for col_num in range(1, 13):
             ws.column_dimensions[get_column_letter(col_num)].width = 15
-        ws.column_dimensions["A"].width = 20  # № Заявки - делаем шире
-        ws.column_dimensions["B"].width = 20  # Оборудование
-        ws.column_dimensions["E"].width = 30  # Адрес
+        ws.column_dimensions["A"].width = 12  # № Заявки
+        ws.column_dimensions["B"].width = 12  # Статус
+        ws.column_dimensions["C"].width = 18  # Оборудование
+        ws.column_dimensions["F"].width = 30  # Адрес
+        ws.column_dimensions["L"].width = 35  # Причина отказа - делаем шире
 
     async def get_master_archived_reports(self, master_id: int, limit: int = 10):
         """
