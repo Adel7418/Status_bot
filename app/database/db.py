@@ -1017,7 +1017,7 @@ class Database:
             LEFT JOIN users u1 ON o.dispatcher_id = u1.telegram_id
             LEFT JOIN masters m ON o.assigned_master_id = m.id
             LEFT JOIN users u2 ON m.telegram_id = u2.telegram_id
-            WHERE 1=1
+            WHERE o.deleted_at IS NULL
         """
         params: list[Any] = []
 

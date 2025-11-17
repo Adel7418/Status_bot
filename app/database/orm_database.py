@@ -697,12 +697,15 @@ class ORMDatabase:
     async def get_all_orders(
         self, status: str | None = None, master_id: int | None = None, limit: int | None = None
     ) -> list[Order]:
-        """Получение всех заявок с фильтрацией"""
+        """Получение всех заявок с фильтрацией (исключая удаленные)"""
         async with self.get_session() as session:
             stmt = select(Order).options(
                 joinedload(Order.assigned_master).joinedload(Master.user),
                 joinedload(Order.dispatcher),
             )
+
+            # Исключаем удаленные заявки
+            stmt = stmt.where(Order.deleted_at.is_(None))
 
             if status:
                 stmt = stmt.where(Order.status == status)
@@ -1031,7 +1034,7 @@ class ORMDatabase:
         status: str | None = None,
         master_id: int | None = None,
     ) -> list[Order]:
-        """Получение заявок за период"""
+        """Получение заявок за период (исключая удаленные)"""
         async with self.get_session() as session:
             stmt = (
                 select(Order)
@@ -1039,7 +1042,11 @@ class ORMDatabase:
                     joinedload(Order.assigned_master).joinedload(Master.user),
                     joinedload(Order.dispatcher),
                 )
-                .where(and_(Order.created_at >= start_date, Order.created_at <= end_date))
+                .where(and_(
+                    Order.created_at >= start_date,
+                    Order.created_at <= end_date,
+                    Order.deleted_at.is_(None)  # Исключаем удаленные заявки
+                ))
             )
 
             if status:
