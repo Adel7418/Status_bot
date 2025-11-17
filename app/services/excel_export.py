@@ -1540,7 +1540,7 @@ class ExcelExportService:
                 
                 # Статистика по отказам
                 refused_count = sum(1 for o in orders if o["status"] == "REFUSED")
-                refused_with_reason = sum(1 for o in orders if o["status"] == "REFUSED" and o.get("refuse_reason"))
+                refused_with_reason = sum(1 for o in orders if o["status"] == "REFUSED" and o["refuse_reason"])
                 if refused_count > 0:
                     row += 1
                     ws[f"A{row}"] = f"Отказов: {refused_count} (с причиной: {refused_with_reason})"
@@ -1723,7 +1723,7 @@ class ExcelExportService:
                 
                 # Статистика по отказам
                 refused_count = sum(1 for o in completed_orders if o["status"] == "REFUSED")
-                refused_with_reason = sum(1 for o in completed_orders if o["status"] == "REFUSED" and o.get("refuse_reason"))
+                refused_with_reason = sum(1 for o in completed_orders if o["status"] == "REFUSED" and o["refuse_reason"])
                 closed_count = sum(1 for o in completed_orders if o["status"] == "CLOSED")
                 
                 row += 1
