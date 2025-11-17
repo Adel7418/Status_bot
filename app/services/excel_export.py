@@ -1353,22 +1353,26 @@ class ExcelExportService:
 
             # Заголовок
             row = 1
-            # A1: "ОТЧЕТ ПО МАСТЕРУ:"
-            cell_a1 = ws.cell(row=row, column=1)
-            cell_a1.value = "ОТЧЕТ ПО МАСТЕРУ:"
-            cell_a1.font = header_font
-            cell_a1.fill = header_fill
-            cell_a1.alignment = center_alignment
+            # Заполняем A1:D1 фоном
+            for col in range(1, 5):  # A1:D1
+                ws.cell(row=row, column=col).fill = header_fill
+            
+            # E1: "ОТЧЕТ ПО МАСТЕРУ:"
+            cell_e1 = ws.cell(row=row, column=5)
+            cell_e1.value = "ОТЧЕТ ПО МАСТЕРУ:"
+            cell_e1.font = header_font
+            cell_e1.fill = header_fill
+            cell_e1.alignment = center_alignment
 
-            # B1: имя мастера
-            cell_b1 = ws.cell(row=row, column=2)
-            cell_b1.value = master_name
-            cell_b1.font = header_font
-            cell_b1.fill = header_fill
-            cell_b1.alignment = center_alignment
+            # F1: имя мастера
+            cell_f1 = ws.cell(row=row, column=6)
+            cell_f1.value = master_name
+            cell_f1.font = header_font
+            cell_f1.fill = header_fill
+            cell_f1.alignment = center_alignment
 
             # Растягиваем заголовок на остальные столбцы
-            for col in range(3, 15):  # C1:N1
+            for col in range(7, 16):  # G1:O1
                 ws.cell(row=row, column=col).fill = header_fill
 
             ws.row_dimensions[row].height = 25
@@ -1601,19 +1605,23 @@ class ExcelExportService:
             row = 1
             
             # Заголовок
-            cell_a1 = ws.cell(row=row, column=1)
-            cell_a1.value = "ЗАВЕРШЕННЫЕ ЗАЯВКИ:"
-            cell_a1.font = header_font
-            cell_a1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
-            cell_a1.alignment = center_alignment
+            # Заполняем A1:D1 фоном
+            for col in range(1, 5):  # A1:D1
+                ws.cell(row=row, column=col).fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
             
-            cell_b1 = ws.cell(row=row, column=2)
-            cell_b1.value = master_name
-            cell_b1.font = header_font
-            cell_b1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
-            cell_b1.alignment = center_alignment
+            cell_e1 = ws.cell(row=row, column=5)
+            cell_e1.value = "ЗАВЕРШЕННЫЕ ЗАЯВКИ:"
+            cell_e1.font = header_font
+            cell_e1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+            cell_e1.alignment = center_alignment
             
-            for col in range(3, 16):
+            cell_f1 = ws.cell(row=row, column=6)
+            cell_f1.value = master_name
+            cell_f1.font = header_font
+            cell_f1.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+            cell_f1.alignment = center_alignment
+            
+            for col in range(7, 16):
                 ws.cell(row=row, column=col).fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
             
             ws.row_dimensions[row].height = 25
