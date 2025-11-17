@@ -820,9 +820,11 @@ class ORMDatabase:
             logger.info(f"Мастер {master_id} назначен на заявку #{order_id}")
             return True
 
-    async def unassign_master_from_order(self, order_id: int, refuse_reason: str | None = None) -> bool:
+    async def unassign_master_from_order(
+        self, order_id: int, refuse_reason: str | None = None
+    ) -> bool:
         """Снятие мастера с заявки
-        
+
         Args:
             order_id: ID заявки
             refuse_reason: Причина отказа/отмены (опционально)
@@ -842,7 +844,7 @@ class ORMDatabase:
             order.status = OrderStatus.NEW
             order.updated_at = get_now()
             order.version += 1
-            
+
             # Сохраняем причину отказа если указана
             if refuse_reason:
                 order.refuse_reason = refuse_reason
@@ -936,6 +938,8 @@ class ORMDatabase:
             # DR поля
             "estimated_completion_date",
             "prepayment_amount",
+            # Причина отказа
+            "refuse_reason",
         }
 
         if field not in allowed_fields:
@@ -1051,11 +1055,13 @@ class ORMDatabase:
                     joinedload(Order.assigned_master).joinedload(Master.user),
                     joinedload(Order.dispatcher),
                 )
-                .where(and_(
-                    Order.created_at >= start_date,
-                    Order.created_at <= end_date,
-                    Order.deleted_at.is_(None)  # Исключаем удаленные заявки
-                ))
+                .where(
+                    and_(
+                        Order.created_at >= start_date,
+                        Order.created_at <= end_date,
+                        Order.deleted_at.is_(None),  # Исключаем удаленные заявки
+                    )
+                )
             )
 
             if status:
@@ -1487,7 +1493,7 @@ class ORMDatabase:
             # Если это ставка по умолчанию, снимаем флаг с других ставок
             if is_default:
                 stmt = select(SpecializationRate).where(
-                    SpecializationRate.is_default == True,
+                    SpecializationRate.is_default.is_(True),
                     SpecializationRate.id != rate.id if rate.id else True,
                     SpecializationRate.deleted_at.is_(None),
                 )
