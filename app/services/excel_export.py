@@ -1661,16 +1661,7 @@ class ExcelExportService:
                 ws[f"A{row}"].font = Font(bold=True, size=11)
                 ws.merge_cells(f"A{row}:H{row}")
                 
-                # Статистика по отказам
-                refused_count = sum(1 for o in completed_orders if o["status"] == "REFUSED")
-                refused_with_reason = sum(1 for o in completed_orders if o["status"] == "REFUSED" and o["refuse_reason"])
-                closed_count = sum(1 for o in completed_orders if o["status"] == "CLOSED")
-                
-                row += 1
-                ws[f"A{row}"] = f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
-                ws[f"A{row}"].font = Font(italic=True, size=10)
-                ws.merge_cells(f"A{row}:H{row}")
-                
+                # Подсчитываем суммы
                 total_sum_completed = sum(
                     float(o["total_amount"] or 0) for o in completed_orders if o["status"] == "CLOSED"
                 )
@@ -1684,7 +1675,7 @@ class ExcelExportService:
                     float(o["company_profit"] or 0) for o in completed_orders if o["status"] == "CLOSED"
                 )
                 
-                row += 1
+                # Добавляем суммы на ту же строку что и "ИТОГО:"
                 for col, val in [
                     (f"I{row}", total_sum_completed),
                     (f"J{row}", total_materials_completed),
@@ -1697,6 +1688,16 @@ class ExcelExportService:
                     cell.number_format = "#,##0.00 ₽"
                     cell.alignment = right_alignment
                     cell.border = thin_border
+                
+                # Статистика по отказам на следующей строке
+                refused_count = sum(1 for o in completed_orders if o["status"] == "REFUSED")
+                refused_with_reason = sum(1 for o in completed_orders if o["status"] == "REFUSED" and o["refuse_reason"])
+                closed_count = sum(1 for o in completed_orders if o["status"] == "CLOSED")
+                
+                row += 1
+                ws[f"A{row}"] = f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
+                ws[f"A{row}"].font = Font(italic=True, size=10)
+                ws.merge_cells(f"A{row}:H{row}")
             
             # Ширина столбцов для завершенных заявок
             widths_completed = {
