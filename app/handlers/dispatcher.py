@@ -753,12 +753,14 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     sent_message = await message.answer(
         "📍 Шаг 3/7: Введите адрес клиента:",
@@ -834,12 +836,14 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     sent_message = await message.answer(
         "📞 Шаг 5/7: Введите телефон клиента:\n" "<i>(в формате +7XXXXXXXXXX)</i>",
@@ -917,12 +921,14 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     sent_message = await message.answer(
         "👤 Шаг 4/7: Введите имя клиента:",
@@ -1061,12 +1067,14 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     sent_message = await message.answer(
         "📝 Шаг 6/7: Введите дополнительные заметки (необязательно):\n"
@@ -1175,12 +1183,14 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     # Переходим к вводу времени прибытия (не пропускаем этот шаг!)
     await state.set_state(CreateOrderStates.scheduled_time)
@@ -1232,12 +1242,14 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     # Переходим к вводу времени прибытия
     await state.set_state(CreateOrderStates.scheduled_time)
@@ -1347,12 +1359,14 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                 if last_msg_id := data.get("last_bot_message_id"):
                     try:
                         await message.bot.delete_message(message.chat.id, last_msg_id)
-                    except Exception:
-                        pass
+                        logger.debug(f"Deleted bot message {last_msg_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
                 try:
                     await message.delete()
-                except Exception:
-                    pass
+                    logger.debug(f"Deleted user message {message.message_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
                 # Формируем сообщение с предупреждением если есть
                 confirmation_text = f"✅ <b>Дата распознана:</b>\n\n{user_friendly}"
@@ -1427,12 +1441,14 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     await state.update_data(scheduled_time=scheduled_time)
     await state.set_state(CreateOrderStates.confirm)
@@ -1458,12 +1474,14 @@ async def skip_scheduled_time(message: Message, state: FSMContext, user_role: st
     if last_msg_id := data.get("last_bot_message_id"):
         try:
             await message.bot.delete_message(message.chat.id, last_msg_id)
-        except Exception:
-            pass
+            logger.debug(f"Deleted bot message {last_msg_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
         await message.delete()
-    except Exception:
-        pass
+        logger.debug(f"Deleted user message {message.message_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete user message {message.message_id}: {e}")
 
     await state.update_data(scheduled_time=None)
     await show_order_confirmation(message, state)
