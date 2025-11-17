@@ -1520,6 +1520,53 @@ class ExcelExportService:
             
             row += 2
             
+            # Статистика мастера
+            stats_cursor = await self.db.connection.execute(
+                """
+                SELECT
+                    COUNT(*) as total_orders,
+                    SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
+                    SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
+                    SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
+                    SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
+                    SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
+                    SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
+                    AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
+                FROM orders
+                WHERE assigned_master_id = ? AND deleted_at IS NULL
+                """,
+                (master_id,),
+            )
+            stats = await stats_cursor.fetchone()
+
+            # Блок статистики
+            ws[f"A{row}"] = "СТАТИСТИКА:"
+            ws[f"A{row}"].font = Font(bold=True, size=11)
+            ws.merge_cells(f"A{row}:O{row}")
+            row += 1
+
+            stat_data = [
+                ["Всего заявок:", stats["total_orders"] or 0],
+                ["Завершено:", stats["closed"] or 0],
+                ["В работе:", stats["in_work"] or 0],
+                ["Отказано:", stats["refused"] or 0],
+                ["Общая сумма:", f"{float(stats['total_sum'] or 0):,.2f} ₽"],
+                ["Материалы:", f"{float(stats['materials_sum'] or 0):,.2f} ₽"],
+                ["Сдача в кассу:", f"{float(stats['company_profit_sum'] or 0):,.2f} ₽"],
+                ["Средний чек:", f"{float(stats['avg_check'] or 0):,.2f} ₽"],
+            ]
+
+            for label, value in stat_data:
+                ws[f"A{row}"] = label
+                ws[f"A{row}"].font = Font(bold=True)
+                ws[f"B{row}"] = value
+                ws[f"B{row}"].font = Font(bold=True)
+                ws[f"B{row}"].alignment = right_alignment
+                ws.merge_cells(f"B{row}:C{row}")
+                row += 1
+
+            row += 1
+            
             # Заголовки колонок для завершенных заявок
             headers_completed = [
                 "ID",
