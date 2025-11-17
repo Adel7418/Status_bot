@@ -1451,7 +1451,6 @@ class ExcelExportService:
                 "Прибыль компании",
                 "Выезд",
                 "Отзыв",
-                "Причина отказа",
             ]
 
             for col_idx, header in enumerate(headers, start=1):
@@ -1500,7 +1499,6 @@ class ExcelExportService:
                         float(order["company_profit"] or 0),
                         "Да" if order["out_of_city"] else "",
                         "Да" if order["has_review"] else "",
-                        order["refuse_reason"] or "",
                     ]
 
                     for col_idx, value in enumerate(data, start=1):
@@ -1527,8 +1525,6 @@ class ExcelExportService:
                                 )
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
-                        elif col_idx == 15:  # Причина отказа
-                            cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
                         else:
                             cell.alignment = center_alignment if col_idx >= 13 else right_alignment
                             if col_idx >= 9 and col_idx <= 12:  # Денежные поля
@@ -1593,7 +1589,6 @@ class ExcelExportService:
                 "L": 18,
                 "M": 10,
                 "N": 10,
-                "O": 35,  # Причина отказа - широкая колонка
             }
             for col, width in widths.items():
                 ws.column_dimensions[col].width = width
