@@ -1420,6 +1420,7 @@ class ExcelExportService:
                 "Прибыль компании",
                 "Выезд",
                 "Отзыв",
+                "Причина отказа",
             ]
 
             for col_idx, header in enumerate(headers, start=1):
@@ -1437,7 +1438,7 @@ class ExcelExportService:
                 SELECT
                     id, status, equipment_type, client_name, client_address, client_phone,
                     created_at, updated_at, total_amount, materials_cost,
-                    master_profit, company_profit, out_of_city, has_review
+                    master_profit, company_profit, out_of_city, has_review, refuse_reason
                 FROM orders
                 WHERE assigned_master_id = ? AND deleted_at IS NULL
                 ORDER BY
@@ -1491,6 +1492,7 @@ class ExcelExportService:
                         float(order["company_profit"] or 0),
                         "Да" if order["out_of_city"] else "",
                         "Да" if order["has_review"] else "",
+                        order["refuse_reason"] or "",
                     ]
 
                     for col_idx, value in enumerate(data, start=1):
@@ -1517,6 +1519,10 @@ class ExcelExportService:
                                 )
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
+                        elif col_idx == 15:  # Причина отказа
+                            cell.alignment = left_alignment
+                            from openpyxl.styles import Alignment
+                            cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
                         else:
                             cell.alignment = center_alignment if col_idx >= 13 else right_alignment
                             if col_idx >= 9 and col_idx <= 12:  # Денежные поля
@@ -1529,6 +1535,15 @@ class ExcelExportService:
                 ws[f"A{row}"] = "ИТОГО:"
                 ws[f"A{row}"].font = Font(bold=True, size=11)
                 ws.merge_cells(f"A{row}:H{row}")
+                
+                # Статистика по отказам
+                refused_count = sum(1 for o in orders if o["status"] == "REFUSED")
+                refused_with_reason = sum(1 for o in orders if o["status"] == "REFUSED" and o.get("refuse_reason"))
+                if refused_count > 0:
+                    row += 1
+                    ws[f"A{row}"] = f"Отказов: {refused_count} (с причиной: {refused_with_reason})"
+                    ws[f"A{row}"].font = Font(italic=True, size=10, color="FF0000")
+                    ws.merge_cells(f"A{row}:H{row}")
 
                 total_sum = sum(
                     float(o["total_amount"] or 0) for o in orders if o["status"] == "CLOSED"
@@ -1572,6 +1587,7 @@ class ExcelExportService:
                 "L": 18,
                 "M": 10,
                 "N": 10,
+                "O": 35,  # Причина отказа - широкая колонка
             }
             for col, width in widths.items():
                 ws.column_dimensions[col].width = width
@@ -1893,26 +1909,29 @@ class ExcelExportService:
         ws.cell(row=2, column=15).fill = subheader_fill
         ws.cell(row=2, column=15).alignment = center_alignment
         ws.cell(row=2, column=15).border = thin_border
-        
+
         # Пересчитываем для добавления колонки "Отказов с причиной"
         row_idx = 3
         for master_report in master_reports:
             master_id = master_report.master_id
             if not master_id:
                 continue
-                
+
             from app.core.constants import OrderStatus
+
             orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
-            
+
             # Подсчитываем отказы с причиной
-            refused_with_reason = len([o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason])
-            
+            refused_with_reason = len(
+                [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
+            )
+
             cell = ws.cell(row=row_idx, column=15, value=refused_with_reason)
             cell.border = thin_border
             cell.alignment = center_alignment
-            
+
             row_idx += 1
-        
+
         # ИТОГО по всем мастерам
         row += 1
         ws[f"A{row}"] = "ИТОГО:"
@@ -1996,7 +2015,7 @@ class ExcelExportService:
         }
         for col, width in widths.items():
             ws.column_dimensions[col].width = width
-    
+
     async def _add_refusals_details_sheet(
         self,
         wb,
@@ -2010,7 +2029,7 @@ class ExcelExportService:
     ):
         """Добавляет лист с детальной информацией об отказах и причинах"""
         ws = wb.create_sheet(title="Причины отказов")
-        
+
         # Заголовок
         row = 1
         ws.merge_cells(f"A{row}:F{row}")
@@ -2020,9 +2039,9 @@ class ExcelExportService:
         cell.fill = header_fill
         cell.alignment = center_alignment
         ws.row_dimensions[row].height = 25
-        
+
         row += 1
-        
+
         # Заголовки колонок
         headers = [
             "ID заявки",
@@ -2032,30 +2051,32 @@ class ExcelExportService:
             "Дата отказа",
             "Причина отказа",
         ]
-        
+
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=row, column=col_idx, value=header)
             cell.font = Font(bold=True)
             cell.fill = subheader_fill
             cell.alignment = center_alignment
             cell.border = thin_border
-        
+
         row += 1
-        
+
         # Получаем все отказы с причинами
         from app.core.constants import OrderStatus
-        
+
         for master_report in master_reports:
             master_id = master_report.master_id
             master_name = master_report.master_name
-            
+
             if not master_id:
                 continue
-            
+
             # Получаем отказанные заявки мастера
             orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
-            refused_orders = [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
-            
+            refused_orders = [
+                o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason
+            ]
+
             for order in refused_orders:
                 order_data = [
                     order.id,
@@ -2065,11 +2086,11 @@ class ExcelExportService:
                     order.updated_at.strftime("%d.%m.%Y %H:%M") if order.updated_at else "",
                     order.refuse_reason or "Не указана",
                 ]
-                
+
                 for col_idx, value in enumerate(order_data, start=1):
                     cell = ws.cell(row=row, column=col_idx, value=value)
                     cell.border = thin_border
-                    
+
                     # Форматирование
                     if col_idx == 1:  # ID
                         cell.alignment = center_alignment
@@ -2077,15 +2098,15 @@ class ExcelExportService:
                         cell.alignment = left_alignment
                     else:
                         cell.alignment = left_alignment
-                
+
                 row += 1
-        
+
         # Если нет отказов с причинами
         if row == 3:
             ws.cell(row=row, column=1, value="Нет отказов с указанными причинами")
             ws.merge_cells(f"A{row}:F{row}")
             ws.cell(row=row, column=1).alignment = center_alignment
-        
+
         # Ширина столбцов
         widths = {
             "A": 12,  # ID заявки
