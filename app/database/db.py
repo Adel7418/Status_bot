@@ -1862,6 +1862,8 @@ class Database:
             ),
         )
         await connection.commit()
+        if cursor.lastrowid is None:
+            raise ValueError("Failed to insert financial report: lastrowid is None")
         return int(cursor.lastrowid)
 
     async def get_financial_report_by_id(self, report_id: int) -> FinancialReport | None:
@@ -1938,6 +1940,8 @@ class Database:
             ),
         )
         await connection.commit()
+        if cursor.lastrowid is None:
+            raise ValueError("Failed to insert financial report: lastrowid is None")
         return int(cursor.lastrowid)
 
     async def get_master_reports_by_report_id(self, report_id: int) -> list[MasterFinancialReport]:
@@ -2056,6 +2060,8 @@ class Database:
             ),
         )
         await connection.commit()
+        if cursor.lastrowid is None:
+            raise ValueError("Failed to insert financial report: lastrowid is None")
         return int(cursor.lastrowid)
 
     async def get_master_archived_reports(

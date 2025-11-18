@@ -812,6 +812,10 @@ class TaskScheduler:
             failed_count = 0
 
             for master in masters:
+                # Skip masters without ID
+                if master.id is None:
+                    logger.warning(f"Skipping master without ID: {master.get_display_name()}")
+                    continue
                 try:
                     # Генерируем и сохраняем отчет в архив
                     await reports_service.generate_master_report_excel(

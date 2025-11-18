@@ -125,6 +125,8 @@ class ORMDatabase:
         if not self.engine:
             await self.connect()
 
+        # MyPy type guard: engine is guaranteed to be set after connect()
+        assert self.engine is not None  # nosec B101 - type guard, not production check
         async with self.engine.begin() as conn:
             # Создаем все таблицы из метаданных
             await conn.run_sync(Base.metadata.create_all)
