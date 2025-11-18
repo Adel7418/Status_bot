@@ -554,6 +554,25 @@ class Database:
             )
         return users
 
+    async def get_users_by_role(self, role: str) -> list[User]:
+        """
+        Получение всех пользователей с определенной ролью
+
+        Args:
+            role: Роль для фильтрации (например, "ADMIN", "DISPATCHER", "MASTER")
+
+        Returns:
+            Список пользователей с указанной ролью
+        """
+        users = await self.get_all_users()
+        result = []
+
+        for user in users:
+            if user.has_role(role):
+                result.append(user)
+
+        return result
+
     async def get_admins_and_dispatchers(self, exclude_user_id: int | None = None) -> list[User]:
         """
         Получение всех админов и диспетчеров

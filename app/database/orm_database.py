@@ -364,6 +364,26 @@ class ORMDatabase:
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
+    async def get_users_by_role(self, role: str) -> list[User]:
+        """
+        Получение всех пользователей с определенной ролью
+
+        Args:
+            role: Роль для фильтрации (например, "ADMIN", "DISPATCHER", "MASTER")
+
+        Returns:
+            List[User]: Список пользователей с указанной ролью
+        """
+        async with self.get_session() as session:
+            stmt = select(User).where(
+                and_(
+                    User.deleted_at.is_(None),
+                    User.role.contains(role)
+                )
+            ).order_by(User.created_at.desc())
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
     async def get_admins_and_dispatchers(self, exclude_user_id: int | None = None) -> list[User]:
         """
         Получение всех админов и диспетчеров

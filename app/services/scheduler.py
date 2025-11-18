@@ -906,7 +906,8 @@ class TaskScheduler:
 
                 for old_backup in backup_dir.glob("bot_database_*.db"):
                     try:
-                        file_time = datetime.fromtimestamp(old_backup.stat().st_mtime)
+                        # Создаём timezone-aware datetime для корректного сравнения
+                        file_time = datetime.fromtimestamp(old_backup.stat().st_mtime, tz=MOSCOW_TZ)
                         if file_time < cutoff_date:
                             old_backup.unlink()
                             deleted_count += 1
