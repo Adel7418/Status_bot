@@ -2,7 +2,6 @@
 Тесты для OrderRepository
 """
 
-
 import aiosqlite
 import pytest
 

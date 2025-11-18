@@ -44,8 +44,7 @@ async def set_user_role(telegram_id: int, new_role: str):
 
         # Обновляем роль
         await db.connection.execute(
-            "UPDATE users SET role = ? WHERE telegram_id = ?",
-            (new_role, telegram_id)
+            "UPDATE users SET role = ? WHERE telegram_id = ?", (new_role, telegram_id)
         )
         await db.connection.commit()
 
@@ -78,7 +77,9 @@ async def main():
         print("Использование: python set_user_role.py <telegram_id> <role>")
         print("\nДопустимые роли:")
         print(f"  - {UserRole.ADMIN} - Администратор (полный доступ)")
-        print(f"  - {UserRole.DISPATCHER} - Диспетчер (создание заявок, назначение мастеров, отчеты)")
+        print(
+            f"  - {UserRole.DISPATCHER} - Диспетчер (создание заявок, назначение мастеров, отчеты)"
+        )
         print(f"  - {UserRole.MASTER} - Мастер (работа с назначенными заявками)")
         print(f"  - {UserRole.UNKNOWN} - Неизвестный (без доступа)")
         print("\nПример: python set_user_role.py 123456789 dispatcher")

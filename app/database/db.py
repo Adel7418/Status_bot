@@ -1063,12 +1063,16 @@ class Database:
                     if "prepayment_amount" in row and row["prepayment_amount"] is not None
                     else None
                 ),
-                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["created_at"]
-                else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["updated_at"]
-                else None,
+                created_at=(
+                    datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["created_at"]
+                    else None
+                ),
+                updated_at=(
+                    datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["updated_at"]
+                    else None
+                ),
                 dispatcher_name=row["dispatcher_name"],
                 master_name=row["master_name"],
             )
@@ -1303,9 +1307,9 @@ class Database:
                     "old_status": row["old_status"],
                     "new_status": row["new_status"],
                     "changed_by": row["changed_by"],
-                    "changed_by_name": row["changed_by_name"].strip()
-                    if row["changed_by_name"]
-                    else None,
+                    "changed_by_name": (
+                        row["changed_by_name"].strip() if row["changed_by_name"] else None
+                    ),
                     "changed_at": row["changed_at"],
                     "notes": row["notes"],
                 }
@@ -1790,12 +1794,16 @@ class Database:
                 company_profit=row["company_profit"],
                 has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
                 out_of_city=bool(row["out_of_city"]) if row["out_of_city"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["created_at"]
-                else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["updated_at"]
-                else None,
+                created_at=(
+                    datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["created_at"]
+                    else None
+                ),
+                updated_at=(
+                    datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["updated_at"]
+                    else None
+                ),
             )
 
             # Добавляем имена мастеров и диспетчеров
@@ -1879,9 +1887,9 @@ class Database:
         return FinancialReport(
             id=row["id"],
             report_type=row["report_type"],
-            period_start=datetime.fromisoformat(row["period_start"])
-            if row["period_start"]
-            else None,
+            period_start=(
+                datetime.fromisoformat(row["period_start"]) if row["period_start"] else None
+            ),
             period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
             total_orders=row["total_orders"],
             total_amount=row["total_amount"],
@@ -1993,9 +2001,9 @@ class Database:
             report = FinancialReport(
                 id=row["id"],
                 report_type=row["report_type"],
-                period_start=datetime.fromisoformat(row["period_start"])
-                if row["period_start"]
-                else None,
+                period_start=(
+                    datetime.fromisoformat(row["period_start"]) if row["period_start"] else None
+                ),
                 period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
                 total_orders=row["total_orders"],
                 total_amount=row["total_amount"],
@@ -2083,9 +2091,9 @@ class Database:
             report = MasterReportArchive(
                 id=row["id"],
                 master_id=row["master_id"],
-                period_start=datetime.fromisoformat(row["period_start"])
-                if row["period_start"]
-                else None,
+                period_start=(
+                    datetime.fromisoformat(row["period_start"]) if row["period_start"] else None
+                ),
                 period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
                 file_path=row["file_path"],
                 file_name=row["file_name"],
@@ -2127,9 +2135,9 @@ class Database:
         return MasterReportArchive(
             id=row["id"],
             master_id=row["master_id"],
-            period_start=datetime.fromisoformat(row["period_start"])
-            if row["period_start"]
-            else None,
+            period_start=(
+                datetime.fromisoformat(row["period_start"]) if row["period_start"] else None
+            ),
             period_end=datetime.fromisoformat(row["period_end"]) if row["period_end"] else None,
             file_path=row["file_path"],
             file_name=row["file_name"],
@@ -2229,12 +2237,16 @@ class Database:
                 company_profit=row["company_profit"],
                 has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
                 out_of_city=bool(row["out_of_city"]) if row["out_of_city"] is not None else None,
-                created_at=datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["created_at"]
-                else None,
-                updated_at=datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row["updated_at"]
-                else None,
+                created_at=(
+                    datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["created_at"]
+                    else None
+                ),
+                updated_at=(
+                    datetime.fromisoformat(row["updated_at"]).replace(tzinfo=MOSCOW_TZ)
+                    if row["updated_at"]
+                    else None
+                ),
             )
 
             # Добавляем имена мастеров и диспетчеров

@@ -119,9 +119,9 @@ class MasterReportsService:
             # Сохраняем запись в БД
             archive_data = {
                 "master_id": master_id,
-                "period_start": period_start or all_orders[-1].created_at
-                if all_orders
-                else datetime.now(UTC),
+                "period_start": (
+                    period_start or all_orders[-1].created_at if all_orders else datetime.now(UTC)
+                ),
                 "period_end": period_end or datetime.now(UTC),
                 "file_path": str(archive_path),
                 "file_name": archive_filename,

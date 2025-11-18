@@ -27,7 +27,7 @@ def check_column(db_path: str) -> None:
     # Ищем refuse_reason
     refuse_reason_col = None
     for col in columns:
-        if col[1] == 'refuse_reason':
+        if col[1] == "refuse_reason":
             refuse_reason_col = col
             break
 

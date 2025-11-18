@@ -247,14 +247,16 @@ class FinancialReportsService:
                 "master_reports": master_reports,
                 "summary": {
                     "total_masters": len(master_reports),
-                    "most_profitable_master": max(
-                        master_reports, key=lambda x: x.total_master_profit
-                    )
-                    if master_reports
-                    else None,
-                    "highest_average_check": max(master_reports, key=lambda x: x.average_check)
-                    if master_reports
-                    else None,
+                    "most_profitable_master": (
+                        max(master_reports, key=lambda x: x.total_master_profit)
+                        if master_reports
+                        else None
+                    ),
+                    "highest_average_check": (
+                        max(master_reports, key=lambda x: x.average_check)
+                        if master_reports
+                        else None
+                    ),
                 },
             }
 

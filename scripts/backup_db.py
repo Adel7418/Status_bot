@@ -102,7 +102,9 @@ def backup_database(keep_days=30):
             backup_path = os.path.join(backup_dir, backup_filename)
             size = os.path.getsize(backup_path)
             mtime = datetime.fromtimestamp(os.path.getmtime(backup_path))
-            print(f"  - {backup_filename} ({format_size(size)}) - {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(
+                f"  - {backup_filename} ({format_size(size)}) - {mtime.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
 
     return True
 

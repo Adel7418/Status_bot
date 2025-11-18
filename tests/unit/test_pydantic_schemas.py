@@ -1,4 +1,5 @@
 """Тесты для Pydantic схем валидации"""
+
 import pytest
 from pydantic import ValidationError
 
@@ -70,7 +71,9 @@ class TestOrderCreateSchema:
 
         # Проверяем, что ошибка связана с длиной описания (description)
         error_str = str(exc_info.value).lower()
-        assert ("description" in error_str and ("at least 4" in error_str or "string_too_short" in error_str))
+        assert "description" in error_str and (
+            "at least 4" in error_str or "string_too_short" in error_str
+        )
 
     def test_sql_injection_protection(self):
         """Тест защиты от SQL injection в описании"""
@@ -104,7 +107,9 @@ class TestOrderCreateSchema:
 
         # Проверяем, что ошибка связана с именем клиента (client_name)
         error_str = str(exc_info.value).lower()
-        assert ("client_name" in error_str and ("at least 2" in error_str or "string_too_short" in error_str))
+        assert "client_name" in error_str and (
+            "at least 2" in error_str or "string_too_short" in error_str
+        )
 
     def test_valid_single_name(self):
         """Тест валидного имени (одно слово, 5+ символов)"""

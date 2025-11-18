@@ -2,7 +2,6 @@
 Тесты для утилит маскирования персональных данных (PII)
 """
 
-
 from app.utils.pii_masking import (
     mask_address,
     mask_dict,

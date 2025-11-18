@@ -1,6 +1,7 @@
 """
 Скрипт для очистки временных таблиц Alembic для city1
 """
+
 import asyncio
 import os
 import sys
@@ -14,6 +15,7 @@ if not DATABASE_PATH:
     load_dotenv("env.city1")
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city1/bot_database.db")
 
+
 async def cleanup_temp_tables():
     """Удаляет временные таблицы Alembic (с префиксом _alembic_tmp_)"""
     conn = None
@@ -22,7 +24,9 @@ async def cleanup_temp_tables():
         cursor = await conn.cursor()
 
         # Получаем список всех таблиц
-        await cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '_alembic_tmp_%'")
+        await cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '_alembic_tmp_%'"
+        )
         temp_tables = await cursor.fetchall()
 
         if temp_tables:

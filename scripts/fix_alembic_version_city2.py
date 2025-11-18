@@ -1,6 +1,7 @@
 """
 Скрипт для исправления записи в таблице alembic_version для city2
 """
+
 import asyncio
 import os
 import sys
@@ -14,6 +15,7 @@ if not DATABASE_PATH:
     load_dotenv("env.city2")
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city2/bot_database.db")
 
+
 async def fix_alembic_version():
     """Исправляет запись в таблице alembic_version"""
     conn = None
@@ -22,7 +24,9 @@ async def fix_alembic_version():
         cursor = await conn.cursor()
 
         # Проверяем, существует ли таблица alembic_version
-        await cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
+        await cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+        )
         table_exists = await cursor.fetchone()
 
         if not table_exists:
@@ -38,12 +42,14 @@ async def fix_alembic_version():
             print(f"[INFO] Текущая ревизия в базе данных: {current_version[0]}")
 
             # Проверяем, является ли ревизия '004' (неправильная)
-            if current_version[0] == '004':
+            if current_version[0] == "004":
                 print("[WARN] Обнаружена неправильная ревизия '004'")
                 print("[INFO] Удаляем запись, чтобы Alembic мог определить правильную ревизию")
                 await cursor.execute("DELETE FROM alembic_version")
                 await conn.commit()
-                print("[OK] Запись удалена. Используйте 'alembic stamp head' для установки правильной ревизии")
+                print(
+                    "[OK] Запись удалена. Используйте 'alembic stamp head' для установки правильной ревизии"
+                )
             else:
                 print(f"[OK] Ревизия '{current_version[0]}' корректна")
         else:

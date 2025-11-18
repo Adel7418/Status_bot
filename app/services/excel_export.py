@@ -504,9 +504,11 @@ class ExcelExportService:
                     f"{status_emoji} {order['status']}",
                     order["equipment_type"],
                     order["client_name"],
-                    order["client_address"][:30] + "..."
-                    if len(order["client_address"]) > 30
-                    else order["client_address"],
+                    (
+                        order["client_address"][:30] + "..."
+                        if len(order["client_address"]) > 30
+                        else order["client_address"]
+                    ),
                     order["client_phone"],
                     created_at,
                     updated_at,
@@ -772,9 +774,11 @@ class ExcelExportService:
                         f"{status_emoji} {order['status']}",
                         order["equipment_type"],
                         order["client_name"],
-                        order["client_address"][:30] + "..."
-                        if len(order["client_address"]) > 30
-                        else order["client_address"],
+                        (
+                            order["client_address"][:30] + "..."
+                            if len(order["client_address"]) > 30
+                            else order["client_address"]
+                        ),
                         order["client_phone"],
                         created_at,
                         updated_at,
@@ -1592,9 +1596,11 @@ class ExcelExportService:
                         f"{status_emoji} {order['status']}",
                         order["equipment_type"],
                         order["client_name"],
-                        order["client_address"][:30] + "..."
-                        if len(order["client_address"] or "") > 30
-                        else (order["client_address"] or ""),
+                        (
+                            order["client_address"][:30] + "..."
+                            if len(order["client_address"] or "") > 30
+                            else (order["client_address"] or "")
+                        ),
                         order["client_phone"],
                         created_at,
                         updated_at,
@@ -1800,9 +1806,11 @@ class ExcelExportService:
                         f"{status_emoji} {order['status']}",
                         order["equipment_type"],
                         order["client_name"],
-                        order["client_address"][:30] + "..."
-                        if len(order["client_address"] or "") > 30
-                        else (order["client_address"] or ""),
+                        (
+                            order["client_address"][:30] + "..."
+                            if len(order["client_address"] or "") > 30
+                            else (order["client_address"] or "")
+                        ),
                         order["client_phone"],
                         created_at,
                         updated_at,

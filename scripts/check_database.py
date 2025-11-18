@@ -118,16 +118,16 @@ def check_database():
             dispatcher_display = (
                 order["dispatcher_name"].strip()
                 if order["dispatcher_name"] and order["dispatcher_name"].strip()
-                else f"ID: {order['dispatcher_id']}"
-                if order["dispatcher_id"]
-                else "-"
+                else f"ID: {order['dispatcher_id']}" if order["dispatcher_id"] else "-"
             )
             master_display = (
                 order["master_name"].strip()
                 if order["master_name"] and order["master_name"].strip()
-                else f"Master ID: {order['assigned_master_id']}"
-                if order["assigned_master_id"]
-                else "-"
+                else (
+                    f"Master ID: {order['assigned_master_id']}"
+                    if order["assigned_master_id"]
+                    else "-"
+                )
             )
 
             print(f"Заявка #{order['id']} | {status_emoji} {order['status']}")

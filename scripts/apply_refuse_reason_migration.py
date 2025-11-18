@@ -49,14 +49,17 @@ def add_refuse_reason_column(db_path: str) -> None:
         print("💾 Создаем бэкап...")
         backup_path = f"{db_path}.backup_before_refuse_reason"
         import shutil
+
         shutil.copy2(db_path, backup_path)
         print(f"   Бэкап сохранен: {backup_path}")
 
         # Добавляем колонку
-        cursor.execute("""
+        cursor.execute(
+            """
             ALTER TABLE orders
             ADD COLUMN refuse_reason VARCHAR(500)
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()

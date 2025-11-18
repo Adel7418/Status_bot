@@ -45,7 +45,9 @@ def set_permissions_posix(paths: Iterable[Path]) -> None:
             pass
         try:
             # Allow rwx for all to avoid permission surprises
-            os.chmod(p, 0o777)  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
+            os.chmod(
+                p, 0o777
+            )  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
         except Exception:
             pass
 

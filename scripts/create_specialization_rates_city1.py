@@ -1,6 +1,7 @@
 """
 Скрипт для создания таблицы specialization_rates для city1
 """
+
 import asyncio
 import os
 import sys
@@ -14,6 +15,7 @@ if not DATABASE_PATH:
     load_dotenv("env.city1")
     DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city1/bot_database.db")
 
+
 async def create_specialization_rates_table():
     """Создает таблицу specialization_rates, если она не существует"""
     conn = None
@@ -22,7 +24,9 @@ async def create_specialization_rates_table():
         cursor = await conn.cursor()
 
         # Проверяем, существует ли таблица
-        await cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='specialization_rates'")
+        await cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='specialization_rates'"
+        )
         table_exists = await cursor.fetchone()
 
         if table_exists:
@@ -30,7 +34,8 @@ async def create_specialization_rates_table():
             return
 
         # Создаем таблицу specialization_rates
-        await cursor.execute("""
+        await cursor.execute(
+            """
             CREATE TABLE specialization_rates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 specialization_name VARCHAR(255) NOT NULL UNIQUE,
@@ -44,22 +49,29 @@ async def create_specialization_rates_table():
                 CHECK (company_percentage >= 0 AND company_percentage <= 100),
                 CHECK (master_percentage + company_percentage = 100)
             )
-        """)
+        """
+        )
 
         # Создаем индекс
-        await cursor.execute("""
+        await cursor.execute(
+            """
             CREATE INDEX idx_specialization_rates_name ON specialization_rates(specialization_name)
-        """)
+        """
+        )
 
         # Вставляем начальные данные
-        await cursor.execute("""
+        await cursor.execute(
+            """
             INSERT INTO specialization_rates (specialization_name, master_percentage, company_percentage, is_default)
             VALUES ('электрик', 50.0, 50.0, 0)
-        """)
-        await cursor.execute("""
+        """
+        )
+        await cursor.execute(
+            """
             INSERT INTO specialization_rates (specialization_name, master_percentage, company_percentage, is_default)
             VALUES ('сантехник', 50.0, 50.0, 0)
-        """)
+        """
+        )
 
         await conn.commit()
         print(f"[OK] Таблица specialization_rates создана в {DATABASE_PATH}")

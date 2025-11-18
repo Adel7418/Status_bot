@@ -1,6 +1,7 @@
 """
 Скрипт для создания таблицы order_reports в базе данных city1
 """
+
 import asyncio
 import os
 import sys
@@ -36,7 +37,8 @@ async def create_order_reports_table():
             return
 
         # Создаем таблицу
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE order_reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 order_id INTEGER NOT NULL,
@@ -57,7 +59,8 @@ async def create_order_reports_table():
                 closed_at DATETIME,
                 completion_time_hours REAL
             )
-        """)
+        """
+        )
 
         await db.commit()
         print(f"[OK] Таблица order_reports создана в {DATABASE_PATH}")

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         Реальная логика выбора реализации скрыта от type checker.
         """
         ...
+
 else:
 
     def get_database() -> "DatabaseType":

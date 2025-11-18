@@ -116,20 +116,26 @@ async def test_di_injection():
         logger.info(f"   USE_ORM: {db.use_orm if hasattr(db, 'use_orm') else 'N/A'}")
 
         # Проверяем, что handlers зарегистрированы
-        logger.info(f"✅ Handlers зарегистрированы: {len(master_router.sub_routers) if hasattr(master_router, 'sub_routers') else 'N/A'}")
+        logger.info(
+            f"✅ Handlers зарегистрированы: {len(master_router.sub_routers) if hasattr(master_router, 'sub_routers') else 'N/A'}"
+        )
 
         # Проверяем подключение к БД
         try:
             # Проверяем тип Database
-            if hasattr(db, 'get_session'):
+            if hasattr(db, "get_session"):
                 # ORM Database
                 from app.database.models import User
+
                 async with db.get_session() as session:
                     from sqlalchemy import select
+
                     result = await session.execute(select(User).limit(1))
                     users = result.scalars().all()
-                    logger.info(f"✅ Подключение к БД работает (ORM, найдено пользователей: {len(users)})")
-            elif hasattr(db, 'get_user_by_telegram_id'):
+                    logger.info(
+                        f"✅ Подключение к БД работает (ORM, найдено пользователей: {len(users)})"
+                    )
+            elif hasattr(db, "get_user_by_telegram_id"):
                 # Legacy Database
                 user = await db.get_user_by_telegram_id(1)  # Тестовый запрос
                 logger.info(f"✅ Подключение к БД работает (Legacy)")
@@ -189,8 +195,8 @@ def print_statistics(stats: dict):
     import io
 
     # Устанавливаем UTF-8 для вывода
-    if sys.stdout.encoding != 'utf-8':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
     print("\n" + "=" * 60)
     print("СТАТИСТИКА РАБОТЫ HANDLERS")
@@ -232,8 +238,8 @@ async def main():
     import io
 
     # Устанавливаем UTF-8 для вывода
-    if sys.stdout.encoding != 'utf-8':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
     print("\n" + "=" * 60)
     print("ТЕСТИРОВАНИЕ HANDLERS В РЕАЛЬНЫХ УСЛОВИЯХ")

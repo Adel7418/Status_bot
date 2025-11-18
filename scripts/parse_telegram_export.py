@@ -50,12 +50,12 @@ def parse_new_order_message(text: str) -> dict | None:
         order["equipment_type"] = match.group(1).strip()
 
     # Описание (после эмодзи 📝, но не "Заметки:")
-    lines = text.split('\n')
+    lines = text.split("\n")
     for i, line in enumerate(lines):
-        if '🔧 Тип:' in line and i + 1 < len(lines):
+        if "🔧 Тип:" in line and i + 1 < len(lines):
             # Следующая строка после типа - это описание
             next_line = lines[i + 1].strip()
-            if next_line and '📝' not in next_line and '👤' not in next_line:
+            if next_line and "📝" not in next_line and "👤" not in next_line:
                 order["description"] = next_line
                 break
 
@@ -63,7 +63,7 @@ def parse_new_order_message(text: str) -> dict | None:
     match = re.search(r"👤\s*Клиент:\s*(.+?)(?:\n|$)", text)
     if match:
         client = match.group(1).strip()
-        if client.lower() not in ['неизвестно', 'unknown', '']:
+        if client.lower() not in ["неизвестно", "unknown", ""]:
             order["client_name"] = client
         else:
             order["client_name"] = "Клиент"
@@ -77,9 +77,9 @@ def parse_new_order_message(text: str) -> dict | None:
     match = re.search(r"📞\s*(.+?)(?:\n|$)", text)
     if match:
         phone = match.group(1).strip()
-        phone = re.sub(r'[^\d+]', '', phone)
-        if not phone.startswith('+'):
-            phone = '+' + phone
+        phone = re.sub(r"[^\d+]", "", phone)
+        if not phone.startswith("+"):
+            phone = "+" + phone
         order["client_phone"] = phone
 
     # Заметки
@@ -149,9 +149,9 @@ def parse_order_confirmation(text: str) -> dict | None:
     if match:
         phone = match.group(1).strip()
         # Очистка от лишних символов
-        phone = re.sub(r'[^\d+]', '', phone)
-        if not phone.startswith('+'):
-            phone = '+' + phone
+        phone = re.sub(r"[^\d+]", "", phone)
+        if not phone.startswith("+"):
+            phone = "+" + phone
         order["client_phone"] = phone
 
     # Заметки
@@ -192,7 +192,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
     print()
 
     # Читаем JSON
-    with open(json_file, 'r', encoding='utf-8') as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     messages = data.get("messages", [])
@@ -227,7 +227,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
             # Дата создания
             date_str = msg.get("date", "")
             try:
-                created_at = datetime.fromisoformat(date_str.replace('T', ' '))
+                created_at = datetime.fromisoformat(date_str.replace("T", " "))
                 order_data["created_at"] = created_at.strftime("%Y-%m-%d %H:%M:%S")
             except:
                 order_data["created_at"] = None
@@ -237,7 +237,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
 
             # Если нет, ищем в следующих сообщениях
             if not order_number:
-                for next_msg in messages[i+1:i+5]:  # Смотрим следующие 5 сообщений
+                for next_msg in messages[i + 1 : i + 5]:  # Смотрим следующие 5 сообщений
                     next_text_parts = next_msg.get("text", "")
                     if isinstance(next_text_parts, list):
                         next_text = ""
@@ -276,13 +276,13 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
         print(f"   Клиент: {order['client_name']}")
         print(f"   Адрес: {order['client_address']}")
         print(f"   Телефон: {order['client_phone']}")
-        if order.get('created_at'):
+        if order.get("created_at"):
             print(f"   Дата: {order['created_at']}")
     print()
 
     # Спрашиваем подтверждение
     answer = input("Восстановить эти заявки в базу данных? (yes/no): ")
-    if answer.lower() not in ['yes', 'y', 'да', 'д']:
+    if answer.lower() not in ["yes", "y", "да", "д"]:
         print("Отменено.")
         return
 
@@ -312,11 +312,15 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
                     )
                     await db.connection.commit()
 
-                print(f"OK: Восстановлена заявка #{new_order.id} (было #{order.get('order_number', '?')})")
+                print(
+                    f"OK: Восстановлена заявка #{new_order.id} (было #{order.get('order_number', '?')})"
+                )
                 restored_count += 1
 
             except Exception as e:
-                print(f"ERROR: Ошибка при восстановлении заявки #{order.get('order_number', '?')}: {e}")
+                print(
+                    f"ERROR: Ошибка при восстановлении заявки #{order.get('order_number', '?')}: {e}"
+                )
 
         print()
         print(f"Восстановлено заявок: {restored_count}/{len(orders_to_restore)}")
@@ -340,10 +344,14 @@ async def main():
         print()
         print("Примеры:")
         print(f"  # Восстановить все заявки:")
-        print(f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457")
+        print(
+            f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457"
+        )
         print()
         print(f"  # Восстановить только заявки >= #45:")
-        print(f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457 45")
+        print(
+            f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457 45"
+        )
         return
 
     json_file = sys.argv[1]

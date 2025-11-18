@@ -381,9 +381,9 @@ class OrderSearchService:
                     master_profit=row["master_profit"],
                     company_profit=row["company_profit"],
                     has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
-                    out_of_city=bool(row["out_of_city"])
-                    if row["out_of_city"] is not None
-                    else None,
+                    out_of_city=(
+                        bool(row["out_of_city"]) if row["out_of_city"] is not None else None
+                    ),
                     created_at=row["created_at"],
                     updated_at=row["updated_at"],
                     rescheduled_count=row["rescheduled_count"],

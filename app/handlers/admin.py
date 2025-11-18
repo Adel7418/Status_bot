@@ -66,9 +66,11 @@ def _convert_orm_order_to_legacy(orm_order) -> "Order":  # type: ignore[name-def
         company_profit=orm_order.company_profit,
         has_review=orm_order.has_review,
         out_of_city=orm_order.out_of_city,
-        estimated_completion_date=orm_order.estimated_completion_date
-        if hasattr(orm_order, "estimated_completion_date")
-        else None,
+        estimated_completion_date=(
+            orm_order.estimated_completion_date
+            if hasattr(orm_order, "estimated_completion_date")
+            else None
+        ),
         prepayment_amount=orm_order.prepayment_amount,
         rescheduled_count=orm_order.rescheduled_count,
         last_rescheduled_at=orm_order.last_rescheduled_at,
@@ -76,15 +78,21 @@ def _convert_orm_order_to_legacy(orm_order) -> "Order":  # type: ignore[name-def
         refuse_reason=orm_order.refuse_reason if hasattr(orm_order, "refuse_reason") else None,
         created_at=orm_order.created_at,
         updated_at=orm_order.updated_at,
-        master_name=orm_order.master_name
-        if hasattr(orm_order, "master_name")
-        else (orm_order.assigned_master.get_display_name() if orm_order.assigned_master else None),
-        dispatcher_name=orm_order.dispatcher_name
-        if hasattr(orm_order, "dispatcher_name")
-        else (
-            orm_order.dispatcher.full_name
-            if orm_order.dispatcher and hasattr(orm_order.dispatcher, "full_name")
-            else None
+        master_name=(
+            orm_order.master_name
+            if hasattr(orm_order, "master_name")
+            else (
+                orm_order.assigned_master.get_display_name() if orm_order.assigned_master else None
+            )
+        ),
+        dispatcher_name=(
+            orm_order.dispatcher_name
+            if hasattr(orm_order, "dispatcher_name")
+            else (
+                orm_order.dispatcher.full_name
+                if orm_order.dispatcher and hasattr(orm_order.dispatcher, "full_name")
+                else None
+            )
         ),
     )
 

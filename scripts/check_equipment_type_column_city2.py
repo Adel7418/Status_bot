@@ -1,6 +1,7 @@
 """
 Скрипт для проверки наличия колонки equipment_type в таблице orders (city2)
 """
+
 import asyncio
 import os
 import sys
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv("env.city2")
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/city2/bot_database.db")
+
 
 async def check_equipment_type_column():
     """Проверяет наличие колонки equipment_type в таблице orders"""
@@ -30,12 +32,16 @@ async def check_equipment_type_column():
             print(f"[OK] Колонка equipment_type существует в таблице orders")
 
             # Проверяем, есть ли данные в этой колонке
-            await cursor.execute("SELECT COUNT(*) FROM orders WHERE equipment_type IS NOT NULL AND equipment_type != ''")
+            await cursor.execute(
+                "SELECT COUNT(*) FROM orders WHERE equipment_type IS NOT NULL AND equipment_type != ''"
+            )
             count = await cursor.fetchone()
             print(f"[INFO] Заказов с заполненным equipment_type: {count[0]}")
 
             # Проверяем примеры данных
-            await cursor.execute("SELECT id, equipment_type FROM orders WHERE equipment_type IS NOT NULL AND equipment_type != '' LIMIT 5")
+            await cursor.execute(
+                "SELECT id, equipment_type FROM orders WHERE equipment_type IS NOT NULL AND equipment_type != '' LIMIT 5"
+            )
             examples = await cursor.fetchall()
             if examples:
                 print(f"[INFO] Примеры заказов с equipment_type:")
@@ -73,10 +79,12 @@ async def add_equipment_type_column():
             return True
 
         # Добавляем колонку
-        await cursor.execute("""
+        await cursor.execute(
+            """
             ALTER TABLE orders
             ADD COLUMN equipment_type TEXT NOT NULL DEFAULT ''
-        """)
+        """
+        )
 
         await conn.commit()
         print(f"[OK] Колонка equipment_type добавлена в таблицу orders")

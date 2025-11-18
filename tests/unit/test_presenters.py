@@ -240,11 +240,7 @@ class TestMasterPresenter:
         master.get_display_name = Mock(return_value="Сергей Профи")
 
         result = MasterPresenter.format_master_stats(
-            master,
-            total_orders=10,
-            completed_orders=8,
-            in_progress_orders=2,
-            total_revenue=50000.0
+            master, total_orders=10, completed_orders=8, in_progress_orders=2, total_revenue=50000.0
         )
 
         assert "Сергей Профи" in result
