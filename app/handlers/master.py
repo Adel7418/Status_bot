@@ -1434,7 +1434,7 @@ async def process_total_amount(message: Message, state: FSMContext):
     raw_text = message.text.strip()
     # Удаляем неразрывные пробелы и обычные пробелы
     normalized = (
-        raw_text.replace("\u00A0", "")
+        raw_text.replace("\u00a0", "")
         .replace(" ", "")
         .replace("₽", "")
         .replace("р.", "")

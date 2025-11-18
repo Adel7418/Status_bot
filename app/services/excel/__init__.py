@@ -1,4 +1,5 @@
 """Excel utilities package"""
+
 from app.services.excel.formatter import ExcelFormatter
 from app.services.excel.styles import ExcelStyles
 

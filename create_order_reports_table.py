@@ -5,6 +5,7 @@
     python create_order_reports_table.py --db-path data/city2/bot_database.db
     python create_order_reports_table.py --db-path data/bot_database.db
 """
+
 import argparse
 import sqlite3
 import sys

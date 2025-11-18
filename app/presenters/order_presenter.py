@@ -2,7 +2,6 @@
 OrderPresenter - форматирование заказов для отображения
 """
 
-
 from app.config import OrderStatus
 from app.utils import escape_html as escape_html_util
 

@@ -1,4 +1,5 @@
 """Global error handler"""
+
 import logging
 from typing import Any
 

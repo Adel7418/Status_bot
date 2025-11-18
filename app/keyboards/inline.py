@@ -79,8 +79,7 @@ class MasterLike(Protocol):
     specialization: str | None
     work_chat_id: int | None
 
-    def get_display_name(self) -> str:
-        ...
+    def get_display_name(self) -> str: ...
 
 
 def get_equipment_types_keyboard() -> InlineKeyboardMarkup:

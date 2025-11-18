@@ -1,4 +1,5 @@
 """Pydantic schemas package"""
+
 from app.schemas.master import MasterCreateSchema, MasterUpdateSchema
 from app.schemas.order import (
     OrderAmountsSchema,

@@ -1,6 +1,7 @@
 """
 Retry механизм для Bot API запросов с экспоненциальным backoff
 """
+
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable

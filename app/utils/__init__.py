@@ -1,4 +1,5 @@
 """Утилиты и вспомогательные функции"""
+
 from app.utils.date_parser import (
     format_datetime_for_storage,
     format_datetime_user_friendly,

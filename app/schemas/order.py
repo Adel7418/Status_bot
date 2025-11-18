@@ -1,4 +1,5 @@
 """Pydantic схемы для валидации заявок (Orders)"""
+
 import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator

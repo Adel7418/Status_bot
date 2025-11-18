@@ -1889,9 +1889,9 @@ class ExcelExportService:
                 closed_count = sum(1 for o in completed_orders if o["status"] == "CLOSED")
 
                 row += 1
-                ws[
-                    f"A{row}"
-                ] = f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
+                ws[f"A{row}"] = (
+                    f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
+                )
                 ws[f"A{row}"].font = ExcelStyles.ITALIC_FONT
                 ws.merge_cells(f"A{row}:H{row}")
 

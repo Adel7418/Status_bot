@@ -1,4 +1,5 @@
 """Middlewares package"""
+
 from app.middlewares.dependency_injection import DependencyInjectionMiddleware
 from app.middlewares.error_handler import global_error_handler
 from app.middlewares.logging import LoggingMiddleware

@@ -1,4 +1,5 @@
 """Pydantic схемы для валидации мастеров"""
+
 import re
 
 from pydantic import BaseModel, Field, field_validator

@@ -1,6 +1,7 @@
 """
 Сервис для управления ежедневными таблицами в реальном времени
 """
+
 import logging
 import os
 from datetime import date, datetime, timedelta
