@@ -266,6 +266,58 @@ mb-start-city2:  ## Запустить только bot_city2 (пересбор�
 	@docker compose -f $(MB_COMPOSE) up -d bot_city2
 	@echo "✅ bot_city2 запущен"
 
+mb-backup-city1:  ## Создать backup БД city1
+	@echo "💾 Создание backup для city1..."
+	@docker compose -f $(MB_COMPOSE) exec bot_city1 python scripts/backup_db.py
+	@echo "✅ Backup создан в контейнере: /app/backups/"
+	@echo "📁 Файлы backup внутри контейнера city1"
+
+mb-backup-city2:  ## Создать backup БД city2
+	@echo "💾 Создание backup для city2..."
+	@docker compose -f $(MB_COMPOSE) exec bot_city2 python scripts/backup_db.py
+	@echo "✅ Backup создан в контейнере: /app/backups/"
+	@echo "📁 Файлы backup внутри контейнера city2"
+
+mb-backup-all:  ## Создать backup обеих БД (city1 и city2)
+	@echo "💾 Создание backup для всех ботов..."
+	@echo "📦 Backup city1..."
+	@docker compose -f $(MB_COMPOSE) exec bot_city1 python scripts/backup_db.py
+	@echo "📦 Backup city2..."
+	@docker compose -f $(MB_COMPOSE) exec bot_city2 python scripts/backup_db.py
+	@echo "✅ Все backups созданы!"
+	@echo ""
+	@echo "📁 Backups находятся в volumes контейнеров:"
+	@echo "   - city1: backups/city1/"
+	@echo "   - city2: backups/city2/"
+
+mb-backup-copy-city1:  ## Скопировать backup city1 на хост
+	@echo "📋 Копирование backups city1 на хост..."
+	@mkdir -p backups/city1
+	@docker compose -f $(MB_COMPOSE) cp bot_city1:/app/backups/. ./backups/city1/
+	@echo "✅ Backups скопированы в ./backups/city1/"
+	@ls -lh backups/city1/ | tail -5
+
+mb-backup-copy-city2:  ## Скопировать backup city2 на хост
+	@echo "📋 Копирование backups city2 на хост..."
+	@mkdir -p backups/city2
+	@docker compose -f $(MB_COMPOSE) cp bot_city2:/app/backups/. ./backups/city2/
+	@echo "✅ Backups скопированы в ./backups/city2/"
+	@ls -lh backups/city2/ | tail -5
+
+mb-backup-copy-all:  ## Скопировать все backups на хост
+	@echo "📋 Копирование всех backups на хост..."
+	@make mb-backup-copy-city1
+	@echo ""
+	@make mb-backup-copy-city2
+	@echo ""
+	@echo "✅ Все backups скопированы!"
+
+mb-shell-city1:  ## Войти в контейнер city1
+	@docker compose -f $(MB_COMPOSE) exec bot_city1 /bin/sh
+
+mb-shell-city2:  ## Войти в контейнер city2
+	@docker compose -f $(MB_COMPOSE) exec bot_city2 /bin/sh
+
 # ========================================
 # GIT SHORTCUTS
 # ========================================
