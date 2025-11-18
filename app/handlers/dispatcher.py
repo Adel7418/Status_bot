@@ -522,9 +522,7 @@ async def admin_edit_closed_review(message: Message, state: FSMContext, user_rol
     has_review = (
         True
         if val in {"да", "+", "yes", "y", "1"}
-        else False
-        if val in {"нет", "-", "no", "n", "0"}
-        else None
+        else False if val in {"нет", "-", "no", "n", "0"} else None
     )
     if has_review is None:
         await message.answer("Ответьте 'да' или 'нет'.")
@@ -543,9 +541,7 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     out_of_city = (
         True
         if val in {"да", "+", "yes", "y", "1"}
-        else False
-        if val in {"нет", "-", "no", "n", "0"}
-        else None
+        else False if val in {"нет", "-", "no", "n", "0"} else None
     )
     if out_of_city is None:
         await message.answer("Ответьте 'да' или 'нет'.")
@@ -1133,7 +1129,9 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
+    except (
+        Exception
+    ) as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
@@ -1169,7 +1167,9 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
+    except (
+        Exception
+    ) as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(

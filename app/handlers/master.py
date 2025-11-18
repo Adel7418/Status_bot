@@ -454,7 +454,9 @@ async def process_refuse_reason(message: Message, state: FSMContext):
 
                     if isinstance(db, ORMDatabase):
                         await db.deactivate_group_messages(order_id)
-        except Exception:  # nosec B110 - игнорирование ошибок деактивации групповых сообщений не критично
+        except (
+            Exception
+        ):  # nosec B110 - игнорирование ошибок деактивации групповых сообщений не критично
             pass
 
         # Возвращаем статус в NEW и убираем мастера, сохраняем причину отказа
@@ -1408,7 +1410,9 @@ async def process_total_amount(message: Message, state: FSMContext):
                     )
             finally:
                 await _db.disconnect()
-        except Exception as exc:  # nosec B110 - игнорирование ошибок проверки админского override не критично
+        except (
+            Exception
+        ) as exc:  # nosec B110 - игнорирование ошибок проверки админского override не критично
             logger.debug("Admin override check failed in PROCESS_TOTAL_AMOUNT: %s", exc)
 
     if not is_sender_allowed:
