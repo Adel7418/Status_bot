@@ -45,7 +45,7 @@ class RoleCheckMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler
         """
-        if not isinstance(event, (Message, CallbackQuery)):
+        if not isinstance(event, Message | CallbackQuery):
             return await handler(event, data)
 
         # Получаем пользователя из события

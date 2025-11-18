@@ -2,8 +2,6 @@
 MasterPresenter - форматирование информации о мастерах
 """
 
-from typing import Optional
-
 
 class MasterPresenter:
     """Presenter для форматирования информации о мастерах"""
@@ -90,7 +88,7 @@ class MasterPresenter:
         total_orders: int,
         completed_orders: int,
         in_progress_orders: int,
-        total_revenue: Optional[float] = None,
+        total_revenue: float | None = None,
     ) -> str:
         """
         Форматирование статистики мастера
@@ -122,9 +120,7 @@ class MasterPresenter:
         return text
 
     @staticmethod
-    def format_master_notification(
-        master, action: str, additional_info: Optional[str] = None
-    ) -> str:
+    def format_master_notification(master, action: str, additional_info: str | None = None) -> str:
         """
         Форматирование уведомления о мастере
 

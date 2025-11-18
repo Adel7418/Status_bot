@@ -9,4 +9,4 @@ from app.presenters.master_presenter import MasterPresenter
 from app.presenters.order_presenter import OrderPresenter
 
 
-__all__ = ["OrderPresenter", "MasterPresenter"]
+__all__ = ["MasterPresenter", "OrderPresenter"]

@@ -5,7 +5,6 @@ import logging
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from app.database import DatabaseType, get_database
 from app.services.master_reports_detailed import MasterReportsService
@@ -21,8 +20,8 @@ class RealtimeDailyTableService:
     def __init__(self) -> None:
         self.db: DatabaseType = get_database()
         self.reports_service = MasterReportsService()
-        self.current_table_path: Optional[str] = None
-        self.current_date: Optional[date] = None
+        self.current_table_path: str | None = None
+        self.current_date: date | None = None
 
     async def init(self):
         """Инициализация сервиса"""
@@ -54,7 +53,7 @@ class RealtimeDailyTableService:
         """Создает новую ежедневную таблицу"""
         # Преобразуем date в datetime с timezone
         start_datetime = datetime.combine(date, datetime.min.time()).replace(tzinfo=MOSCOW_TZ)
-        end_datetime = start_datetime + timedelta(days=1)
+        start_datetime + timedelta(days=1)
 
         # Создаем отчет
         report_path = await self.reports_service.generate_daily_master_report(start_datetime)
@@ -124,7 +123,7 @@ class RealtimeDailyTableService:
         start_datetime = datetime.combine(self.current_date, datetime.min.time()).replace(
             tzinfo=MOSCOW_TZ
         )
-        end_datetime = start_datetime + timedelta(days=1)
+        start_datetime + timedelta(days=1)
 
         # Генерируем обновленный отчет
         report_path = await self.reports_service.generate_daily_master_report(start_datetime)
@@ -165,7 +164,7 @@ class RealtimeDailyTableService:
         except Exception as e:
             logger.error(f"Ошибка при сохранении и создании новой таблицы: {e}")
 
-    async def get_current_table_path(self) -> Optional[str]:
+    async def get_current_table_path(self) -> str | None:
         """Возвращает путь к текущей таблице"""
         return self.current_table_path
 

@@ -1012,7 +1012,7 @@ class Database:
                 client_name=row["client_name"],
                 client_address=row["client_address"],
                 client_phone=row["client_phone"],
-                master_lead_name=(row["master_lead_name"] if "master_lead_name" in row else None),
+                master_lead_name=row.get("master_lead_name", None),
                 status=row["status"],
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],
@@ -1253,7 +1253,7 @@ class Database:
 
         logger.info(
             f"Статус заявки #{order_id} изменен с {old_status} на {status}"
-            + (f" пользователем {changed_by}" if changed_by else "")
+            f"{f' пользователем {changed_by}' if changed_by else ''}"
         )
 
         return True
@@ -1343,7 +1343,7 @@ class Database:
         connection = self._get_connection()
 
         await connection.execute(
-            f"UPDATE orders SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608
+            f"UPDATE orders SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608 - field из контролируемого enum, не из пользовательского ввода
             (value, order_id),
         )
         await connection.commit()
@@ -1456,7 +1456,7 @@ class Database:
         params.append(get_now().isoformat())  # Добавляем дату в конец
         params.append(order_id)
 
-        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
+        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608 - updates формируется из контролируемых полей, не из пользовательского ввода
         connection = self._get_connection()
         await connection.execute(query, params)
         await connection.commit()
@@ -1619,7 +1619,7 @@ class Database:
         params.append(get_now().isoformat())  # Добавляем дату в конец
         params.append(order_id)
 
-        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
+        query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608 - updates формируется из контролируемых полей, не из пользовательского ввода
         connection = self._get_connection()
         await connection.execute(query, params)
         await connection.commit()
@@ -1850,7 +1850,7 @@ class Database:
             ),
         )
         await connection.commit()
-        return cast(int, cursor.lastrowid)
+        return int(cursor.lastrowid)
 
     async def get_financial_report_by_id(self, report_id: int) -> FinancialReport | None:
         """
@@ -1926,7 +1926,7 @@ class Database:
             ),
         )
         await connection.commit()
-        return cast(int, cursor.lastrowid)
+        return int(cursor.lastrowid)
 
     async def get_master_reports_by_report_id(self, report_id: int) -> list[MasterFinancialReport]:
         """
@@ -2008,7 +2008,7 @@ class Database:
 
     # ==================== АРХИВНЫЕ ОТЧЕТЫ МАСТЕРОВ ====================
 
-    async def save_master_report_archive(self, report: "MasterReportArchive") -> int:  # type: ignore[name-defined]
+    async def save_master_report_archive(self, report: "MasterReportArchive") -> int:  # type: ignore[name-defined]  # noqa: F821
         """
         Сохранение архивного отчета мастера
 
@@ -2044,11 +2044,11 @@ class Database:
             ),
         )
         await connection.commit()
-        return cast(int, cursor.lastrowid)
+        return int(cursor.lastrowid)
 
     async def get_master_archived_reports(
         self, master_id: int, limit: int = 10
-    ) -> list["MasterReportArchive"]:  # type: ignore[name-defined]
+    ) -> list["MasterReportArchive"]:  # type: ignore[name-defined]  # noqa: F821
         """
         Получение списка архивных отчетов мастера
 
@@ -2097,7 +2097,7 @@ class Database:
 
         return reports
 
-    async def get_master_report_archive_by_id(self, report_id: int) -> "MasterReportArchive | None":  # type: ignore[name-defined]
+    async def get_master_report_archive_by_id(self, report_id: int) -> "MasterReportArchive | None":  # type: ignore[name-defined]  # noqa: F821
         """
         Получение архивного отчета по ID
 

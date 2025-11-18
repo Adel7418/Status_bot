@@ -53,4 +53,3 @@ CREATE INDEX IF NOT EXISTS idx_orders_financial ON orders(status, total_amount);
 CREATE INDEX IF NOT EXISTS idx_orders_review ON orders(has_review, status);
 
 COMMIT;
-

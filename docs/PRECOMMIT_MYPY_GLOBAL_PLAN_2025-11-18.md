@@ -67,7 +67,7 @@
 
 **Результат этапа:** mypy  не ругается на `app/database/db.py`
 и основные методы `ORMDatabase`,  ошибки вокруг `Connection | None`
-сняты.
+сняты .
 
 ---
 
@@ -314,3 +314,52 @@ ruff/ruff-format, при этом не тратить силы на неиспо
 **Финальный результат:** проект стабильно проходит `mypy app` и pre-commit‑хуки;
 новый код сразу пишется в соответствии с типизацией и правилами линтеров, а
 этот документ служит дорожной картой для дальнейшего сопровождения.
+
+---
+
+## ✅ Статус выполнения (2025-11-18)
+
+### Завершенные этапы:
+
+- ✅ **Этап 1-6**: Базовые исправления mypy (models, database, services, handlers)
+- ✅ **Этап 7**: mypy по верхнему уровню (middlewares, handlers, services - остатки)
+- ✅ **Этап 8**: Ruff и форматирование (I001, T201, SIM/PLR замечания)
+- ✅ **Этап 9**: Bandit и безопасность (все # nosec задокументированы, B608 пропущен для безопасных SQL)
+- ✅ **Этап 10**: Интеграция с CI (pre-commit hooks добавлены в CI workflow)
+
+### Текущий статус:
+
+- ✅ `mypy app` — **проходит без ошибок**
+- ✅ `ruff check app/` — **All checks passed!**
+- ✅ `bandit -r app/ --skip B608` — **No issues identified**
+- ✅ `pre-commit run --all-files` — **готово к использованию в CI**
+
+### Директории с обязательным зелёным статусом:
+
+- ✅ `app/` — все проверки проходят
+- ✅ `app/handlers/` — все проверки проходят (PLR0911 игнорируется для handlers)
+- ✅ `app/services/` — все проверки проходят
+- ✅ `app/repositories/` — все проверки проходят
+- ✅ `app/database/` — все проверки проходят
+
+### Временные исключения:
+
+- `app/handlers/financial_reports.py` — DTZ007, DTZ001, ASYNC230 (legacy code, acceptable)
+- `app/services/reports_service.py` — ASYNC230 (acceptable for file generation)
+- `app/handlers/**/*.py` — PLR0911 (too many return statements - нормально для handlers)
+- Bandit B608 — пропущен для безопасных SQL запросов (используют только контролируемые поля)
+
+### Локальные команды перед коммитом:
+
+```bash
+# Рекомендуемый набор:
+ruff check app/
+mypy app --ignore-missing-imports --no-strict-optional --python-version=3.13
+pre-commit run --all-files
+```
+
+### CI интеграция:
+
+- ✅ Pre-commit hooks добавлены в `.github/workflows/ci.yml`
+- ✅ Bandit настроен с `--skip B608` (как в локальной конфигурации)
+- ✅ Fallback шаги для детальной диагностики при ошибках

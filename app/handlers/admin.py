@@ -36,6 +36,59 @@ router = Router(name="admin")
 # Проверка роли теперь в каждом обработчике через декоратор
 
 
+def _convert_orm_order_to_legacy(orm_order) -> "Order":  # type: ignore[name-defined]  # noqa: F821
+    """
+    Преобразование ORM Order в Legacy Order dataclass для совместимости с клавиатурами
+
+    Args:
+        orm_order: ORM модель Order из app.database.orm_models
+
+    Returns:
+        Legacy Order dataclass из app.database.models
+    """
+    from app.database.models import Order as LegacyOrder
+
+    return LegacyOrder(
+        id=orm_order.id,
+        equipment_type=orm_order.equipment_type,
+        description=orm_order.description,
+        client_name=orm_order.client_name,
+        client_address=orm_order.client_address,
+        client_phone=orm_order.client_phone,
+        status=orm_order.status,
+        assigned_master_id=orm_order.assigned_master_id,
+        dispatcher_id=orm_order.dispatcher_id,
+        notes=orm_order.notes,
+        scheduled_time=orm_order.scheduled_time,
+        total_amount=orm_order.total_amount,
+        materials_cost=orm_order.materials_cost,
+        master_profit=orm_order.master_profit,
+        company_profit=orm_order.company_profit,
+        has_review=orm_order.has_review,
+        out_of_city=orm_order.out_of_city,
+        estimated_completion_date=orm_order.estimated_completion_date
+        if hasattr(orm_order, "estimated_completion_date")
+        else None,
+        prepayment_amount=orm_order.prepayment_amount,
+        rescheduled_count=orm_order.rescheduled_count,
+        last_rescheduled_at=orm_order.last_rescheduled_at,
+        reschedule_reason=orm_order.reschedule_reason,
+        refuse_reason=orm_order.refuse_reason if hasattr(orm_order, "refuse_reason") else None,
+        created_at=orm_order.created_at,
+        updated_at=orm_order.updated_at,
+        master_name=orm_order.master_name
+        if hasattr(orm_order, "master_name")
+        else (orm_order.assigned_master.get_display_name() if orm_order.assigned_master else None),
+        dispatcher_name=orm_order.dispatcher_name
+        if hasattr(orm_order, "dispatcher_name")
+        else (
+            orm_order.dispatcher.full_name
+            if orm_order.dispatcher and hasattr(orm_order.dispatcher, "full_name")
+            else None
+        ),
+    )
+
+
 # УДАЛЕНО: обработчик "📊 Отчеты" перенесен в dispatcher.py
 # для универсальной обработки админов и диспетчеров
 
@@ -866,6 +919,13 @@ async def process_edit_master_specialization(message: Message, state: FSMContext
         # Обновляем информацию о мастере
         updated_master = await db.get_master_by_telegram_id(telegram_id)
 
+        if not updated_master:
+            await message.answer(
+                "❌ Ошибка: не удалось загрузить обновлённую информацию о мастере."
+            )
+            await state.clear()
+            return
+
         await message.answer(
             f"✅ <b>Специализация обновлена</b>\n\n"
             f"👤 Мастер: {updated_master.get_display_name()}\n"
@@ -1201,7 +1261,12 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    telegram_id = int(data.split(":")[1])
 
     # Сохраняем telegram_id мастера в состоянии
     await state.update_data(master_telegram_id=telegram_id)
@@ -1225,7 +1290,12 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
 
     keyboard = builder.as_markup(resize_keyboard=True)
 
-    await callback.message.answer(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Ошибка: сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.answer(
         "💬 <b>Установка рабочей группы</b>\n\n"
         "Для установки рабочей группы для мастера:\n\n"
         "1️⃣ Добавьте бота в рабочую группу с мастером\n"
@@ -1264,9 +1334,29 @@ async def handle_work_chat_selection(message: Message, state: FSMContext, user_r
 
     chat_id = chat_shared.chat_id
     data = await state.get_data()
-    master_telegram_id = data.get("master_telegram_id")
+    master_telegram_id_raw = data.get("master_telegram_id")
+
+    if not master_telegram_id_raw or not isinstance(master_telegram_id_raw, int):
+        from app.handlers.common import get_menu_with_counter
+
+        menu_keyboard = await get_menu_with_counter([user_role])
+        await message.answer(
+            "❌ Ошибка: не найден ID мастера. Попробуйте снова.", reply_markup=menu_keyboard
+        )
+        await state.clear()
+        return
+
+    master_telegram_id: int = master_telegram_id_raw
 
     # Получаем информацию о группе через API
+    if message.bot is None:
+        from app.handlers.common import get_menu_with_counter
+
+        menu_keyboard = await get_menu_with_counter([user_role])
+        await message.answer("❌ Ошибка: бот недоступен", reply_markup=menu_keyboard)
+        await state.clear()
+        return
+
     try:
         chat_info = await message.bot.get_chat(chat_id)
         chat_title = chat_info.title or f"ID: {chat_id}"
@@ -1420,7 +1510,12 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
         return
 
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     db = ORMDatabase()
     await db.connect()
@@ -1440,6 +1535,11 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
 
         if not master:
             await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Проверяем наличие пользователя
+        if not callback.from_user:
+            await callback.answer("❌ Ошибка: пользователь недоступен", show_alert=True)
             return
 
         # Обновляем статус (админ может менять от имени мастера)
@@ -1511,21 +1611,34 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
         # Получаем обновленную заявку из БД для правильной генерации клавиатуры
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
+
+        # Преобразуем ORM Order в Legacy Order для совместимости с get_order_actions_keyboard
+        legacy_order = _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
 
         text = OrderPresenter.format_order_details(order, include_client_phone=False, master=master)
         text += "<i>✅ Заявка принята администратором от имени мастера</i>"
 
-        keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
+        keyboard = get_order_actions_keyboard(legacy_order, UserRole.ADMIN)
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
 
-        log_action(
-            callback.from_user.id,
-            "ADMIN_ACCEPT_ORDER_FOR_MASTER",
-            f"Order #{order_id} for master {master.telegram_id}",
-        )
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+        if callback.from_user:
+            log_action(
+                callback.from_user.id,
+                "ADMIN_ACCEPT_ORDER_FOR_MASTER",
+                f"Order #{order_id} for master {master.telegram_id}",
+            )
 
     finally:
         await db.disconnect()
@@ -1545,7 +1658,12 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
         return
 
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     db = ORMDatabase()
     await db.connect()
@@ -1565,6 +1683,11 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
 
         if not master:
             await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Проверяем наличие пользователя
+        if not callback.from_user:
+            await callback.answer("❌ Ошибка: пользователь недоступен", show_alert=True)
             return
 
         # Обновляем статус (админ может менять от имени мастера)
@@ -1634,21 +1757,33 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
         # Получаем обновленную заявку из БД для правильной генерации клавиатуры
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
+
+        legacy_order = _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
 
         text = OrderPresenter.format_order_details(order, include_client_phone=True, master=master)
         text += "<i>🏠 Статус обновлен администратором от имени мастера</i>"
 
-        keyboard = get_order_actions_keyboard(order, UserRole.ADMIN)
+        keyboard = get_order_actions_keyboard(legacy_order, UserRole.ADMIN)
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
 
-        log_action(
-            callback.from_user.id,
-            "ADMIN_ONSITE_ORDER_FOR_MASTER",
-            f"Order #{order_id} for master {master.telegram_id}",
-        )
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+        if callback.from_user:
+            log_action(
+                callback.from_user.id,
+                "ADMIN_ONSITE_ORDER_FOR_MASTER",
+                f"Order #{order_id} for master {master.telegram_id}",
+            )
 
     finally:
         await db.disconnect()
@@ -1669,13 +1804,27 @@ async def callback_admin_refuse_order_complete(
     if user_role != UserRole.ADMIN:
         return
 
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     db = ORMDatabase()
     await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
+
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
+        if not order.assigned_master_id:
+            await callback.answer("❌ Мастер не назначен на эту заявку", show_alert=True)
+            return
+
         master = await db.get_master_by_id(order.assigned_master_id)
 
         if not master:
@@ -1691,11 +1840,16 @@ async def callback_admin_refuse_order_complete(
         await state.set_state(RefuseOrderStates.confirm_refusal)
 
         # Показываем подтверждение
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"⚠️ <b>Подтверждение отказа (от имени мастера)</b>\n\n"
             f"📋 Заявка #{order_id}\n"
-            f"🔧 Тип техники: {order.equipment_type}\n"
-            f"👤 Клиент: {order.client_name}\n"
+            f"🔧 Тип техники: {order.equipment_type or 'Не указан'}\n"
+            f"👤 Клиент: {order.client_name or 'Не указан'}\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"<b>Вы уверены, что хотите закрыть заявку как отказ?</b>\n\n"
             f"<i>Заявка будет помечена как отказ с суммой 0 рублей.</i>",
@@ -1723,7 +1877,12 @@ async def callback_admin_complete_order(callback: CallbackQuery, state: FSMConte
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
         return
 
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     db = ORMDatabase()
     await db.connect()
@@ -1753,18 +1912,24 @@ async def callback_admin_complete_order(callback: CallbackQuery, state: FSMConte
 
         await state.set_state(CompleteOrderStates.enter_total_amount)
 
-        await callback.message.answer(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.answer(
             f"💰 <b>Завершение заявки #{order_id} от имени мастера {master.get_display_name()}</b>\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
             f"Например: 5000, 5000.50 или 0",
             parse_mode="HTML",
         )
 
-        log_action(
-            callback.from_user.id,
-            "ADMIN_START_COMPLETE_ORDER_FOR_MASTER",
-            f"Order #{order_id} for master {master.telegram_id}",
-        )
+        if callback.from_user:
+            log_action(
+                callback.from_user.id,
+                "ADMIN_START_COMPLETE_ORDER_FOR_MASTER",
+                f"Order #{order_id} for master {master.telegram_id}",
+            )
 
     finally:
         await db.disconnect()
@@ -1786,7 +1951,12 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
         await callback.answer("У вас нет доступа к этой функции", show_alert=True)
         return
 
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     logger.debug(f"[DR] Admin starting DR process for order #{order_id}")
 
@@ -1822,7 +1992,12 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
-        await callback.message.answer(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.answer(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n"
             f"<b>От имени мастера:</b> {master.get_display_name()}\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
@@ -1852,22 +2027,34 @@ async def process_admin_refuse_confirmation_callback(
         return
 
     # Извлекаем данные из callback_data
-    parts = callback_query.data.split(":")
+    data = callback_query.data or ""
+    if ":" not in data:
+        await callback_query.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    parts = data.split(":")
+    if len(parts) < 3:
+        await callback_query.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
     action = parts[1]  # "yes" или "no"
     order_id = int(parts[2])
 
     if action == "yes":
         # Подтверждаем отказ
-        data = await state.get_data()
-        order_id = data.get("order_id", order_id)
-        acting_as_master_id = data.get("acting_as_master_id")
+        state_data = await state.get_data()
+        order_id = state_data.get("order_id", order_id)
+        acting_as_master_id = state_data.get("acting_as_master_id")
 
         # Завершаем заказ как отказ от имени мастера
         from app.handlers.master import complete_order_as_refusal
 
-        await complete_order_as_refusal(
-            callback_query.message, state, order_id, acting_as_master_id
-        )
+        message_obj = callback_query.message
+        if not isinstance(message_obj, Message):
+            await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await complete_order_as_refusal(message_obj, state, order_id, acting_as_master_id)
 
         # Очищаем состояние
         await state.clear()
@@ -1879,13 +2066,21 @@ async def process_admin_refuse_confirmation_callback(
         await db.connect()
         try:
             order = await db.get_order_by_id(order_id)
+            message_obj = callback_query.message
+            if not isinstance(message_obj, Message):
+                await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+                return
+
             if order:
-                await callback_query.message.edit_text(
+                legacy_order = (
+                    _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
+                )
+                await message_obj.edit_text(
                     "❌ Отказ отменен.\n\nЗаявка остается активной.",
-                    reply_markup=get_order_actions_keyboard(order, UserRole.ADMIN),
+                    reply_markup=get_order_actions_keyboard(legacy_order, UserRole.ADMIN),
                 )
             else:
-                await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
+                await message_obj.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
         finally:
             await db.disconnect()
         await state.clear()
@@ -1965,13 +2160,24 @@ async def show_closed_order_financial_info(message: Message, order, user_role: s
 @handle_errors
 async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование общей суммы заявки"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     await state.update_data(order_id=order_id, field="total_amount")
     from app.states import AdminCloseOrderStates
 
     await state.set_state(AdminCloseOrderStates.enter_value)
-    await callback.message.edit_text(
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"💵 <b>Редактирование общей суммы</b>\n\n"
         f"Введите новую общую сумму для заявки #{order_id}:\n\n"
         f"<i>Например: 1500.50</i>",
@@ -1985,13 +2191,24 @@ async def callback_edit_total_amount(callback: CallbackQuery, state: FSMContext,
 @handle_errors
 async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование расходов на материалы"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     await state.update_data(order_id=order_id, field="materials_cost")
     from app.states import AdminCloseOrderStates
 
     await state.set_state(AdminCloseOrderStates.enter_value)
-    await callback.message.edit_text(
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"🔧 <b>Редактирование расходов на материалы</b>\n\n"
         f"Введите новые расходы на материалы для заявки #{order_id}:\n\n"
         f"<i>Например: 300.00</i>",
@@ -2005,13 +2222,24 @@ async def callback_edit_materials_cost(callback: CallbackQuery, state: FSMContex
 @handle_errors
 async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование дохода мастера"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     await state.update_data(order_id=order_id, field="master_profit")
     from app.states import AdminCloseOrderStates
 
     await state.set_state(AdminCloseOrderStates.enter_value)
-    await callback.message.edit_text(
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"👨‍🔧 <b>Редактирование дохода мастера</b>\n\n"
         f"Введите новый доход мастера для заявки #{order_id}:\n\n"
         f"<i>Например: 800.00</i>",
@@ -2025,13 +2253,24 @@ async def callback_edit_master_profit(callback: CallbackQuery, state: FSMContext
 @handle_errors
 async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование дохода компании"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     await state.update_data(order_id=order_id, field="company_profit")
     from app.states import AdminCloseOrderStates
 
     await state.set_state(AdminCloseOrderStates.enter_value)
-    await callback.message.edit_text(
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"🏢 <b>Редактирование дохода компании</b>\n\n"
         f"Введите новый доход компании для заявки #{order_id}:\n\n"
         f"<i>Например: 400.00</i>",
@@ -2045,13 +2284,24 @@ async def callback_edit_company_profit(callback: CallbackQuery, state: FSMContex
 @handle_errors
 async def callback_edit_prepayment(callback: CallbackQuery, state: FSMContext, user_role: str):
     """Редактирование предоплаты"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    if ":" not in data:
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    order_id = int(data.split(":")[1])
 
     await state.update_data(order_id=order_id, field="prepayment_amount")
     from app.states import AdminCloseOrderStates
 
     await state.set_state(AdminCloseOrderStates.enter_value)
-    await callback.message.edit_text(
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"💳 <b>Редактирование предоплаты</b>\n\n"
         f"Введите новую предоплату для заявки #{order_id}:\n\n"
         f"<i>Например: 500.00 или 0 если предоплаты не было</i>",
@@ -2064,7 +2314,12 @@ async def callback_edit_prepayment(callback: CallbackQuery, state: FSMContext, u
 @handle_errors
 async def callback_close_financial_info(callback: CallbackQuery):
     """Закрытие финансовой информации"""
-    await callback.message.delete()
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.delete()
     await callback.answer("Финансовая информация закрыта")
 
 
@@ -2140,7 +2395,7 @@ async def cmd_delete_order(message: Message, user_role: str):
         return
 
     # Получаем ID заявки из сообщения
-    command_parts = message.text.split()
+    command_parts = (message.text or "").split()
     if len(command_parts) != 2:
         await message.reply(
             "❌ Неверный формат команды\n\n"
@@ -2190,7 +2445,7 @@ async def cmd_delete_order(message: Message, user_role: str):
             f"📝 Описание: {order.description}\n"
             f"📊 Статус: {order.status}\n"
             f"{master_info}"
-            f"📅 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"📅 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else 'Не указана'}\n\n"
             f"❓ Вы уверены, что хотите удалить эту заявку?",
             parse_mode="HTML",
             reply_markup=get_yes_no_keyboard("confirm_delete_order", order_id),
@@ -2225,10 +2480,10 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
     action = None
     order_id = None
 
-    data = callback.data
+    data = callback.data or ""
     logger.info(f"[DELETE] Raw callback data: {data}")
 
-    if ":" in data:
+    if data and ":" in data:
         try:
             _, action, order_id_str = data.split(":", maxsplit=2)
             action = action.strip()
@@ -2249,7 +2504,9 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
         return
 
     if action == "no":
-        await callback.message.edit_text("❌ Удаление заявки отменено")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text("❌ Удаление заявки отменено")
         await callback.answer()
         return
 
@@ -2260,8 +2517,13 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
         # Получаем заявку
         order = await db.get_order_by_id(order_id)
 
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
         if not order:
-            await callback.message.edit_text(f"❌ Заявка #{order_id} не найдена")
+            await message_obj.edit_text(f"❌ Заявка #{order_id} не найдена")
             return
 
         # Мягкое удаление заявки
@@ -2269,11 +2531,12 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
 
         if success:
             # Добавляем в аудит
-            await db.add_audit_log(
-                user_id=callback.from_user.id,
-                action="DELETE_ORDER_COMMAND",
-                details=f"Order #{order_id} deleted via /delete_order command",
-            )
+            if callback.from_user:
+                await db.add_audit_log(
+                    user_id=callback.from_user.id,
+                    action="DELETE_ORDER_COMMAND",
+                    details=f"Order #{order_id} deleted via /delete_order command",
+                )
 
             # Уведомляем мастера об удалении заказа, если он был назначен
             if order.assigned_master_id:
@@ -2296,22 +2559,25 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
                             f"Не удалось уведомить мастера {master.telegram_id} об удалении заказа #{order_id}"
                         )
 
-            await callback.message.edit_text(
+            await message_obj.edit_text(
                 f"✅ Заявка #{order_id} успешно удалена\n\n"
                 f"👤 Клиент: {order.client_name}\n"
                 f"📱 Техника: {order.equipment_type}\n"
                 f"📊 Статус: {order.status}"
             )
 
-            logger.info(
-                f"Order #{order_id} deleted by user {callback.from_user.id} via /delete_order command"
-            )
+            if callback.from_user:
+                logger.info(
+                    f"Order #{order_id} deleted by user {callback.from_user.id} via /delete_order command"
+                )
         else:
-            await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
+            await message_obj.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
 
     except Exception as e:
         logger.error(f"Error deleting order {order_id}: {e}")
-        await callback.message.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(f"❌ Ошибка при удалении заявки #{order_id}")
 
     finally:
         await db.disconnect()

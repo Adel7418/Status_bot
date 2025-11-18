@@ -105,9 +105,11 @@ async def show_edit_order_menu(message: Message, order, user_role: str, allow_cl
 
     for field_key, field_name in EDITABLE_FIELDS.items():
         # Показываем поля DR только для заявок в статусе DR
-        if field_key in ["estimated_completion_date", "prepayment_amount"]:
-            if order.status != OrderStatus.DR:
-                continue  # Пропускаем DR поля для других статусов
+        if (
+            field_key in ["estimated_completion_date", "prepayment_amount"]
+            and order.status != OrderStatus.DR
+        ):
+            continue  # Пропускаем DR поля для других статусов
 
         builder.row(
             InlineKeyboardButton(
@@ -195,9 +197,11 @@ async def callback_edit_order(
 
     for field_key, field_name in EDITABLE_FIELDS.items():
         # Показываем поля DR только для заявок в статусе DR
-        if field_key in ["estimated_completion_date", "prepayment_amount"]:
-            if order.status != OrderStatus.DR:
-                continue  # Пропускаем DR поля для других статусов
+        if (
+            field_key in ["estimated_completion_date", "prepayment_amount"]
+            and order.status != OrderStatus.DR
+        ):
+            continue  # Пропускаем DR поля для других статусов
 
         builder.row(
             InlineKeyboardButton(
@@ -400,7 +404,7 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str,
     # Специальная обработка для очистки поля
     if new_value == "-" and field in ["notes", "scheduled_time", "estimated_completion_date"]:
         new_value = None
-    if (new_value == "-" or new_value == "0") and field == "prepayment_amount":
+    if (new_value in ("-", "0")) and field == "prepayment_amount":
         new_value = None
 
     # Валидация нового значения
@@ -489,7 +493,7 @@ async def validate_field_value(field: str, value: str | None, message: Message):
             raise ValueError(f"Неверный тип техники. Доступные: {', '.join(types)}")
         return value
 
-    elif field == "description":
+    if field == "description":
         if len(value) < 4:
             raise ValueError("Описание слишком короткое (минимум 4 символа)")
         if len(value) > MAX_DESCRIPTION_LENGTH:
@@ -577,30 +581,29 @@ async def validate_field_value(field: str, value: str | None, message: Message):
                 await message.answer(confirmation_text, parse_mode="HTML")
 
                 return formatted_time
-            else:
-                # Не смогли распознать дату - переспрашиваем с примерами
-                await message.answer(
-                    f"❓ <b>Не удалось распознать дату:</b> {value}\n\n"
-                    f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
-                    f"<b>🤖 Автоопределение даты:</b>\n"
-                    f"• <code>завтра в 15:00</code>\n"
-                    f"• <code>послезавтра 14:30</code>\n"
-                    f"• <code>через 3 дня 15:00</code>\n"
-                    f"• <code>через неделю 12:00</code>\n\n"
-                    f"<b>⏱ Через часы/дни:</b>\n"
-                    f"• <code>через полтора часа</code>\n"
-                    f"• <code>через 1-1.5 часа</code>\n"
-                    f"• <code>через 3 дня</code>\n\n"
-                    f"<b>📅 Точная дата:</b>\n"
-                    f"• <code>20.10.2025 14:00</code>\n"
-                    f"• <code>25/10/2025 09:30</code>\n\n"
-                    f"<b>📝 Или просто текст:</b>\n"
-                    f"• <code>Набрать клиенту</code>\n"
-                    f"• <code>Уточнить время</code>",
-                    parse_mode="HTML",
-                )
-                # Возвращаем None чтобы пользователь мог ввести заново
-                return None
+            # Не смогли распознать дату - переспрашиваем с примерами
+            await message.answer(
+                f"❓ <b>Не удалось распознать дату:</b> {value}\n\n"
+                f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
+                f"<b>🤖 Автоопределение даты:</b>\n"
+                f"• <code>завтра в 15:00</code>\n"
+                f"• <code>послезавтра 14:30</code>\n"
+                f"• <code>через 3 дня 15:00</code>\n"
+                f"• <code>через неделю 12:00</code>\n\n"
+                f"<b>⏱ Через часы/дни:</b>\n"
+                f"• <code>через полтора часа</code>\n"
+                f"• <code>через 1-1.5 часа</code>\n"
+                f"• <code>через 3 дня</code>\n\n"
+                f"<b>📅 Точная дата:</b>\n"
+                f"• <code>20.10.2025 14:00</code>\n"
+                f"• <code>25/10/2025 09:30</code>\n\n"
+                f"<b>📝 Или просто текст:</b>\n"
+                f"• <code>Набрать клиенту</code>\n"
+                f"• <code>Уточнить время</code>",
+                parse_mode="HTML",
+            )
+            # Возвращаем None чтобы пользователь мог ввести заново
+            return None
 
         # Если не распознали как дату - сохраняем как текст
         if len(value) < 3:
@@ -644,7 +647,9 @@ async def validate_field_value(field: str, value: str | None, message: Message):
             if amount > 1000000:
                 raise ValueError("Предоплата слишком большая (максимум 1 000 000 ₽)")
             return amount
-        except ValueError:
-            raise ValueError("Неверный формат суммы. Используйте число, например: 2000 или 1500.50")
+        except ValueError as err:
+            raise ValueError(
+                "Неверный формат суммы. Используйте число, например: 2000 или 1500.50"
+            ) from err
 
     return value

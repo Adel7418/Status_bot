@@ -1484,7 +1484,6 @@ class ExcelExportService:
             # Стили из ExcelStyles
             header_font = ExcelStyles.HEADER_FONT
             header_fill = ExcelStyles.HEADER_FILL
-            subheader_fill = ExcelStyles.SUBHEADER_FILL
             center_alignment = ExcelStyles.CENTER_ALIGNMENT
             left_alignment = ExcelStyles.LEFT_ALIGNMENT
             right_alignment = ExcelStyles.RIGHT_ALIGNMENT

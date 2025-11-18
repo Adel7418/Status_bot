@@ -231,7 +231,7 @@ class UserRepository(BaseRepository[User]):
         set_parts = [f"{field} = ?" for field in updates]
         set_clause = ", ".join(set_parts)
 
-        query = f"UPDATE users SET {set_clause} WHERE telegram_id = ?"  # nosec B608
+        query = f"UPDATE users SET {set_clause} WHERE telegram_id = ?"  # nosec B608 - set_clause формируется из контролируемых полей модели, не из пользовательского ввода
         params = [*list(updates.values()), telegram_id]
 
         await self._execute_commit(query, tuple(params))

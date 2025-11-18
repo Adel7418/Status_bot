@@ -36,7 +36,7 @@ async def check_user_role(telegram_id: int):
         if user.username:
             print(f"   Username: @{user.username}")
         print(f"   Основная роль: {user.role}")
-        
+
         # Проверяем дополнительные роли
         if user.additional_roles:
             roles_list = user.additional_roles.split(',') if isinstance(user.additional_roles, str) else []
@@ -44,7 +44,7 @@ async def check_user_role(telegram_id: int):
             print(f"   Все роли: {', '.join(all_roles)}")
         else:
             print(f"   Дополнительные роли: нет")
-        
+
         print(f"\n📊 Доступ к отчетам: {'✅ Есть' if user.role in ['admin', 'dispatcher'] else '❌ Нет'}")
         print()
 
@@ -69,4 +69,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

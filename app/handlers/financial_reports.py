@@ -36,11 +36,10 @@ async def safe_edit_message(
     message = callback.message
     if not isinstance(message, Message):
         logger.warning("Callback has no accessible message to edit")
-        try:
+        from contextlib import suppress
+
+        with suppress(Exception):
             await callback.answer()
-        except Exception:
-            # Игнорируем ошибки ответа на callback
-            pass
         return
 
     try:
@@ -567,9 +566,8 @@ async def callback_reports_list(callback: CallbackQuery, user_role: str, db: Dat
                     f"{report.period_start.strftime('%d.%m')} - "
                     f"{report.period_end.strftime('%d.%m.%Y')}"
                 )
-        elif report.report_type == "MONTHLY":
-            if report.period_start is not None:
-                period_text = report.period_start.strftime("%B %Y")
+        elif report.report_type == "MONTHLY" and report.period_start is not None:
+            period_text = report.period_start.strftime("%B %Y")
 
         text += (
             f"{i}. {report.report_type.lower()} ({period_text}) - {report.total_orders} заказов\n"

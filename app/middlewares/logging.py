@@ -57,7 +57,7 @@ class LoggingMiddleware(BaseMiddleware):
             Результат выполнения handler
         """
         # Обрабатываем только Message/CallbackQuery; прочие события просто прокидываем дальше
-        if not isinstance(event, (Message, CallbackQuery)):
+        if not isinstance(event, Message | CallbackQuery):
             return await handler(event, data)
 
         # Получаем пользователя (GDPR: маскируем username)

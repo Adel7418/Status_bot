@@ -36,7 +36,7 @@ async def fix_alembic_version():
 
         if current_version:
             print(f"[INFO] Текущая ревизия в базе данных: {current_version[0]}")
-            
+
             # Проверяем, является ли ревизия '004' (неправильная)
             if current_version[0] == '004':
                 print("[WARN] Обнаружена неправильная ревизия '004'")
@@ -71,4 +71,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

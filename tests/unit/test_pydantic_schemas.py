@@ -67,7 +67,7 @@ class TestOrderCreateSchema:
 
         with pytest.raises(ValidationError) as exc_info:
             OrderCreateSchema(**order_data)
-        
+
         # Проверяем, что ошибка связана с длиной описания (description)
         error_str = str(exc_info.value).lower()
         assert ("description" in error_str and ("at least 4" in error_str or "string_too_short" in error_str))

@@ -2,7 +2,6 @@
 OrderPresenter - форматирование заказов для отображения
 """
 
-from typing import Optional
 
 from app.config import OrderStatus
 from app.utils import escape_html as escape_html_util
@@ -72,11 +71,10 @@ class OrderPresenter:
                 text += "📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
             else:
                 text += "<i>Контактная информация клиента будет доступна\nпосле принятия заявки.</i>\n\n"
-        else:  # default
-            if include_client_phone:
-                text += f"📞 <b>Телефон:</b> {safe(order.client_phone)}\n\n"
-            else:
-                text += "📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
+        elif include_client_phone:
+            text += f"📞 <b>Телефон:</b> {safe(order.client_phone)}\n\n"
+        else:
+            text += "📞 <b>Телефон:</b> <i>Будет доступен после прибытия на объект</i>\n\n"
 
         # Заметки
         if order.notes:
@@ -174,7 +172,7 @@ class OrderPresenter:
         review_text = "⭐ Да" if has_review else "❌ Нет"
         out_of_city_text = "🚗 Да" if out_of_city else "❌ Нет"
 
-        text = (
+        return (
             f"💰 <b>Финансы:</b>\n"
             f"├ Общая сумма: {total_amount:.2f} ₽\n"
             f"├ Расходники: {materials_cost:.2f} ₽\n"
@@ -186,10 +184,8 @@ class OrderPresenter:
             f"└ Выезд за город: {out_of_city_text}"
         )
 
-        return text
-
     @staticmethod
-    def format_order_notification(order, action: str, additional_info: Optional[str] = None) -> str:
+    def format_order_notification(order, action: str, additional_info: str | None = None) -> str:
         """
         Форматирование уведомления о заказе
 

@@ -192,7 +192,7 @@ class RateLimitMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler или None если превышен лимит
         """
-        if not isinstance(event, (Message, CallbackQuery)):
+        if not isinstance(event, Message | CallbackQuery):
             return await handler(event, data)
 
         user = event.from_user

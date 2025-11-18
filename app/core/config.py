@@ -30,7 +30,9 @@ if env_file == ".env":
         if os.path.exists(env_city1_path):
             env_file = env_city1_path
             logger = logging.getLogger(__name__)
-            logger.info("Обнаружен файл env.city1 в директории проекта, используем его для загрузки конфигурации")
+            logger.info(
+                "Обнаружен файл env.city1 в директории проекта, используем его для загрузки конфигурации"
+            )
 
 if env_file in ("env.city1", "env.city2") or (env_file != ".env" and "city" in env_file):
     # Используем абсолютный путь для надежности
@@ -39,7 +41,9 @@ if env_file in ("env.city1", "env.city2") or (env_file != ".env" and "city" in e
         env_file_path = os.path.join(os.getcwd(), env_file)
         if not os.path.exists(env_file_path):
             # Если не найден, проверяем в директории проекта
-            project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            project_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
             env_file_path = os.path.join(project_dir, env_file)
         env_file = env_file_path
     load_dotenv(env_file)

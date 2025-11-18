@@ -30,7 +30,7 @@ async def cleanup_temp_tables():
             for table in temp_tables:
                 table_name = table[0]
                 print(f"  - {table_name}")
-            
+
             # Удаляем каждую временную таблицу
             for table in temp_tables:
                 table_name = table[0]
@@ -39,7 +39,7 @@ async def cleanup_temp_tables():
                     print(f"[OK] Удалена временная таблица: {table_name}")
                 except Exception as e:
                     print(f"[WARN] Не удалось удалить таблицу {table_name}: {e}")
-            
+
             await conn.commit()
             print(f"[OK] Очистка завершена. Удалено {len(temp_tables)} временных таблиц")
         else:
@@ -67,4 +67,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

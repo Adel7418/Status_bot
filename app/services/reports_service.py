@@ -606,7 +606,7 @@ class ReportsService:
         file_path = reports_dir / filename
 
         text = await self.format_report_to_text(report)
-        with open(file_path, "w", encoding="utf-8") as f:  # noqa: ASYNC101
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(text)
 
         logger.info(f"Отчет сохранен в файл: {file_path}")

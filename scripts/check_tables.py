@@ -21,9 +21,3 @@ for table in tables:
     print(f"  {table}: {count} записей")
 
 conn.close()
-
-
-
-
-
-

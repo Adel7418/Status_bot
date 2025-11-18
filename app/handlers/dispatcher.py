@@ -159,9 +159,12 @@ async def send_edit_closed_menu(message: Message, state: FSMContext):
         # Получаем ставку для расчета по типу техники
         specialization_rate = None
         if order.equipment_type:
-            specialization_rate = await db.get_specialization_rate(
-                equipment_type=order.equipment_type,
-            )
+            from app.database.orm_database import ORMDatabase
+
+            if isinstance(db, ORMDatabase):
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
 
         master_profit, company_profit = calculate_profit_split(
             total or 0.0,
@@ -224,16 +227,17 @@ async def admin_edit_closed_select(callback: CallbackQuery, state: FSMContext, u
     if user_role != UserRole.ADMIN:
         return
     _, field, _order_id = callback.data.split(":", 2)
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     if field == "total":
         await state.set_state(EditClosedOrderStates.enter_total_amount)
-        await callback.message.edit_text(
-            "💰 Введите общую сумму заказа (число, ₽):", reply_markup=None
-        )
+        await message_obj.edit_text("💰 Введите общую сумму заказа (число, ₽):", reply_markup=None)
     elif field == "materials":
         await state.set_state(EditClosedOrderStates.enter_materials_cost)
-        await callback.message.edit_text(
-            "🧾 Введите сумму расхода (материалы), ₽:", reply_markup=None
-        )
+        await message_obj.edit_text("🧾 Введите сумму расхода (материалы), ₽:", reply_markup=None)
     await callback.answer()
 
 
@@ -245,7 +249,9 @@ async def admin_edit_closed_set_review(callback: CallbackQuery, state: FSMContex
     _, answer, _order_id = callback.data.split(":", 2)
     await state.update_data(has_review=(answer == "yes"))
     await callback.answer("OK")
-    await send_edit_closed_menu(callback.message, state)
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await send_edit_closed_menu(message_obj, state)
 
 
 @router.callback_query(F.data.startswith("ec_set_out:"))
@@ -256,7 +262,9 @@ async def admin_edit_closed_set_out(callback: CallbackQuery, state: FSMContext, 
     _, answer, _order_id = callback.data.split(":", 2)
     await state.update_data(out_of_city=(answer == "yes"))
     await callback.answer("OK")
-    await send_edit_closed_menu(callback.message, state)
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await send_edit_closed_menu(message_obj, state)
 
 
 @router.callback_query(F.data.startswith("ec_save:"))
@@ -442,9 +450,14 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
 
     # Очищаем состояние и показываем результат
     await state.clear()
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     if final:
         net_prev = (final.total_amount or 0.0) - (final.materials_cost or 0.0)
-        await callback.message.edit_text(
+        await message_obj.edit_text(
             (
                 "✅ Изменения сохранены.\n\n"
                 f"Заявка #{order_id}\n"
@@ -460,7 +473,7 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
             reply_markup=None,
         )
     else:
-        await callback.message.edit_text("✅ Изменения сохранены.")
+        await message_obj.edit_text("✅ Изменения сохранены.")
     await callback.answer("Сохранено")
 
 
@@ -663,12 +676,18 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     await state.set_state(CreateOrderStates.description)
 
     # Удаляем предыдущее сообщение
-    try:
-        await callback.message.delete()
-    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма
-        logger.debug("Failed to delete callback message: %s", exc)
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        try:
+            await message_obj.delete()
+        except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма
+            logger.debug("Failed to delete callback message: %s", exc)
 
-    sent_message = await callback.message.answer(
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    sent_message = await message_obj.answer(
         f"✅ Выбрано: {equipment_type}\n\n"
         f"Шаг 2/7: Опишите проблему:\n"
         f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
@@ -1114,7 +1133,7 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception as exc:  # nosec B110
+    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
@@ -1150,7 +1169,7 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception as exc:  # nosec B110
+    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
@@ -1264,9 +1283,7 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
 
 @router.message(CreateOrderStates.scheduled_time, F.text != "❌ Отмена")
 @handle_errors
-async def process_scheduled_time(  # noqa: PLR0911
-    message: Message, state: FSMContext, user_role: str
-):
+async def process_scheduled_time(message: Message, state: FSMContext, user_role: str):
     """
     Обработка времени прибытия к клиенту с автоопределением даты
 
@@ -1846,7 +1863,9 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
             filter_name = OrderStatus.get_status_name(filter_status)
 
         if not orders:
-            await callback.message.edit_text(f"📭 Нет заявок со статусом '{filter_name}'.")
+            message_obj = callback.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text(f"📭 Нет заявок со статусом '{filter_name}'.")
             await callback.answer()
             return
 
@@ -1870,9 +1889,21 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
         if len(orders) > 10:
             text += f"\n<i>Показано 10 из {len(orders)} заявок</i>"
 
-        keyboard = get_order_list_keyboard(orders[:20])
+        # Конвертируем ORM заказы в Legacy заказы для совместимости с клавиатурой
+        from app.handlers.admin import _convert_orm_order_to_legacy
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        legacy_orders = [
+            _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
+            for order in orders[:20]
+        ]
+        keyboard = get_order_list_keyboard(legacy_orders)
+
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -1922,9 +1953,14 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
             # Определяем базовую ставку с учетом типа техники
             base_rate = "50/50" if net_profit >= 7000 else "40/60"
             if order.equipment_type:
-                specialization_rate = await db.get_specialization_rate(
-                    equipment_type=order.equipment_type,
-                )
+                from app.database.orm_database import ORMDatabase
+
+                if isinstance(db, ORMDatabase):
+                    specialization_rate = await db.get_specialization_rate(
+                        equipment_type=order.equipment_type,
+                    )
+                else:
+                    specialization_rate = None
                 if specialization_rate:
                     base_master_pct, base_company_pct = specialization_rate
                     master_pct_display = int(round(base_master_pct))
@@ -1963,7 +1999,12 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
 
         keyboard = get_order_actions_keyboard(order, user_role)
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -2006,7 +2047,12 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
             masters, order_id=order_id, action="select_master_for_order"
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"👨‍🔧 <b>Выберите мастера для заявки #{order_id}:</b>",
             parse_mode="HTML",
             reply_markup=keyboard,
@@ -2144,7 +2190,12 @@ async def callback_select_master_for_order(
                 f"для заявки {order_id} после всех попыток"
             )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"✅ <b>Мастер назначен!</b>\n\n"
             f"📋 Заявка #{order_id}\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
@@ -2211,7 +2262,12 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
 
         current_master_name = order.master_name if order.master_name else "Неизвестен"
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"🔄 <b>Переназначение мастера</b>\n\n"
             f"📋 Заявка #{order_id}\n"
             f"👨‍🔧 Текущий мастер: {current_master_name}\n\n"
@@ -2355,7 +2411,12 @@ async def callback_select_new_master_for_order(
 
         old_master_name = old_master.get_display_name() if old_master else "Неизвестен"
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"✅ <b>Мастер переназначен!</b>\n\n"
             f"📋 Заявка #{order_id}\n"
             f"👨‍🔧 Старый мастер: {old_master_name}\n"
@@ -2439,7 +2500,10 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
                                 f"Deleted group message {m.message_id} for order {order_id} in chat {m.chat_id}"
                             )
                     # Помечаем записи неактивными
-                    await db.deactivate_group_messages(order_id)
+                    from app.database.orm_database import ORMDatabase
+
+                    if isinstance(db, ORMDatabase):
+                        await db.deactivate_group_messages(order_id)
         except Exception as e:
             logger.warning(f"Не удалось удалить групповые сообщения для заявки {order_id}: {e}")
 
@@ -2458,7 +2522,12 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
         master_name = master.get_display_name() if master else "Неизвестен"
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"✅ <b>Мастер снят с заявки!</b>\n\n"
             f"📋 Заявка #{order_id}\n"
             f"👨‍🔧 Мастер: {master_name}\n\n"
@@ -2503,7 +2572,12 @@ async def callback_close_order(callback: CallbackQuery, user_role: str, state: F
     # Переходим к вводу общей суммы
     await state.set_state(AdminCloseOrderStates.enter_total_amount)
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"💰 <b>Закрытие заявки #{order_id}</b>\n\n"
         "Введите общую сумму заказа в рублях:\n"
         "(например: 5000, 5000.50 или 0)",
@@ -2542,10 +2616,15 @@ async def callback_refuse_order(
             return
 
         # Сохраняем данные в state
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
         await state.update_data(
             order_id=order_id,
-            admin_message_id=callback.message.message_id,
-            admin_chat_id=callback.message.chat.id,
+            admin_message_id=message_obj.message_id,
+            admin_chat_id=message_obj.chat.id,
             user_roles=user_roles,
         )
 
@@ -2559,7 +2638,12 @@ async def callback_refuse_order(
             "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
             f"Например: 'Не актуально', 'Дубликат', 'Некорректные данные' и т.д.",
             reply_markup=None,
@@ -2700,7 +2784,12 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
         finally:
             await db.disconnect()
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             "📋 <b>Все заявки</b>\n\n" "Выберите фильтр:",
             parse_mode="HTML",
             reply_markup=get_orders_filter_keyboard(counts),
@@ -2722,7 +2811,12 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
             orders = await db.get_orders_by_master(master.id, exclude_closed=True)
 
             if not orders:
-                await callback.message.edit_text(
+                message_obj = callback.message
+                if not isinstance(message_obj, Message):
+                    await callback.answer("❌ Сообщение недоступно", show_alert=True)
+                    return
+
+                await message_obj.edit_text(
                     "📭 У вас пока нет активных заявок.\n\n" "Заявки будут назначаться диспетчером."
                 )
                 await callback.answer()
@@ -2760,9 +2854,21 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
 
                     text += "\n"
 
-            keyboard = get_order_list_keyboard(orders, for_master=True)
+            # Конвертируем ORM заказы в Legacy заказы для совместимости с клавиатурой
+            from app.handlers.admin import _convert_orm_order_to_legacy
 
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+            legacy_orders = [
+                _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
+                for order in orders
+            ]
+            keyboard = get_order_list_keyboard(legacy_orders, for_master=True)
+
+            message_obj = callback.message
+            if not isinstance(message_obj, Message):
+                await callback.answer("❌ Сообщение недоступно", show_alert=True)
+                return
+
+            await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
         finally:
             await db.disconnect()
@@ -2828,7 +2934,12 @@ async def callback_report_masters(callback: CallbackQuery, user_role: str):
         )
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -2867,7 +2978,12 @@ async def callback_report_statuses(callback: CallbackQuery, user_role: str):
         )
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -2906,7 +3022,12 @@ async def callback_report_equipment(callback: CallbackQuery, user_role: str):
         )
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -2928,7 +3049,12 @@ async def callback_report_period(callback: CallbackQuery, user_role: str):
 
     from app.keyboards.inline import get_period_keyboard
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         "📅 <b>Выберите период:</b>", parse_mode="HTML", reply_markup=get_period_keyboard()
     )
 
@@ -2971,7 +3097,12 @@ async def callback_period_selected(callback: CallbackQuery, user_role: str):
         )
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_reports"))
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     finally:
         await db.disconnect()
@@ -3003,7 +3134,9 @@ async def callback_download_masters_excel(callback: CallbackQuery, user_role: st
 
         excel_file = await reports.generate_excel_report(report_type="masters")
 
-        await callback.message.answer_document(document=excel_file, caption="📊 Отчет по мастерам")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(document=excel_file, caption="📊 Отчет по мастерам")
 
     finally:
         await db.disconnect()
@@ -3033,7 +3166,9 @@ async def callback_download_statuses_excel(callback: CallbackQuery, user_role: s
 
         excel_file = await reports.generate_excel_report(report_type="statuses")
 
-        await callback.message.answer_document(document=excel_file, caption="📊 Отчет по статусам")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(document=excel_file, caption="📊 Отчет по статусам")
 
     finally:
         await db.disconnect()
@@ -3063,9 +3198,11 @@ async def callback_download_equipment_excel(callback: CallbackQuery, user_role: 
 
         excel_file = await reports.generate_excel_report(report_type="equipment")
 
-        await callback.message.answer_document(
-            document=excel_file, caption="📊 Отчет по типам техники"
-        )
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(
+                document=excel_file, caption="📊 Отчет по типам техники"
+            )
 
     finally:
         await db.disconnect()
@@ -3122,7 +3259,12 @@ async def callback_back_to_reports(callback: CallbackQuery, user_role: str):
 
     from app.keyboards.inline import get_reports_keyboard
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         "📊 <b>Отчеты</b>\n\n" "Выберите тип отчета:",
         parse_mode="HTML",
         reply_markup=get_reports_keyboard(),
@@ -3360,7 +3502,12 @@ async def admin_process_materials_confirmation_callback(
 
         from app.keyboards.inline import get_yes_no_keyboard
 
-        await callback_query.message.edit_text(
+        message_obj = callback_query.message
+        if not isinstance(message_obj, Message):
+            await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             "✅ Сумма расходного материала подтверждена\n\n"
             "❓ <b>Взял ли мастер отзыв у клиента?</b>\n"
             "(За отзыв мастер получит дополнительно +10% к прибыли)",
@@ -3371,11 +3518,14 @@ async def admin_process_materials_confirmation_callback(
         # Возвращаемся к вводу суммы материалов
         await state.set_state(AdminCloseOrderStates.enter_materials_cost)
 
-        await callback_query.message.answer(
-            "💰 <b>Введите сумму расходного материала:</b>\n\n" "Введите число (например: 500, 0):",
-            parse_mode="HTML",
-            reply_markup=get_cancel_keyboard(),
-        )
+        message_obj = callback_query.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer(
+                "💰 <b>Введите сумму расходного материала:</b>\n\n"
+                "Введите число (например: 500, 0):",
+                parse_mode="HTML",
+                reply_markup=get_cancel_keyboard(),
+            )
 
     await callback_query.answer()
 
@@ -3414,7 +3564,12 @@ async def admin_process_review_confirmation_callback(
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
 
-    await callback_query.message.edit_text(
+    message_obj = callback_query.message
+    if not isinstance(message_obj, Message):
+        await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(
         f"{review_text}\n\n"
         f"🚗 <b>Был ли выезд за город?</b>\n"
         f"(За выезд за город мастер получит дополнительно +10% к прибыли)",
@@ -3478,7 +3633,9 @@ async def admin_process_out_of_city_confirmation_callback(
         order = await db.get_order_by_id(order_id_from_state)
 
         if not order:
-            await callback_query.message.edit_text("❌ Заявка не найдена.")
+            message_obj = callback_query.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text("❌ Заявка не найдена.")
             await state.clear()
             return
 
@@ -3582,7 +3739,9 @@ async def admin_process_out_of_city_confirmation_callback(
             f"└ Выезд за город: {out_of_city_text}"
         )
 
-        await callback_query.message.edit_text(summary_message, parse_mode="HTML")
+        message_obj = callback_query.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(summary_message, parse_mode="HTML")
 
         # Уведомление мастера (если есть)
         if order.assigned_master_id:
@@ -3612,7 +3771,9 @@ async def admin_process_out_of_city_confirmation_callback(
 
     except Exception as e:
         logger.error(f"Ошибка при закрытии заявки: {e}")
-        await callback_query.message.edit_text(f"❌ Ошибка при закрытии заявки: {e!s}")
+        message_obj = callback_query.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(f"❌ Ошибка при закрытии заявки: {e!s}")
     finally:
         await db.disconnect()
 

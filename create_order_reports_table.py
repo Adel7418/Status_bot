@@ -14,28 +14,31 @@ from pathlib import Path
 def create_order_reports_table(db_path: str) -> bool:
     """Создает таблицу order_reports если её нет"""
     db_path_obj = Path(db_path)
-    
+
     if not db_path_obj.exists():
         print(f"❌ Файл базы данных не найден: {db_path}")
         return False
-    
+
     try:
         conn = sqlite3.connect(str(db_path_obj))
         cursor = conn.cursor()
-        
+
         # Проверяем существование таблицы
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
+        cursor.execute(
+            """
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name='order_reports'
-        """)
-        
+        """
+        )
+
         if cursor.fetchone():
             print(f"✅ Таблица order_reports уже существует в {db_path}")
             conn.close()
             return True
-        
+
         # Создаем таблицу
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE order_reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 order_id INTEGER NOT NULL,
@@ -56,14 +59,15 @@ def create_order_reports_table(db_path: str) -> bool:
                 closed_at DATETIME,
                 completion_time_hours REAL
             )
-        """)
-        
+        """
+        )
+
         conn.commit()
         conn.close()
-        
+
         print(f"✅ Таблица order_reports успешно создана в {db_path}")
         return True
-        
+
     except Exception as e:
         print(f"❌ Ошибка при создании таблицы order_reports: {e}")
         return False
@@ -75,11 +79,11 @@ def main():
         "--db-path",
         type=str,
         default="data/city2/bot_database.db",
-        help="Путь к файлу базы данных (по умолчанию: data/city2/bot_database.db)"
+        help="Путь к файлу базы данных (по умолчанию: data/city2/bot_database.db)",
     )
-    
+
     args = parser.parse_args()
-    
+
     if create_order_reports_table(args.db_path):
         sys.exit(0)
     else:
@@ -88,4 +92,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

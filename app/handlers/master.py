@@ -117,7 +117,14 @@ async def btn_my_orders(
 
             text += "\n"
 
-    keyboard = get_order_list_keyboard(orders, for_master=True)
+    # Конвертируем ORM заказы в Legacy заказы для совместимости с клавиатурой
+    from app.handlers.admin import _convert_orm_order_to_legacy
+
+    legacy_orders = [
+        _convert_orm_order_to_legacy(order) if hasattr(order, "__table__") else order
+        for order in orders
+    ]
+    keyboard = get_order_list_keyboard(legacy_orders, for_master=True)
 
     await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
@@ -169,9 +176,14 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list, 
         # Определяем базовую ставку с учетом типа техники
         base_rate = "50/50" if net_profit >= 7000 else "40/60"
         if order.equipment_type:
-            specialization_rate = await db.get_specialization_rate(
-                equipment_type=order.equipment_type,
-            )
+            from app.database.orm_database import ORMDatabase
+
+            if isinstance(db, ORMDatabase):
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
+            else:
+                specialization_rate = None
             if specialization_rate:
                 base_master_pct, base_company_pct = specialization_rate
                 master_pct_display = int(round(base_master_pct))
@@ -206,7 +218,12 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list, 
 
     keyboard = get_order_actions_keyboard(order, UserRole.MASTER)
 
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
     await callback.answer()
 
 
@@ -301,7 +318,12 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list, db: D
             InlineKeyboardButton(text="🏠 Я на объекте", callback_data=f"onsite_order:{order_id}")
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             acceptance_text, parse_mode="HTML", reply_markup=keyboard_builder.as_markup()
         )
 
@@ -365,7 +387,12 @@ async def callback_refuse_order_master(
             "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
             f"Например: 'Слишком далеко', 'Нет запчастей', 'Некорректный адрес' и т.д.",
             reply_markup=None,
@@ -423,8 +450,11 @@ async def process_refuse_reason(message: Message, state: FSMContext):
 
                     for m in messages:
                         await safe_delete_message(message.bot, m.chat_id, m.message_id)
-                    await db.deactivate_group_messages(order_id)
-        except Exception:  # nosec B110
+                    from app.database.orm_database import ORMDatabase
+
+                    if isinstance(db, ORMDatabase):
+                        await db.deactivate_group_messages(order_id)
+        except Exception:  # nosec B110 - игнорирование ошибок деактивации групповых сообщений не критично
             pass
 
         # Возвращаем статус в NEW и убираем мастера, сохраняем причину отказа
@@ -432,19 +462,23 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             await db.unassign_master_from_order(order_id, refuse_reason=refuse_reason)
         else:
             # Legacy: прямой SQL
-            async with db.get_session() as session:
-                from sqlalchemy import text
+            from app.database.orm_database import ORMDatabase
 
-                await session.execute(
-                    text(
-                        "UPDATE orders SET status = :status, assigned_master_id = NULL, refuse_reason = :refuse_reason WHERE id = :order_id"
-                    ),
-                    {
-                        "status": OrderStatus.NEW,
-                        "order_id": order_id,
-                        "refuse_reason": refuse_reason,
-                    },
-                )
+            if isinstance(db, ORMDatabase):
+                async with db.get_session() as session:
+                    from sqlalchemy import text
+
+                    await session.execute(
+                        text(
+                            "UPDATE orders SET status = :status, assigned_master_id = NULL, refuse_reason = :refuse_reason WHERE id = :order_id"
+                        ),
+                        {
+                            "status": OrderStatus.NEW,
+                            "order_id": order_id,
+                            "refuse_reason": refuse_reason,
+                        },
+                    )
+                    await session.commit()
 
         # Перезагружаем заказ для получения актуальных данных
         order = await db.get_order_by_id(order_id)
@@ -646,7 +680,12 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list, db: D
             InlineKeyboardButton(text="⏳ ДР", callback_data=f"dr_order:{order_id}")
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"🏠 <b>Статус обновлен!</b>\n\n" f"Заявка #{order_id} - вы на объекте.",
             parse_mode="HTML",
             reply_markup=keyboard_builder.as_markup(),
@@ -679,7 +718,12 @@ async def callback_low_amount_refusal_confirmation(callback: CallbackQuery, stat
         # Это отказ - запрашиваем причину
         await state.set_state(CompleteOrderStates.enter_refuse_reason_on_complete)
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"📝 Укажите причину отказа от заявки #{order_id}:\n\n"
             f"Например: 'Слишком мелкий заказ', 'Клиент отказался', 'Нет смысла' и т.д.",
             reply_markup=None,
@@ -688,7 +732,10 @@ async def callback_low_amount_refusal_confirmation(callback: CallbackQuery, stat
     else:
         # Не отказ - продолжаем обычный процесс завершения
         await callback.answer("Продолжаем обычное завершение заявки")
-        await callback.message.delete()
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            return
+        await message_obj.delete()
 
         # Переходим к запросу суммы расходного материала
         await state.set_state(CompleteOrderStates.enter_materials_cost)
@@ -794,7 +841,12 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
         await state.set_state(RefuseOrderStates.confirm_refusal)
 
         # Показываем подтверждение
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"⚠️ <b>Подтверждение отказа</b>\n\n"
             f"📋 Заявка #{order_id}\n"
             f"🔧 Тип техники: {order.equipment_type}\n"
@@ -922,7 +974,12 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
         # Переходим к вводу срока окончания и предоплаты
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
@@ -936,9 +993,7 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
 
 
 @router.message(LongRepairStates.enter_completion_date_and_prepayment, F.text)
-async def process_dr_info(  # noqa: PLR0911
-    message: Message, state: FSMContext, user_roles: list
-):
+async def process_dr_info(message: Message, state: FSMContext, user_roles: list):
     """
     Обработка ввода срока окончания и предоплаты для DR
 
@@ -1271,7 +1326,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
 
 
 @router.message(CompleteOrderStates.enter_total_amount, ~F.text.startswith("/"))
-async def process_total_amount(message: Message, state: FSMContext):  # noqa: PLR0911
+async def process_total_amount(message: Message, state: FSMContext):
     """
     Обработка ввода общей суммы заказа (работает и в личке, и в группе)
 
@@ -1353,7 +1408,7 @@ async def process_total_amount(message: Message, state: FSMContext):  # noqa: PL
                     )
             finally:
                 await _db.disconnect()
-        except Exception as exc:  # nosec B110
+        except Exception as exc:  # nosec B110 - игнорирование ошибок проверки админского override не критично
             logger.debug("Admin override check failed in PROCESS_TOTAL_AMOUNT: %s", exc)
 
     if not is_sender_allowed:
@@ -1678,7 +1733,12 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
         )
 
         try:
-            await callback_query.message.edit_text(
+            message_obj = callback_query.message
+            if not isinstance(message_obj, Message):
+                await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+                return
+
+            await message_obj.edit_text(
                 "💰 <b>Введите сумму расходного материала:</b>\n\n"
                 "Введите число (например: 500, 0):",
                 parse_mode="HTML",
@@ -1819,9 +1879,9 @@ async def process_out_of_city_confirmation_callback(
             master = await db.get_master_by_telegram_id(callback_query.from_user.id)
 
         if not master or not order or order.assigned_master_id != master.id:
-            await callback_query.message.edit_text(
-                "❌ Ошибка: заявка не найдена или не принадлежит вам."
-            )
+            message_obj = callback_query.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text("❌ Ошибка: заявка не найдена или не принадлежит вам.")
             return
 
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
@@ -1830,9 +1890,12 @@ async def process_out_of_city_confirmation_callback(
         # Получаем ставку для расчета по типу техники
         specialization_rate = None
         if order.equipment_type:
-            specialization_rate = await db.get_specialization_rate(
-                equipment_type=order.equipment_type,
-            )
+            from app.database.orm_database import ORMDatabase
+
+            if isinstance(db, ORMDatabase):
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
 
         master_profit, company_profit = calculate_profit_split(
             total_amount,
@@ -1995,7 +2058,9 @@ async def process_out_of_city_confirmation_callback(
 
     except Exception as e:
         logger.error(f"Ошибка при завершении заявки #{order_id_from_state}: {e}")
-        await callback_query.message.edit_text("❌ Произошла ошибка при завершении заявки.")
+        message_obj = callback_query.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text("❌ Произошла ошибка при завершении заявки.")
     finally:
         await db.disconnect()
 
@@ -2116,7 +2181,12 @@ async def callback_reschedule_order(callback: CallbackQuery, state: FSMContext):
 
         current_time = order.scheduled_time or "не указано"
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"📅 <b>Перенос заявки #{order_id}</b>\n\n"
             f"⏰ Сейчас: {current_time}\n\n"
             f"Напишите новое время:\n"
@@ -2345,12 +2415,15 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
         old_time = order.scheduled_time or "не указано"
 
         # Обновляем заявку
-        async with db.get_session() as session:
-            from sqlalchemy import text
+        from app.database.orm_database import ORMDatabase
 
-            await session.execute(
-                text(
-                    """
+        if isinstance(db, ORMDatabase):
+            async with db.get_session() as session:
+                from sqlalchemy import text
+
+                await session.execute(
+                    text(
+                        """
                 UPDATE orders
                 SET scheduled_time = :new_time,
                     rescheduled_count = rescheduled_count + 1,
@@ -2359,15 +2432,15 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                     updated_at = :updated_at
                 WHERE id = :order_id
                 """
-                ),
-                {
-                    "new_time": new_time,
-                    "last_rescheduled_at": get_now(),
-                    "reason": reason,
-                    "updated_at": get_now(),
-                    "order_id": order_id,
-                },
-            )
+                    ),
+                    {
+                        "new_time": new_time,
+                        "last_rescheduled_at": get_now(),
+                        "reason": reason,
+                        "updated_at": get_now(),
+                        "order_id": order_id,
+                    },
+                )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -2587,12 +2660,15 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             return
 
         # Обновляем заявку
-        async with db.get_session() as session:
-            from sqlalchemy import text
+        from app.database.orm_database import ORMDatabase
 
-            await session.execute(
-                text(
-                    """
+        if isinstance(db, ORMDatabase):
+            async with db.get_session() as session:
+                from sqlalchemy import text
+
+                await session.execute(
+                    text(
+                        """
                 UPDATE orders
                 SET status = :status,
                     estimated_completion_date = :completion_date,
@@ -2600,15 +2676,15 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                     updated_at = :updated_at
                 WHERE id = :order_id
                 """
-                ),
-                {
-                    "status": OrderStatus.DR,
-                    "completion_date": completion_date,
-                    "prepayment_amount": prepayment_amount,
-                    "updated_at": get_now(),
-                    "order_id": order_id,
-                },
-            )
+                    ),
+                    {
+                        "status": OrderStatus.DR,
+                        "completion_date": completion_date,
+                        "prepayment_amount": prepayment_amount,
+                        "updated_at": get_now(),
+                        "order_id": order_id,
+                    },
+                )
 
         # Добавляем в лог
         await db.add_audit_log(
@@ -2758,7 +2834,12 @@ async def callback_master_report_excel(callback: CallbackQuery, db: Database):
 
         await callback.answer("📊 Генерирую отчет...")
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             "⏳ <b>Генерация Excel отчета...</b>\n\nПожалуйста, подождите.", parse_mode="HTML"
         )
 
@@ -2773,7 +2854,7 @@ async def callback_master_report_excel(callback: CallbackQuery, db: Database):
         )
 
         # Отправляем файл
-        await callback.message.answer_document(
+        await message_obj.answer_document(
             document=excel_file,
             caption=(
                 f"📊 <b>Ваш личный отчет</b>\n\n"
@@ -2787,17 +2868,19 @@ async def callback_master_report_excel(callback: CallbackQuery, db: Database):
         )
 
         # Удаляем сообщение о генерации
-        await callback.message.delete()
+        await message_obj.delete()
 
         logger.info(f"Excel отчет отправлен мастеру {master_id}")
 
     except Exception as e:
         logger.exception(f"Ошибка при генерации отчета для мастера {master_id}: {e}")
-        await callback.message.edit_text(
-            "❌ <b>Ошибка при генерации отчета</b>\n\n"
-            "Попробуйте еще раз позже или обратитесь к администратору.",
-            parse_mode="HTML",
-        )
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(
+                "❌ <b>Ошибка при генерации отчета</b>\n\n"
+                "Попробуйте еще раз позже или обратитесь к администратору.",
+                parse_mode="HTML",
+            )
     finally:
         await db.disconnect()
 
@@ -2846,7 +2929,12 @@ async def callback_master_reports_archive(callback: CallbackQuery, db: Database)
 
         keyboard = get_master_archived_reports_keyboard(archived_reports, master_id)
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -2999,9 +3087,12 @@ async def complete_order_as_refusal(
         # Получаем ставку для расчета по типу техники
         specialization_rate = None
         if order.equipment_type:
-            specialization_rate = await db.get_specialization_rate(
-                equipment_type=order.equipment_type,
-            )
+            from app.database.orm_database import ORMDatabase
+
+            if isinstance(db, ORMDatabase):
+                specialization_rate = await db.get_specialization_rate(
+                    equipment_type=order.equipment_type,
+                )
 
         master_profit, company_profit = calculate_profit_split(
             total_amount,
@@ -3037,15 +3128,19 @@ async def complete_order_as_refusal(
                 await db.update_order_field(order_id, "refuse_reason", refuse_reason)
             else:
                 # Legacy SQL
-                async with db.get_session() as session:
-                    from sqlalchemy import text
+                from app.database.orm_database import ORMDatabase
 
-                    await session.execute(
-                        text(
-                            "UPDATE orders SET refuse_reason = :refuse_reason WHERE id = :order_id"
-                        ),
-                        {"refuse_reason": refuse_reason, "order_id": order_id},
-                    )
+                if isinstance(db, ORMDatabase):
+                    async with db.get_session() as session:
+                        from sqlalchemy import text
+
+                        await session.execute(
+                            text(
+                                "UPDATE orders SET refuse_reason = :refuse_reason WHERE id = :order_id"
+                            ),
+                            {"refuse_reason": refuse_reason, "order_id": order_id},
+                        )
+                        await session.commit()
 
         # Добавляем в лог
         log_details = f"Order #{order_id} completed as refusal (0 rubles)"
@@ -3202,9 +3297,12 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
         logger.info(f"[REFUSE] Final order_id: {order_id}")
 
         # Завершаем заказ как отказ
-        await complete_order_as_refusal(
-            callback_query.message, state, order_id, callback_query.from_user.id
-        )
+        message_obj = callback_query.message
+        if not isinstance(message_obj, Message):
+            await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+            return
+
+        await complete_order_as_refusal(message_obj, state, order_id, callback_query.from_user.id)
 
         # Очищаем состояние
         await state.clear()
@@ -3216,13 +3314,18 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
         await db.connect()
         try:
             order = await db.get_order_by_id(order_id)
+            message_obj = callback_query.message
+            if not isinstance(message_obj, Message):
+                await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
+                return
+
             if order:
-                await callback_query.message.edit_text(
+                await message_obj.edit_text(
                     "❌ Отказ отменен.\n\nЗаявка остается активной.",
                     reply_markup=get_order_actions_keyboard(order, UserRole.MASTER),
                 )
             else:
-                await callback_query.message.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
+                await message_obj.edit_text("❌ Отказ отменен.\n\nЗаявка не найдена.")
         finally:
             await db.disconnect()
         await state.clear()

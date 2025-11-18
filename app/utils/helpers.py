@@ -386,22 +386,20 @@ def calculate_profit_split(
             # Используем ставку 50/50 для сантехники
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
-        else:
-            # Стандартная логика для других типов техники
-            if net_profit >= 7000:
-                master_profit = net_profit * 0.5
-                company_profit = net_profit * 0.5
-            else:
-                master_profit = net_profit * 0.4
-                company_profit = net_profit * 0.6
-    else:
-        # Стандартная логика
-        if net_profit >= 7000:
+        # Стандартная логика для других типов техники
+        elif net_profit >= 7000:
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
         else:
             master_profit = net_profit * 0.4
             company_profit = net_profit * 0.6
+    # Стандартная логика
+    elif net_profit >= 7000:
+        master_profit = net_profit * 0.5
+        company_profit = net_profit * 0.5
+    else:
+        master_profit = net_profit * 0.4
+        company_profit = net_profit * 0.6
 
     # Если взят отзыв - добавляем 10% к прибыли мастера
     if has_review:

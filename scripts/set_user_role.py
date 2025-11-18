@@ -23,12 +23,12 @@ async def set_user_role(telegram_id: int, new_role: str):
     """
     # Проверяем валидность роли
     valid_roles = [UserRole.ADMIN, UserRole.DISPATCHER, UserRole.MASTER, UserRole.UNKNOWN]
-    
+
     if new_role not in valid_roles:
         print(f"❌ Ошибка: недопустимая роль '{new_role}'")
         print(f"Допустимые роли: {', '.join(valid_roles)}")
         return
-    
+
     db = Database()
     await db.connect()
 
@@ -41,7 +41,7 @@ async def set_user_role(telegram_id: int, new_role: str):
             return
 
         old_role = user.role
-        
+
         # Обновляем роль
         await db.connection.execute(
             "UPDATE users SET role = ? WHERE telegram_id = ?",
@@ -57,14 +57,14 @@ async def set_user_role(telegram_id: int, new_role: str):
         print(f"   Старая роль: {old_role}")
         print(f"   Новая роль: {new_role}")
         print()
-        
+
         if new_role == UserRole.DISPATCHER:
             print("📊 Теперь пользователь имеет доступ к отчетам!")
         elif new_role == UserRole.ADMIN:
             print("🔑 Теперь пользователь имеет полный административный доступ!")
         elif new_role == UserRole.MASTER:
             print("🔧 Теперь пользователь зарегистрирован как мастер!")
-        
+
         print("\n⚠️  Пользователю нужно перезапустить бота командой /start для обновления меню.")
         print()
 
@@ -95,4 +95,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

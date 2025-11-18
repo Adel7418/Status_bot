@@ -186,6 +186,9 @@ ignore = [
     "ARG001",  # unused function argument (needed for aiogram handlers)
     "PLW2901", # overwriting loop variable (acceptable in some cases)
     "F403",    # wildcard imports (used in __init__.py for convenience)
+    "A003",    # class attribute shadowing builtin (normal for SQLAlchemy ORM models)
+    "ASYNC101", # async functions calling blocking operations (acceptable for file operations)
+    "T201",    # print statements (acceptable in scripts)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -197,6 +200,21 @@ ignore = [
 ]
 "__init__.py" = ["F401"]  # unused imports
 "tests/conftest.py" = ["E402"]  # module level imports not at top (sys.path manipulation required)
+"app/database/orm_models.py" = ["A003"]  # class attribute shadowing builtin (normal for SQLAlchemy)
+"app/keyboards/inline.py" = ["A003"]  # class attribute shadowing builtin (normal for enums)
+"create_order_reports_table.py" = ["T201"]  # print statements (acceptable in scripts)
+"app/handlers/**/*.py" = [
+    "PLR0911", # too many return statements (normal for handlers with early returns)
+]
+"app/handlers/financial_reports.py" = [
+    "DTZ007",  # naive datetime (legacy code, acceptable for user input parsing)
+    "DTZ001",  # datetime without tzinfo (legacy code)
+    "ASYNC101", # blocking file operations (acceptable for file downloads)
+]
+"app/services/reports_service.py" = [
+    "PLR2004", # magic value comparison (acceptable for file generation)
+    "ASYNC101", # blocking file operations (acceptable for file generation)
+]
 
 [tool.ruff.lint.isort]
 force-single-line = false

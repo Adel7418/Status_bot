@@ -39,7 +39,7 @@ class ValidationHandlerMiddleware(BaseMiddleware):
             return await handler(event, data)
         except InvalidStateTransitionError as e:
             # Обрабатываем только события, у которых есть пользователь и понятный контекст
-            if isinstance(event, (Message, CallbackQuery)):
+            if isinstance(event, Message | CallbackQuery):
                 user = event.from_user
                 user_id: int | str = user.id if user else "unknown"
 

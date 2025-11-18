@@ -118,4 +118,3 @@ python scripts/check_user_role.py 123456789
 1. Проверьте логи бота: `docker logs telegram_repair_bot_prod -f`
 2. Проверьте роль пользователя скриптом `check_user_role.py`
 3. Обратитесь к разработчику с подробным описанием проблемы
-

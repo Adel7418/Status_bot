@@ -3,6 +3,7 @@ State Machine для валидации переходов статусов за
 """
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from app.core.constants import OrderStatus, UserRole
 
@@ -44,7 +45,7 @@ class OrderStateMachine:
     """
 
     # Допустимые переходы: из какого статуса в какие можно перейти
-    TRANSITIONS: dict[str, set[str]] = {
+    TRANSITIONS: ClassVar[dict[str, set[str]]] = {
         OrderStatus.NEW: {
             OrderStatus.ASSIGNED,  # Назначение мастера
             OrderStatus.REFUSED,  # Отмена диспетчером
@@ -76,7 +77,7 @@ class OrderStateMachine:
     }
 
     # Роли, которые могут выполнять определённые переходы
-    ROLE_PERMISSIONS: dict[tuple[str, str], set[str]] = {
+    ROLE_PERMISSIONS: ClassVar[dict[tuple[str, str], set[str]]] = {
         # (from_status, to_status): {allowed_roles}
         (OrderStatus.NEW, OrderStatus.ASSIGNED): {
             UserRole.ADMIN,

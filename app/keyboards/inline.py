@@ -426,7 +426,7 @@ def get_orders_filter_keyboard(counts: dict | None = None) -> InlineKeyboardMark
     # Длительные ремонты - всегда показываем счётчик для видимости
     dr_text = f"⏳ Длительные ремонты ({counts.get(OrderStatus.DR, 0)})"
     # Завершенные заказы
-    closed_count = counts.get(OrderStatus.CLOSED, 0)
+    counts.get(OrderStatus.CLOSED, 0)
     # closed_text = f"✅ Завершенные ({closed_count})" if closed_count > 0 else "✅ Завершенные"  # Не используется
 
     builder.row(

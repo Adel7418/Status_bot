@@ -275,7 +275,6 @@ def sanitize_log_message(message: str) -> str:
     return re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]", message)
 
 
-
 # Константы для удобства
 NO_PII_FIELDS = {
     "id",

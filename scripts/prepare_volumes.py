@@ -39,13 +39,13 @@ def is_windows() -> bool:
 def set_permissions_posix(paths: Iterable[Path]) -> None:
     for p in paths:
         try:
-            os.chown(p, APP_UID, APP_GID)  # type: ignore[attr-defined]
+            os.chown(p, APP_UID, APP_GID)  # type: ignore[attr-defined]  # nosec S103 - chown используется только с фиксированными UID/GID для Docker setup
         except Exception:
             # chown may fail on some filesystems; ignore
             pass
         try:
             # Allow rwx for all to avoid permission surprises
-            os.chmod(p, 0o777)
+            os.chmod(p, 0o777)  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
         except Exception:
             pass
 
@@ -54,7 +54,7 @@ def grant_windows_acl(path: Path) -> None:
     # Grant Full control to Everyone on folder recursively
     # SDDL SID for Everyone: S-1-1-0; icacls supports name "Everyone" as well
     try:
-        subprocess.run(
+        subprocess.run(  # nosec S603 - icacls используется только с фиксированными параметрами и локальными путями
             [
                 "icacls",
                 str(path),

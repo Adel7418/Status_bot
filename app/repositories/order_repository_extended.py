@@ -378,16 +378,16 @@ class OrderRepositoryExtended(OrderRepository):
         # Общее количество
         # where_clause формируется только из внутреннего булева флага include_deleted
         # и не содержит пользовательского ввода, поэтому конкатенация SQL безопасна.
-        total_row = await self._fetch_one(  # nosec B608
-            f"SELECT COUNT(*) as total FROM orders {where_clause}"
+        total_row = await self._fetch_one(
+            f"SELECT COUNT(*) as total FROM orders {where_clause}"  # nosec B608 - where_clause контролируется кодом, не пользовательским вводом
         )
 
         # По статусам — аналогично, where_clause контролируется кодом
-        status_rows = await self._fetch_all(  # nosec B608
+        status_rows = await self._fetch_all(
             f"""
             SELECT status, COUNT(*) as count
             FROM orders
-            {where_clause}
+            {where_clause}  # nosec B608 - where_clause контролируется кодом, не пользовательским вводом
             GROUP BY status
             """
         )
@@ -541,7 +541,7 @@ class OrderRepositoryExtended(OrderRepository):
             values = list(fields.values())
             values.extend([now.isoformat(), order_id, expected_version])
 
-            cursor = await self._execute(  # nosec B608
+            cursor = await self._execute(  # nosec B608 - set_clause формируется из контролируемых полей модели, не из пользовательского ввода
                 f"""
                 UPDATE orders
                 SET {set_clause}, version = version + 1, updated_at = ?

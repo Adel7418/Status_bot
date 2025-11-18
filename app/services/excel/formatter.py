@@ -125,8 +125,7 @@ class ExcelFormatter:
                 if cell.value is None:
                     continue
                 cell_length = len(str(cell.value))
-                if cell_length > max_length:
-                    max_length = cell_length
+                max_length = max(cell_length, max_length)
 
             adjusted_width = max(min_width, min(max_length + 2, max_width))
             ws.column_dimensions[column_letter].width = adjusted_width

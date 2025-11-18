@@ -2,10 +2,12 @@
 Планировщик задач
 """
 
+import asyncio
 import contextlib
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING, TypedDict
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,6 +17,20 @@ from app.config import Config, OrderStatus
 from app.database import Database
 from app.utils import get_now, safe_send_message
 from app.utils.helpers import MOSCOW_TZ
+
+
+if TYPE_CHECKING:
+    from app.database.models import Order as LegacyOrder
+    from app.database.orm_models import Order as ORMOrder
+
+    OrderType = LegacyOrder | ORMOrder
+
+
+class OrderAlert(TypedDict):
+    """Типизация для алертов о заявках"""
+
+    order: OrderType
+    time: timedelta
 
 
 logger = logging.getLogger(__name__)
@@ -35,9 +51,9 @@ class TaskScheduler:
         self.scheduler = AsyncIOScheduler()
         self.db = db
         # Трекер фоновых задач и отправленных напоминаний, чтобы избегать дубликатов
-        self._background_tasks = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
         # Ключ: (order_id, date) — напоминание за 2 часа уже поставлено/отправлено в этот день
-        self._sent_scheduled_reminders = set()
+        self._sent_scheduled_reminders: set[tuple[int, date]] = set()
 
     async def start(self):
         """Запуск планировщика"""
@@ -298,10 +314,7 @@ class TaskScheduler:
             return True
 
         # Если до визита больше 2:30 часов - ждем
-        if time_until_visit > timedelta(hours=2, minutes=30):
-            return True  # Не проверяем по стандартному SLA
-
-        return False
+        return time_until_visit > timedelta(hours=2, minutes=30)  # Не проверяем по стандартному SLA
 
     async def check_order_sla(self):
         """
@@ -314,7 +327,7 @@ class TaskScheduler:
             orders = await self.db.get_all_orders()
 
             now = get_now()
-            alerts = []
+            alerts: list[OrderAlert] = []
 
             for order in orders:
                 if order.status in [OrderStatus.CLOSED, OrderStatus.REFUSED]:
@@ -352,7 +365,8 @@ class TaskScheduler:
                         continue  # Пропускаем стандартную проверку SLA для этой заявки
 
                 if sla_limit and time_in_status > sla_limit:
-                    alerts.append({"order": order, "time": time_in_status})
+                    alert: OrderAlert = {"order": order, "time": time_in_status}
+                    alerts.append(alert)
 
             # Отправляем уведомления администраторам
             if alerts:
@@ -677,7 +691,7 @@ class TaskScheduler:
             # Используем get_now() для правильного часового пояса
             now = get_now()
             remind_threshold = timedelta(minutes=15)
-            unassigned_alerts = []
+            unassigned_alerts: list[OrderAlert] = []
 
             for order in orders:
                 if not order.created_at:
@@ -691,7 +705,8 @@ class TaskScheduler:
                 time_unassigned = now - order_created_at
 
                 if time_unassigned > remind_threshold:
-                    unassigned_alerts.append({"order": order, "time": time_unassigned})
+                    alert: OrderAlert = {"order": order, "time": time_unassigned}
+                    unassigned_alerts.append(alert)
 
             # Отправляем уведомления если есть неназначенные заявки
             if unassigned_alerts:
