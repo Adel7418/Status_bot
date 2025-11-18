@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from pydantic import ValidationError
 
 from app.config import MAX_DESCRIPTION_LENGTH, MAX_NOTES_LENGTH, OrderStatus, UserRole
-from app.database import Database
+from app.database import get_database
 from app.decorators import handle_errors
 from app.keyboards.inline import (
     get_equipment_types_keyboard,
@@ -665,11 +665,12 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     # Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
-    except Exception:
-        pass
+    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма
+        logger.debug("Failed to delete callback message: %s", exc)
 
     sent_message = await callback.message.answer(
-        f"✅ Выбрано: {equipment_type}\n\n" f"Шаг 2/7: Опишите проблему:\n"
+        f"✅ Выбрано: {equipment_type}\n\n"
+        f"Шаг 2/7: Опишите проблему:\n"
         f"<i>(максимум {MAX_DESCRIPTION_LENGTH} символов)</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
@@ -1004,9 +1005,7 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
 
     # Ищем существующие данные клиента по номеру телефона
     try:
-        from app.database import Database
-
-        db = Database()
+        db = get_database()
         await db.connect()
 
         # Ищем заявки с таким номером телефона
@@ -1038,16 +1037,16 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
             )
             await state.set_state(CreateOrderStates.confirm_client_data)
             return
-        else:
-            # Данные не найдены - это новый клиент
-            await message.answer(
-                "✅ <b>Новый клиент</b>\n\n"
-                "Клиент с таким номером телефона не найден в базе данных.\n"
-                "Это означает, что это новый клиент.\n"
-                "Продолжаем создание заявки.",
-                parse_mode="HTML",
-            )
-            logger.info(f"Новый клиент с телефоном {phone} - продолжаем создание заявки")
+
+        # Данные не найдены - это новый клиент
+        await message.answer(
+            "✅ <b>Новый клиент</b>\n\n"
+            "Клиент с таким номером телефона не найден в базе данных.\n"
+            "Это означает, что это новый клиент.\n"
+            "Продолжаем создание заявки.",
+            parse_mode="HTML",
+        )
+        logger.info(f"Новый клиент с телефоном {phone} - продолжаем создание заявки")
 
     except Exception as e:
         logger.error(f"Ошибка при поиске клиента по телефону {phone}: {e}")
@@ -1115,8 +1114,8 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as exc:  # nosec B110
+        logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
         "✅ <b>Данные клиента сохранены</b>\n\n"
@@ -1151,8 +1150,8 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as exc:  # nosec B110
+        logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
         "👤 Шаг 4/7: Введите ФИО клиента:\n" "<i>(минимум 2 символа, максимум 200 символов)</i>",
@@ -1265,7 +1264,9 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
 
 @router.message(CreateOrderStates.scheduled_time, F.text != "❌ Отмена")
 @handle_errors
-async def process_scheduled_time(message: Message, state: FSMContext, user_role: str):
+async def process_scheduled_time(  # noqa: PLR0911
+    message: Message, state: FSMContext, user_role: str
+):
     """
     Обработка времени прибытия к клиенту с автоопределением даты
 
@@ -1393,31 +1394,30 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                 await show_order_confirmation(message, state)
                 logger.info(f"Автоопределение даты: '{message.text}' -> '{formatted_time}'")
                 return
-            else:
-                # Не смогли распознать дату - переспрашиваем с примерами
-                logger.info(f"[SCHEDULED_TIME] Failed to parse date: '{scheduled_time}'")
-                await message.answer(
-                    f"❓ <b>Не удалось распознать дату:</b> {scheduled_time}\n\n"
-                    f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
-                    f"<b>🤖 Автоопределение даты:</b>\n"
-                    f"• <code>завтра в 15:00</code>\n"
-                    f"• <code>послезавтра 14:30</code>\n"
-                    f"• <code>через 3 дня 15:00</code>\n"
-                    f"• <code>через неделю 12:00</code>\n\n"
-                    f"<b>⏱ Через часы/дни:</b>\n"
-                    f"• <code>через полтора часа</code>\n"
-                    f"• <code>через 1-1.5 часа</code>\n"
-                    f"• <code>через 3 дня</code>\n\n"
-                    f"<b>📅 Точная дата:</b>\n"
-                    f"• <code>20.10.2025 14:00</code>\n"
-                    f"• <code>25/10/2025 09:30</code>\n\n"
-                    f"<b>📝 Или просто текст:</b>\n"
-                    f"• <code>Набрать клиенту</code>\n"
-                    f"• <code>Уточнить время</code>",
-                    parse_mode="HTML",
-                    reply_markup=get_skip_cancel_keyboard(),
-                )
-                return
+            # Не смогли распознать дату - переспрашиваем с примерами
+            logger.info(f"[SCHEDULED_TIME] Failed to parse date: '{scheduled_time}'")
+            await message.answer(
+                f"❓ <b>Не удалось распознать дату:</b> {scheduled_time}\n\n"
+                f"<b>Пожалуйста, укажите дату в одном из форматов:</b>\n\n"
+                f"<b>🤖 Автоопределение даты:</b>\n"
+                f"• <code>завтра в 15:00</code>\n"
+                f"• <code>послезавтра 14:30</code>\n"
+                f"• <code>через 3 дня 15:00</code>\n"
+                f"• <code>через неделю 12:00</code>\n\n"
+                f"<b>⏱ Через часы/дни:</b>\n"
+                f"• <code>через полтора часа</code>\n"
+                f"• <code>через 1-1.5 часа</code>\n"
+                f"• <code>через 3 дня</code>\n\n"
+                f"<b>📅 Точная дата:</b>\n"
+                f"• <code>20.10.2025 14:00</code>\n"
+                f"• <code>25/10/2025 09:30</code>\n\n"
+                f"<b>📝 Или просто текст:</b>\n"
+                f"• <code>Набрать клиенту</code>\n"
+                f"• <code>Уточнить время</code>",
+                parse_mode="HTML",
+                reply_markup=get_skip_cancel_keyboard(),
+            )
+            return
 
     # Если не похоже на дату - проверяем, не является ли это простой цифрой
     if re.match(r"^\d{1,2}$", scheduled_time.strip()):
@@ -1667,7 +1667,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             )
             return
 
-        db = Database()
+        db = get_database()
         await db.connect()
 
         # Создаем заявку с валидированными данными
@@ -1795,7 +1795,7 @@ async def btn_all_orders(message: Message, state: FSMContext, user_role: str):
     await state.clear()
 
     # Получаем счетчики заявок по статусам (включая завершенные)
-    db = Database()
+    db = get_database()
     await db.connect()
     try:
         counts = {}
@@ -1834,7 +1834,7 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
 
     filter_status = callback.data.split(":")[1]
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -1892,7 +1892,7 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
     """
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -1991,7 +1991,7 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
 
     await state.update_data(order_id=order_id)
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2038,7 +2038,7 @@ async def callback_select_master_for_order(
     order_id = int(parts[1])
     master_id = int(parts[2])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2178,7 +2178,7 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2245,7 +2245,7 @@ async def callback_select_new_master_for_order(
     order_id = int(parts[1])
     new_master_id = int(parts[2])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2390,7 +2390,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2514,7 +2514,9 @@ async def callback_close_order(callback: CallbackQuery, user_role: str, state: F
 
 
 @router.callback_query(F.data.startswith("refuse_order:"))
-async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_roles: list, state: FSMContext):
+async def callback_refuse_order(
+    callback: CallbackQuery, user_role: str, user_roles: list, state: FSMContext
+):
     """
     Начало процесса отклонения заявки админом/диспетчером (запрос причины)
 
@@ -2529,39 +2531,42 @@ async def callback_refuse_order(callback: CallbackQuery, user_role: str, user_ro
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
         order = await db.get_order_by_id(order_id)
-        
+
         if not order:
             await callback.answer("Заявка не найдена", show_alert=True)
             return
-        
+
         # Сохраняем данные в state
         await state.update_data(
             order_id=order_id,
             admin_message_id=callback.message.message_id,
             admin_chat_id=callback.message.chat.id,
-            user_roles=user_roles
+            user_roles=user_roles,
         )
-        
+
         # Переключаемся в состояние ввода причины
         from app.states import RefuseOrderStates
+
         await state.set_state(RefuseOrderStates.enter_refuse_reason)
-        
+
         # Определяем тип действия
-        action_type = "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
-        
+        action_type = (
+            "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
+        )
+
         await callback.message.edit_text(
             f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
             f"Например: 'Не актуально', 'Дубликат', 'Некорректные данные' и т.д.",
-            reply_markup=None
+            reply_markup=None,
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Error in refuse_order: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
@@ -2584,7 +2589,7 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
 
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2679,7 +2684,7 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
     # Для диспетчеров и админов - возврат к фильтру заявок
     if user_role in [UserRole.ADMIN, UserRole.DISPATCHER]:
         # Получаем счетчики заявок (без завершённых)
-        db = Database()
+        db = get_database()
         await db.connect()
         try:
             counts = {}
@@ -2702,7 +2707,7 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
         )
     # Для мастеров - возврат к списку своих заявок
     elif user_role == UserRole.MASTER:
-        db = Database()
+        db = get_database()
         await db.connect()
 
         try:
@@ -2726,7 +2731,7 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
             text = "📋 <b>Ваши заявки:</b>\n\n"
 
             # Группируем по статусам
-            by_status = {}
+            by_status: dict[str, list] = {}
             for order in orders:
                 if order.status not in by_status:
                     by_status[order.status] = []
@@ -2804,7 +2809,7 @@ async def callback_report_masters(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2843,7 +2848,7 @@ async def callback_report_statuses(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2882,7 +2887,7 @@ async def callback_report_equipment(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2944,7 +2949,7 @@ async def callback_period_selected(callback: CallbackQuery, user_role: str):
 
     period = callback.data.split("_")[1]
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2988,7 +2993,7 @@ async def callback_download_masters_excel(callback: CallbackQuery, user_role: st
 
     await callback.answer("Генерация отчета...")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3018,7 +3023,7 @@ async def callback_download_statuses_excel(callback: CallbackQuery, user_role: s
 
     await callback.answer("Генерация отчета...")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3048,7 +3053,7 @@ async def callback_download_equipment_excel(callback: CallbackQuery, user_role: 
 
     await callback.answer("Генерация отчета...")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3082,7 +3087,7 @@ async def callback_download_period_excel(callback: CallbackQuery, user_role: str
 
     await callback.answer("Генерация отчета...")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3139,7 +3144,7 @@ async def btn_masters_dispatcher(message: Message, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3345,7 +3350,6 @@ async def admin_process_materials_confirmation_callback(
     from app.utils import parse_callback_data
 
     parsed_data = parse_callback_data(callback_query.data)
-    action = parsed_data.get("action")
     params = parsed_data.get("params", [])
     answer = params[0] if len(params) > 0 else None  # yes/no
     order_id = params[1] if len(params) > 1 else None  # order_id
@@ -3391,7 +3395,6 @@ async def admin_process_review_confirmation_callback(
     from app.utils import parse_callback_data
 
     callback_data = parse_callback_data(callback_query.data)
-    order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ
@@ -3453,7 +3456,6 @@ async def admin_process_out_of_city_confirmation_callback(
     from app.utils import parse_callback_data
 
     callback_data = parse_callback_data(callback_query.data)
-    order_id = callback_data["params"][0] if len(callback_data["params"]) > 0 else None
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ
@@ -3465,7 +3467,7 @@ async def admin_process_out_of_city_confirmation_callback(
     materials_cost = data.get("materials_cost")
     has_review = data.get("has_review")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
@@ -3587,7 +3589,7 @@ async def admin_process_out_of_city_confirmation_callback(
             master = await db.get_master_by_id(order.assigned_master_id)
             if master and master.work_chat_id:
                 master_message = (
-                    f"✅ <b>Заявка #{order_id} закрыта!</b>\n\n"
+                    f"✅ <b>Заявка #{order_id_from_state} закрыта!</b>\n\n"
                     f"💰 <b>Финансы:</b>\n"
                     f"├ Общая сумма: {total_amount:.2f} ₽\n"
                     f"├ Расходники: {materials_cost:.2f} ₽\n"

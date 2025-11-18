@@ -376,9 +376,13 @@ class OrderRepositoryExtended(OrderRepository):
         where_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
 
         # Общее количество
-        total_row = await self._fetch_one(f"SELECT COUNT(*) as total FROM orders {where_clause}")  # nosec B608
+        # where_clause формируется только из внутреннего булева флага include_deleted
+        # и не содержит пользовательского ввода, поэтому конкатенация SQL безопасна.
+        total_row = await self._fetch_one(  # nosec B608
+            f"SELECT COUNT(*) as total FROM orders {where_clause}"
+        )
 
-        # По статусам
+        # По статусам — аналогично, where_clause контролируется кодом
         status_rows = await self._fetch_all(  # nosec B608
             f"""
             SELECT status, COUNT(*) as count
@@ -526,11 +530,13 @@ class OrderRepositoryExtended(OrderRepository):
                 raise ConcurrentModificationError("Order", order_id, expected_version)
 
             # Формируем SQL для обновления
-            set_clause = ", ".join([f"{field} = ?" for field in fields.keys()])
+            # Имена полей приходят только из кода (kwargs в вызывающих методах),
+            # а значения передаются параметризованно, поэтому риск SQL-инъекции минимален.
+            set_clause = ", ".join(f"{field} = ?" for field in fields)
             values = list(fields.values())
             values.extend([now.isoformat(), order_id, expected_version])
 
-            cursor = await self._execute(
+            cursor = await self._execute(  # nosec B608
                 f"""
                 UPDATE orders
                 SET {set_clause}, version = version + 1, updated_at = ?

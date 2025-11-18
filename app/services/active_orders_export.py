@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.config import OrderStatus
-from app.database.db import Database
+from app.database import DatabaseType, get_database
 from app.utils.helpers import get_now
 
 
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 class ActiveOrdersExportService:
     """Сервис для экспорта активных заявок в Excel"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
 
     async def export_active_orders_to_excel(self) -> str | None:
         """
@@ -170,7 +170,7 @@ class ActiveOrdersExportService:
                     try:
                         created_dt = datetime.fromisoformat(order.created_at.replace("Z", "+00:00"))
                         created_str = created_dt.strftime("%d.%m.%Y %H:%M")
-                    except:
+                    except Exception:
                         created_str = order.created_at
                 else:
                     created_str = order.created_at.strftime("%d.%m.%Y %H:%M")
@@ -281,7 +281,7 @@ class ActiveOrdersExportService:
                     try:
                         created_dt = datetime.fromisoformat(order.created_at.replace("Z", "+00:00"))
                         created_str = created_dt.strftime("%d.%m.%Y %H:%M")
-                    except:
+                    except Exception:
                         created_str = order.created_at
                 else:
                     created_str = order.created_at.strftime("%d.%m.%Y %H:%M")
@@ -305,6 +305,14 @@ class ActiveOrdersExportService:
             row += 1
 
         # Устанавливаем ширину столбцов
-        column_widths = {"A": 12, "B": 18, "C": 20, "D": 20, "E": 30, "F": 20, "G": 18}
-        for col, width in column_widths.items():
-            ws.column_dimensions[col].width = width
+        column_widths: dict[str, int] = {
+            "A": 12,
+            "B": 18,
+            "C": 20,
+            "D": 20,
+            "E": 30,
+            "F": 20,
+            "G": 18,
+        }
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width

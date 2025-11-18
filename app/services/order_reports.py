@@ -145,7 +145,7 @@ class OrderReportsService:
 
         try:
             query = "SELECT * FROM order_reports WHERE 1=1"
-            params = {}
+            params: dict[str, object] = {}
 
             if start_date:
                 query += " AND DATE(closed_at) >= :start_date"

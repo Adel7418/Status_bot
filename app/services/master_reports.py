@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-import aiofiles
+import aiofiles  # type: ignore[import-untyped]
 from aiogram.types import BufferedInputFile
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -71,7 +71,9 @@ class MasterReportsService:
         active_orders = [
             o for o in all_orders if o.status not in [OrderStatus.CLOSED, OrderStatus.REFUSED]
         ]
-        completed_orders = [o for o in all_orders if o.status in [OrderStatus.CLOSED, OrderStatus.REFUSED]]
+        completed_orders = [
+            o for o in all_orders if o.status in [OrderStatus.CLOSED, OrderStatus.REFUSED]
+        ]
 
         # Создаем Excel workbook
         wb = Workbook()
@@ -79,7 +81,7 @@ class MasterReportsService:
         # Создаем листы
         ws_active = wb.create_sheet("Активные заявки", 0)
         ws_completed = wb.create_sheet("Завершенные заявки", 1)
-        
+
         # Удаляем стандартный лист (если он есть)
         for sheet_name in wb.sheetnames:
             if sheet_name in ["Sheet", "Sheet1"]:
@@ -227,7 +229,7 @@ class MasterReportsService:
 
         # Стили
         header_font = Font(bold=True, size=11, color="FFFFFF")
-        header_fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         border = Border(
             left=Side(style="thin"),
@@ -239,7 +241,8 @@ class MasterReportsService:
         # Заголовок
         ws.merge_cells("A1:L1")
         ws["A1"] = f"ЗАВЕРШЕННЫЕ ЗАЯВКИ - {master.get_display_name()}"
-        ws["A1"].font = Font(bold=True, size=14, color="28a745")
+        ws["A1"].font = Font(bold=True, size=14, color="FFFFFF")
+        ws["A1"].fill = header_fill
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
         # Дата последнего обновления
@@ -264,11 +267,13 @@ class MasterReportsService:
             "Причина отказа",
         ]
 
+        table_header_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=4, column=col_num)
             cell.value = header
             cell.font = header_font
-            cell.fill = header_fill
+            cell.fill = table_header_fill
             cell.alignment = header_alignment
             cell.border = border
 
@@ -281,16 +286,19 @@ class MasterReportsService:
 
         for order in orders:
             ws.cell(row=row_num, column=1, value=order.id).border = border
-            
+
             # Статус
             from app.config import OrderStatus
+
             status_name = OrderStatus.get_status_name(order.status)
             status_cell = ws.cell(row=row_num, column=2, value=status_name)
             status_cell.border = border
             # Подсветка для отказов
             if order.status == OrderStatus.REFUSED:
-                status_cell.fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
-            
+                status_cell.fill = PatternFill(
+                    start_color="FFE6E6", end_color="FFE6E6", fill_type="solid"
+                )
+
             ws.cell(row=row_num, column=3, value=order.equipment_type or "").border = border
             ws.cell(row=row_num, column=4, value=order.client_name or "").border = border
             ws.cell(row=row_num, column=5, value=order.client_phone or "").border = border
@@ -310,9 +318,9 @@ class MasterReportsService:
                 column=11,
                 value=format_datetime(order.updated_at) if order.updated_at else "",
             ).border = border
-            
+
             # Причина отказа
-            refuse_reason = order.refuse_reason if hasattr(order, 'refuse_reason') else None
+            refuse_reason = order.refuse_reason if hasattr(order, "refuse_reason") else None
             refuse_cell = ws.cell(row=row_num, column=12, value=refuse_reason or "")
             refuse_cell.border = border
             if refuse_reason:
@@ -332,9 +340,39 @@ class MasterReportsService:
         ws.cell(row=row_num, column=7, value=f"{total_amount:.2f} ₽").font = Font(bold=True)
         ws.cell(row=row_num, column=8, value=f"{total_materials:.2f} ₽").font = Font(bold=True)
         ws.cell(row=row_num, column=9, value=f"{total_master_profit:.2f} ₽").font = Font(
-            bold=True, color="28a745"
+            bold=True, color="4472C4"
         )
-        ws.cell(row=row_num, column=10, value=f"{total_company_profit:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=10, value=f"{total_company_profit:.2f} ₽").font = Font(
+            bold=True
+        )
+
+        # Статистика по отказам
+        refused_orders_list = [o for o in orders if o.status == OrderStatus.REFUSED]
+        refused_with_reason = [
+            o for o in refused_orders_list if hasattr(o, "refuse_reason") and o.refuse_reason
+        ]
+
+        row_stats = row_num + 2
+        ws.cell(row=row_stats, column=1, value="СТАТИСТИКА ПО ОТКАЗАМ:").font = Font(bold=True)
+        row_stats += 1
+
+        ws.cell(row=row_stats, column=1, value=f"Всего отказов: {len(refused_orders_list)}")
+        row_stats += 1
+
+        ws.cell(
+            row=row_stats,
+            column=1,
+            value=f"С указанием причины: {len(refused_with_reason)}",
+        )
+        row_stats += 1
+
+        if refused_orders_list:
+            percent = (len(refused_with_reason) / len(refused_orders_list)) * 100
+            ws.cell(
+                row=row_stats,
+                column=1,
+                value=f"Процент заполнения: {percent:.1f}%",
+            )
 
         # Автоширина столбцов
         for col_num in range(1, 13):

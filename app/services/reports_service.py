@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.repositories.order_repository_extended import OrderRepositoryExtended
 from app.utils.helpers import get_now
 
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class ReportsService:
     """Сервис для генерации отчетов"""
 
-    def __init__(self):
-        self.db = Database()
-        self._order_repo_extended = None
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
+        self._order_repo_extended: OrderRepositoryExtended | None = None
 
     async def _get_extended_repo(self) -> OrderRepositoryExtended:
         """Получить расширенный репозиторий"""
@@ -570,8 +570,9 @@ class ReportsService:
 
         file_path = reports_dir / filename
 
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(self.format_report_to_text(report))
+        text = await self.format_report_to_text(report)
+        with open(file_path, "w", encoding="utf-8") as f:  # noqa: ASYNC101
+            f.write(text)
 
         logger.info(f"Отчет сохранен в файл: {file_path}")
         return str(file_path)
@@ -599,6 +600,7 @@ class ReportsService:
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         subheader_font = Font(bold=True, size=12)
         subheader_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        table_header_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
         center_alignment = Alignment(horizontal="center", vertical="center")
         left_alignment = Alignment(horizontal="left", vertical="center")
         right_alignment = Alignment(horizontal="right", vertical="center")
@@ -658,9 +660,7 @@ class ReportsService:
                 cell.border = thin_border
                 if row_data == stats_data[0]:
                     cell.font = Font(bold=True)
-                    cell.fill = PatternFill(
-                        start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                    )
+                    cell.fill = table_header_fill
                 cell.alignment = left_alignment if col_idx == 1 else right_alignment
             row += 1
 
@@ -690,9 +690,7 @@ class ReportsService:
                     cell.border = thin_border
                     if row_data == financial_data[0]:
                         cell.font = Font(bold=True)
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
+                        cell.fill = table_header_fill
                     cell.alignment = left_alignment if col_idx == 1 else right_alignment
                 row += 1
 
@@ -731,7 +729,7 @@ class ReportsService:
             for col_idx, header in enumerate(headers, start=1):
                 cell = ws2.cell(row=row, column=col_idx, value=header)
                 cell.font = Font(bold=True)
-                cell.fill = subheader_fill
+                cell.fill = table_header_fill
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
@@ -852,7 +850,7 @@ class ReportsService:
             for col_idx, header in enumerate(master_headers, start=1):
                 cell = ws3.cell(row=row, column=col_idx, value=header)
                 cell.font = Font(bold=True)
-                cell.fill = subheader_fill
+                cell.fill = table_header_fill
                 cell.alignment = center_alignment
                 cell.border = thin_border
 

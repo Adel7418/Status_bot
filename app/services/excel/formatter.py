@@ -81,7 +81,7 @@ class ExcelFormatter:
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.value = column_name
             cell.font = ExcelStyles.TABLE_HEADER_FONT
-            cell.fill = ExcelStyles.HEADER_FILL
+            cell.fill = ExcelStyles.TABLE_HEADER_FILL
             cell.alignment = ExcelStyles.CENTER_ALIGNMENT
             cell.border = ExcelStyles.THIN_BORDER
 
@@ -122,13 +122,11 @@ class ExcelFormatter:
             column_letter = column_cells[0].column_letter
 
             for cell in column_cells:
-                try:
-                    if cell.value:
-                        cell_length = len(str(cell.value))
-                        if cell_length > max_length:
-                            max_length = cell_length
-                except Exception:
-                    pass
+                if cell.value is None:
+                    continue
+                cell_length = len(str(cell.value))
+                if cell_length > max_length:
+                    max_length = cell_length
 
             adjusted_width = max(min_width, min(max_length + 2, max_width))
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -223,7 +221,7 @@ class ExcelFormatter:
         """
         for row in range(start_row, ws.max_row + 1):
             cell = ws[f"{column_letter}{row}"]
-            if isinstance(cell.value, (int, float)):
+            if isinstance(cell.value, (int | float)):
                 cell.number_format = "#,##0.00 ₽"
 
     @staticmethod
@@ -238,7 +236,7 @@ class ExcelFormatter:
         """
         for row in range(start_row, ws.max_row + 1):
             cell = ws[f"{column_letter}{row}"]
-            if isinstance(cell.value, (int, float)):
+            if isinstance(cell.value, (int | float)):
                 cell.number_format = "0.0%"
 
     @staticmethod
@@ -261,7 +259,3 @@ class ExcelFormatter:
 
         for cell in ws[row_idx]:
             cell.fill = fill
-
-
-
-

@@ -11,7 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
 from app.config import OrderStatus, UserRole
-from app.database import Database
+from app.database import Database, get_database
 from app.decorators import handle_errors
 from app.handlers.common import get_menu_with_counter
 from app.keyboards.inline import (
@@ -91,7 +91,7 @@ async def btn_my_orders(
     text = "📋 <b>Ваши заявки:</b>\n\n"
 
     # Группируем по статусам
-    by_status = {}
+    by_status: dict[str, list] = {}
     for order in orders:
         if order.status not in by_status:
             by_status[order.status] = []
@@ -403,7 +403,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -751,7 +751,12 @@ async def process_refuse_reason_on_complete(message: Message, state: FSMContext)
 
     # Завершаем заказ как отказ с указанной причиной и суммой
     await complete_order_as_refusal(
-        message, state, order_id, acting_as_master_id, refuse_reason=refuse_reason, total_amount=float(total_amount)
+        message,
+        state,
+        order_id,
+        acting_as_master_id,
+        refuse_reason=refuse_reason,
+        total_amount=float(total_amount),
     )
 
 
@@ -971,7 +976,7 @@ async def process_dr_info(  # noqa: PLR0911
         await state.clear()
 
         # Показываем главное меню
-        db = Database()
+        db = get_database()
         await db.connect()
         try:
             user = await db.get_user_by_telegram_id(message.from_user.id)
@@ -1114,7 +1119,7 @@ async def process_dr_info(  # noqa: PLR0911
         # Сохраняем текущее состояние, чтобы сообщение с корректной датой было обработано
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -1194,7 +1199,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
         )
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -1226,7 +1231,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
 
         # Подсчитываем статистику
         total = len(orders)
-        by_status = {}
+        by_status: dict[str, int] = {}
 
         for order in orders:
             by_status[order.status] = by_status.get(order.status, 0) + 1
@@ -1266,7 +1271,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
 
 
 @router.message(CompleteOrderStates.enter_total_amount, ~F.text.startswith("/"))
-async def process_total_amount(message: Message, state: FSMContext):
+async def process_total_amount(message: Message, state: FSMContext):  # noqa: PLR0911
     """
     Обработка ввода общей суммы заказа (работает и в личке, и в группе)
 
@@ -1278,9 +1283,7 @@ async def process_total_amount(message: Message, state: FSMContext):
     if message.text == "❌ Отмена":
         # Получаем роли пользователя для правильной клавиатуры
         try:
-            from app.database import Database as _LegacyDB
-
-            _db = _LegacyDB()
+            _db = get_database()
             await _db.connect()
             try:
                 _user = await _db.get_user_by_telegram_id(message.from_user.id)
@@ -1338,9 +1341,8 @@ async def process_total_amount(message: Message, state: FSMContext):
         # Дополнительный допуск: администратор может вводить сумму из любого чата
         try:
             from app.config import UserRole as _UserRole
-            from app.database import Database as _LegacyDB
 
-            _db = _LegacyDB()
+            _db = get_database()
             await _db.connect()
             try:
                 _user = await _db.get_user_by_telegram_id(message.from_user.id)
@@ -1351,8 +1353,8 @@ async def process_total_amount(message: Message, state: FSMContext):
                     )
             finally:
                 await _db.disconnect()
-        except Exception:
-            pass
+        except Exception as exc:  # nosec B110
+            logger.debug("Admin override check failed in PROCESS_TOTAL_AMOUNT: %s", exc)
 
     if not is_sender_allowed:
         logger.warning(
@@ -1800,7 +1802,7 @@ async def process_out_of_city_confirmation_callback(
         "acting_as_master_id"
     )  # ID мастера, если админ действует от его имени
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
@@ -2089,7 +2091,7 @@ async def callback_reschedule_order(callback: CallbackQuery, state: FSMContext):
     """
     order_id = int(callback.data.split(":")[1])
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2255,7 +2257,7 @@ async def show_reschedule_confirmation(message: Message, state: FSMContext):
     reason = data.get("reschedule_reason")
 
     # Получаем информацию о заявке
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2304,10 +2306,7 @@ async def handle_reschedule_confirm(message: Message, state: FSMContext):
         await confirm_reschedule_order(message, state)
     elif message.text == "❌ Отмена":
         # Определяем роль пользователя (может быть ADMIN или MASTER)
-        from app.database import Database
-        from app.keyboards.reply import get_main_menu_keyboard
-
-        db_role = Database()
+        db_role = get_database()
         await db_role.connect()
         try:
             user = await db_role.get_user_by_telegram_id(message.from_user.id)
@@ -2334,7 +2333,7 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
     reason = data.get("reschedule_reason")
     initiated_by = data.get("reschedule_initiated_by")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2496,7 +2495,7 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
     prepayment_amount = data.get("prepayment_amount")
 
     # Получаем информацию о заявке
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2551,7 +2550,7 @@ async def handle_dr_confirm(message: Message, state: FSMContext):
         await state.clear()
 
         # Показываем главное меню
-        db = Database()
+        db = get_database()
         await db.connect()
         try:
             user = await db.get_user_by_telegram_id(message.from_user.id)
@@ -2578,7 +2577,7 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
     completion_date = data.get("completion_date")
     prepayment_amount = data.get("prepayment_amount")
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -2938,7 +2937,7 @@ async def complete_order_as_refusal(
     from app.config import OrderStatus
     from app.utils.helpers import calculate_profit_split
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -3105,8 +3104,10 @@ async def complete_order_as_refusal(
         if refuse_reason:
             confirmation_text += f"\n📝 Причина отказа: {refuse_reason}"
         elif total_amount == 0:
-            confirmation_text += "\nЗаявка автоматически помечена как отказ, так как сумма составляет 0 рублей."
-        
+            confirmation_text += (
+                "\nЗаявка автоматически помечена как отказ, так как сумма составляет 0 рублей."
+            )
+
         await message.reply(confirmation_text, parse_mode="HTML")
 
         # Уведомляем диспетчера
@@ -3121,7 +3122,7 @@ async def complete_order_as_refusal(
             if total_amount > 0:
                 dispatcher_text += f"💰 Сумма: {total_amount:.2f} ₽\n"
             dispatcher_text += f"Причина: {dispatcher_reason}"
-            
+
             result = await safe_send_message(
                 message.bot,
                 order.dispatcher_id,
@@ -3211,7 +3212,7 @@ async def process_refuse_confirmation_callback(callback_query: CallbackQuery, st
         await callback_query.answer("Заявка отклонена")
     else:
         # Отменяем отказ - получаем заказ для клавиатуры
-        db = Database()
+        db = get_database()
         await db.connect()
         try:
             order = await db.get_order_by_id(order_id)
@@ -3324,7 +3325,7 @@ async def callback_complete_dr_order(callback: CallbackQuery, state: FSMContext)
         f"[COMPLETE_DR] Starting completion process for DR order #{order_id} by user {callback.from_user.id}"
     )
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:

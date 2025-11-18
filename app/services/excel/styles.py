@@ -18,8 +18,8 @@ class ExcelStyles:
     SUBHEADER_FONT = Font(bold=True, size=12)
     """Шрифт для подзаголовков (черный, жирный, 12pt)"""
 
-    TABLE_HEADER_FONT = Font(bold=True, size=12, color="FFFFFF")
-    """Шрифт для заголовков таблиц (белый, жирный, 12pt)"""
+    TABLE_HEADER_FONT = Font(bold=True, size=12, color="000000")
+    """Шрифт для заголовков таблиц (чёрный, жирный, 12pt)"""
 
     DATA_FONT = Font(size=10)
     """Шрифт для обычных данных (черный, 10pt)"""
@@ -48,6 +48,9 @@ class ExcelStyles:
 
     ERROR_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     """Красный фон для ошибок (#FFC7CE)"""
+
+    TABLE_HEADER_FILL = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+    """Серый фон для заголовков таблиц (#E7E6E6)"""
 
     # ======================
     # ВЫРАВНИВАНИЕ
@@ -132,7 +135,7 @@ class ExcelStyles:
         """
         return {
             "font": ExcelStyles.TABLE_HEADER_FONT,
-            "fill": ExcelStyles.HEADER_FILL,
+            "fill": ExcelStyles.TABLE_HEADER_FILL,
             "alignment": ExcelStyles.CENTER_ALIGNMENT,
             "border": ExcelStyles.THIN_BORDER,
         }
@@ -153,7 +156,3 @@ class ExcelStyles:
             "alignment": ExcelStyles.CENTER_ALIGNMENT if centered else ExcelStyles.LEFT_ALIGNMENT,
             "border": ExcelStyles.THIN_BORDER,
         }
-
-
-
-

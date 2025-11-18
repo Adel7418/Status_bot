@@ -67,7 +67,8 @@ async def callback_create_test_order(callback: CallbackQuery, db: Database):
 
     # Генерация случайных данных для заявки
     equipment_types = EquipmentType.all_types()
-    equipment = random.choice(equipment_types)  # noqa: S311
+    # Используем стандартный random только для генерации тестовых данных (не для безопасности)
+    equipment = random.choice(equipment_types)  # nosec B311  # noqa: S311
 
     test_clients = [
         "Иван Петров",
@@ -96,10 +97,11 @@ async def callback_create_test_order(callback: CallbackQuery, db: Database):
         "Не сливает воду",
     ]
 
-    client_name = random.choice(test_clients)  # noqa: S311
-    client_address = random.choice(test_addresses)  # noqa: S311
-    client_phone = f"+7{random.randint(9000000000, 9999999999)}"  # noqa: S311
-    description = f"{equipment}: {random.choice(test_problems)}"  # noqa: S311
+    # Стандартный random используется только для незначимых тестовых данных
+    client_name = random.choice(test_clients)  # nosec B311  # noqa: S311
+    client_address = random.choice(test_addresses)  # nosec B311  # noqa: S311
+    client_phone = f"+7{random.randint(9000000000, 9999999999)}"  # nosec B311  # noqa: S311
+    description = f"{equipment}: {random.choice(test_problems)}"  # nosec B311  # noqa: S311
 
     # Создание заявки в БД
     try:

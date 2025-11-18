@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.config import OrderStatus
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.utils.helpers import MOSCOW_TZ, get_now
 
 
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class MasterReportsService:
     """Сервис для генерации детализированных отчетов по мастерам"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
 
     async def generate_daily_master_report(self, target_date: datetime) -> str | None:
         """
@@ -354,8 +354,8 @@ class MasterReportsService:
 
         # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
         column_widths: dict[str, int] = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
-        for col, width in column_widths.items():
-            ws.column_dimensions[col].width = width
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width
 
     async def _create_master_sheet(self, ws, master, orders: list, report_type: str = "daily"):
         """Создание листа для конкретного мастера"""
@@ -465,5 +465,5 @@ class MasterReportsService:
             column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 20, "F": 12, "G": 12}
         else:
             column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 12, "F": 12}
-        for col, width in column_widths.items():
-            ws.column_dimensions[col].width = width
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width

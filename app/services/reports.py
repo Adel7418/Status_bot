@@ -102,7 +102,7 @@ class ReportsService:
         orders = await self.db.get_all_orders()
 
         # Подсчитываем по типам
-        by_equipment = {}
+        by_equipment: dict[str, int] = {}
         for order in orders:
             by_equipment[order.equipment_type] = by_equipment.get(order.equipment_type, 0) + 1
 
@@ -148,7 +148,7 @@ class ReportsService:
             return text + "Заявок за этот период нет."
 
         # Статистика по статусам
-        by_status = {}
+        by_status: dict[str, int] = {}
         for order in orders:
             by_status[order.status] = by_status.get(order.status, 0) + 1
 
@@ -160,7 +160,7 @@ class ReportsService:
                 text += f"{emoji} {name}: {by_status[status]}\n"
 
         # Статистика по мастерам
-        by_master = {}
+        by_master: dict[str, int] = {}
         for order in orders:
             if order.assigned_master_id:
                 by_master[order.master_name] = by_master.get(order.master_name, 0) + 1
@@ -333,7 +333,7 @@ class ReportsService:
 
         orders = await self.db.get_all_orders()
 
-        by_equipment = {}
+        by_equipment: dict[str, int] = {}
         for order in orders:
             by_equipment[order.equipment_type] = by_equipment.get(order.equipment_type, 0) + 1
 

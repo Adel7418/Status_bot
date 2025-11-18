@@ -200,7 +200,7 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"Failed to send scheduled time reminder for order #{order.id}: {e}")
 
-    def _check_scheduled_time_alert(self, order, now: datetime) -> bool:
+    def _check_scheduled_time_alert(self, order, now: datetime) -> bool:  # noqa: PLR0911
         """
         Проверка запланированного времени для перенесенных заявок.
         Отправляет напоминание за 2 часа до визита.
@@ -213,7 +213,7 @@ class TaskScheduler:
             True если напоминание было отправлено или время еще не подошло
         """
         import re
-        from datetime import datetime, timedelta
+        from datetime import date, datetime, timedelta
 
         scheduled_time = order.scheduled_time.lower().strip()
 
@@ -250,7 +250,7 @@ class TaskScheduler:
             month = int(date_match.group(2))
             year = int(date_match.group(3))
             try:
-                target_date = datetime(year, month, day).date()
+                target_date = date(year, month, day)
             except ValueError:
                 return False  # Неверная дата
 
@@ -967,8 +967,8 @@ class TaskScheduler:
                             max_attempts=1,
                         )
 
-            except Exception:
-                pass
+            except Exception as notify_exc:  # nosec B110 - сбой уведомления не критичен для бэкапа
+                logger.debug("Failed to notify admins about backup error: %s", notify_exc)
 
     async def update_reports_automatically(self):
         """Автоматическое обновление отчетов"""
