@@ -64,6 +64,10 @@ async def admin_edit_closed_start(message: Message, state: FSMContext, user_role
 
     await state.clear()
 
+    if message.text is None:
+        await message.answer("❌ Сообщение пусто. Введите ID заявки:")
+        return
+
     parts = message.text.strip().split()
     if len(parts) >= 2 and parts[1].isdigit():
         order_id = int(parts[1])
@@ -134,7 +138,17 @@ async def admin_edit_closed_set_id(message: Message, state: FSMContext, user_rol
 
 async def send_edit_closed_menu(message: Message, state: FSMContext):
     data = await state.get_data()
-    order_id = data.get("order_id")
+    order_id_raw = data.get("order_id")
+
+    if order_id_raw is None:
+        await message.answer("❌ ID заявки не найден.")
+        return
+
+    # Type assertion: order_id should be int
+    if not isinstance(order_id_raw, int):
+        await message.answer("❌ Неверный формат ID заявки.")
+        return
+    order_id = int(order_id_raw)
 
     # Загружаем текущие значения из БД
     from app.database.orm_database import ORMDatabase
@@ -226,11 +240,18 @@ async def send_edit_closed_menu(message: Message, state: FSMContext):
 async def admin_edit_closed_select(callback: CallbackQuery, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
         return
+    if callback.data is None:
+        await callback.answer("❌ Данные недоступны", show_alert=True)
+        return
+    # Type guard: callback.data is not None here
+    assert callback.data is not None  # nosec B101 - type guard, not production check
     _, field, _order_id = callback.data.split(":", 2)
     message_obj = callback.message
     if not isinstance(message_obj, Message):
         await callback.answer("❌ Сообщение недоступно", show_alert=True)
         return
+    # Type guard: message_obj is Message here
+    assert isinstance(message_obj, Message)  # nosec B101 - type guard, not production check
 
     if field == "total":
         await state.set_state(EditClosedOrderStates.enter_total_amount)
@@ -246,6 +267,11 @@ async def admin_edit_closed_select(callback: CallbackQuery, state: FSMContext, u
 async def admin_edit_closed_set_review(callback: CallbackQuery, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
         return
+    if callback.data is None:
+        await callback.answer("❌ Данные недоступны", show_alert=True)
+        return
+    # Type guard: callback.data is not None here
+    assert callback.data is not None  # nosec B101 - type guard, not production check
     _, answer, _order_id = callback.data.split(":", 2)
     await state.update_data(has_review=(answer == "yes"))
     await callback.answer("OK")
@@ -259,6 +285,11 @@ async def admin_edit_closed_set_review(callback: CallbackQuery, state: FSMContex
 async def admin_edit_closed_set_out(callback: CallbackQuery, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
         return
+    if callback.data is None:
+        await callback.answer("❌ Данные недоступны", show_alert=True)
+        return
+    # Type guard: callback.data is not None here
+    assert callback.data is not None  # nosec B101 - type guard, not production check
     _, answer, _order_id = callback.data.split(":", 2)
     await state.update_data(out_of_city=(answer == "yes"))
     await callback.answer("OK")
@@ -273,7 +304,11 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
     if user_role != UserRole.ADMIN:
         return
     data = await state.get_data()
-    order_id = int(data.get("order_id"))
+    order_id_raw = data.get("order_id")
+    if order_id_raw is None:
+        await callback.answer("❌ ID заявки не найден", show_alert=True)
+        return
+    order_id = int(order_id_raw)
 
     # Загружаем текущие значения из БД, чтобы менять только отредактированные поля
     from app.database.orm_database import ORMDatabase
@@ -422,22 +457,27 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
         )
 
         # Обновляем данные в отчетах
-        try:
-            from app.services.order_reports import OrderReportsService
+        if updated_order is not None:
+            try:
+                from app.services.order_reports import OrderReportsService
 
-            master_obj = (
-                updated_order.assigned_master if hasattr(updated_order, "assigned_master") else None
-            )
-            dispatcher_user = (
-                updated_order.dispatcher if hasattr(updated_order, "dispatcher") else None
-            )
+                master_obj = (
+                    updated_order.assigned_master
+                    if hasattr(updated_order, "assigned_master")
+                    else None
+                )
+                dispatcher_user = (
+                    updated_order.dispatcher if hasattr(updated_order, "dispatcher") else None
+                )
 
-            reports_service = OrderReportsService()
-            await reports_service.upsert_order_report(updated_order, master_obj, dispatcher_user)
-        except Exception as e:
-            logger.warning(
-                f"Не удалось обновить отчет по заказу {order_id} после редактирования: {e}"
-            )
+                reports_service = OrderReportsService()
+                await reports_service.upsert_order_report(
+                    updated_order, master_obj, dispatcher_user
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Не удалось обновить отчет по заказу {order_id} после редактирования: {e}"
+                )
 
         # Формируем итоговый превью из актуальных значений
         final = updated_order
@@ -482,6 +522,9 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
 async def admin_edit_closed_total(message: Message, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
         return
+    if message.text is None:
+        await message.answer("❌ Сообщение пусто. Введите сумму:")
+        return
     try:
         total = float(message.text.replace(",", ".").strip())
         if total < 0:
@@ -500,6 +543,9 @@ async def admin_edit_closed_total(message: Message, state: FSMContext, user_role
 @handle_errors
 async def admin_edit_closed_materials(message: Message, state: FSMContext, user_role: str):
     if user_role != UserRole.ADMIN:
+        return
+    if message.text is None:
+        await message.answer("❌ Сообщение пусто. Введите сумму расходов:")
         return
     try:
         materials = float(message.text.replace(",", ".").strip())
@@ -522,7 +568,9 @@ async def admin_edit_closed_review(message: Message, state: FSMContext, user_rol
     has_review = (
         True
         if val in {"да", "+", "yes", "y", "1"}
-        else False if val in {"нет", "-", "no", "n", "0"} else None
+        else False
+        if val in {"нет", "-", "no", "n", "0"}
+        else None
     )
     if has_review is None:
         await message.answer("Ответьте 'да' или 'нет'.")
@@ -541,7 +589,9 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     out_of_city = (
         True
         if val in {"да", "+", "yes", "y", "1"}
-        else False if val in {"нет", "-", "no", "n", "0"} else None
+        else False
+        if val in {"нет", "-", "no", "n", "0"}
+        else None
     )
     if out_of_city is None:
         await message.answer("Ответьте 'да' или 'нет'.")
@@ -561,11 +611,21 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
     await db.connect()
     try:
         # Получаем заказ для получения типа техники
-        order = await db.get_order_by_id(order_id) if order_id else None
+        if order_id is None:
+            await message.answer("❌ ID заявки не найден.")
+            return
+        # Type assertion: order_id should be int
+        order_id_int = (
+            int(order_id) if isinstance(order_id, int | str) and str(order_id).isdigit() else None
+        )
+        if order_id_int is None:
+            await message.answer("❌ Неверный формат ID заявки.")
+            return
+        order = await db.get_order_by_id(order_id_int)
 
         # Получаем ставку для расчета по типу техники
         specialization_rate = None
-        if order and order.equipment_type:
+        if order is not None and order.equipment_type:
             specialization_rate = await db.get_specialization_rate(
                 equipment_type=order.equipment_type,
             )
@@ -576,7 +636,7 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
             materials,
             has_review,
             out_of_city,
-            equipment_type=order.equipment_type if order else None,
+            equipment_type=order.equipment_type if order is not None else None,
             specialization_rate=specialization_rate,
         )
         # Округляем до 2 знаков после запятой
@@ -592,6 +652,9 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
             out_of_city=out_of_city,
         )
         net_profit = max(total - materials, 0)
+        if message.from_user is None:
+            logger.warning("message.from_user is None in admin_edit_closed_save")
+            return
         await db.add_audit_log(
             user_id=message.from_user.id,
             action="ADMIN_EDIT_CLOSED_ORDER",
@@ -666,6 +729,9 @@ async def process_equipment_type(callback: CallbackQuery, state: FSMContext, use
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if callback.data is None:
+        await callback.answer("❌ Данные недоступны", show_alert=True)
+        return
     equipment_type = callback.data.split(":", 1)[1]
 
     await state.update_data(equipment_type=equipment_type)
@@ -768,8 +834,9 @@ async def process_description(message: Message, state: FSMContext, user_role: st
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -851,8 +918,9 @@ async def process_client_name(message: Message, state: FSMContext, user_role: st
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -936,8 +1004,9 @@ async def process_client_address(message: Message, state: FSMContext, user_role:
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -1080,8 +1149,9 @@ async def process_client_phone(message: Message, state: FSMContext, user_role: s
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -1129,9 +1199,7 @@ async def confirm_client_data(message: Message, state: FSMContext, user_role: st
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except (
-        Exception
-    ) as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
+    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
@@ -1167,9 +1235,7 @@ async def reject_client_data(message: Message, state: FSMContext, user_role: str
     # Удаляем предыдущее сообщение
     try:
         await message.delete()
-    except (
-        Exception
-    ) as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
+    except Exception as exc:  # nosec B110 - безопасное игнорирование ошибок телеграма при удалении сообщения
         logger.debug("Failed to delete message: %s", exc)
 
     sent_message = await message.answer(
@@ -1200,8 +1266,9 @@ async def skip_notes(message: Message, state: FSMContext, user_role: str):
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -1259,8 +1326,9 @@ async def process_notes(message: Message, state: FSMContext, user_role: str):
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -1457,8 +1525,9 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -1490,8 +1559,9 @@ async def skip_scheduled_time(message: Message, state: FSMContext, user_role: st
     data = await state.get_data()
     if last_msg_id := data.get("last_bot_message_id"):
         try:
-            await message.bot.delete_message(message.chat.id, last_msg_id)
-            logger.debug(f"Deleted bot message {last_msg_id}")
+            if message.bot is not None:
+                await message.bot.delete_message(message.chat.id, last_msg_id)
+                logger.debug(f"Deleted bot message {last_msg_id}")
         except Exception as e:
             logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
     try:
@@ -3694,6 +3764,10 @@ async def admin_process_out_of_city_confirmation_callback(
 
             # Получаем актуальные данные заказа
             updated_order = await db.get_order_by_id(order_id_from_state)
+
+            if updated_order is None:
+                logger.warning(f"Order {order_id_from_state} not found")
+                return
 
             # Получаем данные мастера и диспетчера
             master = None
