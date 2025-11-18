@@ -69,11 +69,11 @@ echo "🐍 5. Проверка подключения через Python:"
 echo "─────────────────────────────────────────────────────────────────"
 docker exec telegram_repair_bot_prod python -c "
 import asyncio
-from app.database import Database
+from app.database import get_database
 
 async def test():
     try:
-        db = Database()
+        db = get_database()
         await db.connect()
         print('✅ Подключение к БД успешно')
 

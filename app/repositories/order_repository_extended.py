@@ -488,11 +488,16 @@ class OrderRepositoryExtended(OrderRepository):
             f"(version: {expected_version} → {expected_version + 1})"
         )
 
-        # Возвращаем обновленную заявку
-        return await self.get_by_id(order_id)
+        # Возвращаем обновленную заявку (в этот момент она гарантированно существует
+        # и не помечена как deleted, так как мы только что успешно обновили её).
+        updated_order = await self.get_by_id(order_id)
+        if updated_order is None:
+            # Теоретически недостижимо, но нужна защита для type checker и от несогласованности данных.
+            raise EntityNotFoundError("Order", order_id)
+        return updated_order
 
     async def update_order_with_version(
-        self, order_id: int, expected_version: int, updated_by: int, **fields
+        self, order_id: int, expected_version: int, updated_by: int, **fields: Any
     ) -> Order:
         """
         Обновление полей заявки с optimistic locking
@@ -564,4 +569,8 @@ class OrderRepositoryExtended(OrderRepository):
             f"(version: {expected_version} → {expected_version + 1})"
         )
 
-        return await self.get_by_id(order_id)
+        updated_order = await self.get_by_id(order_id)
+        if updated_order is None:
+            # Аналогично update_order_status_with_version: к этому моменту запись должна существовать.
+            raise EntityNotFoundError("Order", order_id)
+        return updated_order

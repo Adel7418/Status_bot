@@ -2,11 +2,14 @@
 Inline клавиатуры
 """
 
+from collections.abc import Sequence
+from typing import Protocol
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import EquipmentType, OrderStatus
-from app.database.models import Master, Order
+from app.database.models import Order
 from app.utils import create_callback_data
 
 
@@ -68,6 +71,16 @@ def get_group_order_keyboard(order: Order, status: str) -> InlineKeyboardMarkup:
         )
 
     return builder.as_markup()
+
+
+class MasterLike(Protocol):
+    id: int | None
+    telegram_id: int | None
+    specialization: str | None
+    work_chat_id: int | None
+
+    def get_display_name(self) -> str:
+        ...
 
 
 def get_equipment_types_keyboard() -> InlineKeyboardMarkup:
@@ -276,7 +289,7 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
 
 
 def get_masters_list_keyboard(
-    masters: list[Master], order_id: int | None = None, action: str = "select_master"
+    masters: Sequence[MasterLike], order_id: int | None = None, action: str = "select_master"
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура со списком мастеров

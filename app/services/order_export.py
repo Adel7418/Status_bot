@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from app.config import OrderStatus
-from app.database import Database
+from app.database import get_database
 from app.utils import format_datetime
 
 
@@ -31,7 +31,7 @@ class OrderExportService:
         Returns:
             BufferedInputFile с Excel файлом или None если заявка не найдена
         """
-        db = Database()
+        db = get_database()
         await db.connect()
 
         try:

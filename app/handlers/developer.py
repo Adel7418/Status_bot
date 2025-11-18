@@ -115,7 +115,16 @@ async def callback_create_test_order(callback: CallbackQuery, db: Database):
             notes="[TEST] Тестовая заявка из dev режима",
         )
 
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("Сообщение недоступно", show_alert=True)
+            return
+
+        created_str = (
+            order.created_at.strftime("%d.%m.%Y %H:%M") if order.created_at else "неизвестно"
+        )
+
+        await message_obj.edit_text(
             "✅ <b>Тестовая заявка создана!</b>\n\n"
             f"📋 Заявка #{order.id}\n"
             f"🔧 {order.equipment_type}\n"
@@ -123,7 +132,7 @@ async def callback_create_test_order(callback: CallbackQuery, db: Database):
             f"👤 Клиент: {order.client_name}\n"
             f"📍 Адрес: {order.client_address}\n"
             f"📞 Телефон: {order.client_phone}\n\n"
-            f"🗓 Создана: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"🗓 Создана: {created_str}\n\n"
             f"💾 База данных: <code>{os.path.basename(Config.DATABASE_PATH)}</code>",
             parse_mode="HTML",
             reply_markup=get_dev_menu_keyboard(),
@@ -133,7 +142,12 @@ async def callback_create_test_order(callback: CallbackQuery, db: Database):
 
     except Exception as e:
         logger.error(f"[DEV] Ошибка создания тестовой заявки: {e}")
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer("Сообщение недоступно", show_alert=True)
+            return
+
+        await message_obj.edit_text(
             f"❌ <b>Ошибка при создании заявки</b>\n\n{e!s}",
             parse_mode="HTML",
             reply_markup=get_dev_menu_keyboard(),
@@ -160,7 +174,12 @@ async def callback_dev_archive_orders(callback: CallbackQuery):
     builder.row(InlineKeyboardButton(text="📅 Старше 90 дней", callback_data="dev_archive_90"))
     builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="dev_back"))
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer()
+        return
+
+    await message_obj.edit_text(
         "🗄️ <b>Архивирование старых заявок</b>\n\n"
         "Выберите период для архивирования завершенных и отклоненных заявок:\n\n"
         "⚠️ <b>Внимание:</b> Заявки будут удалены из базы данных,\n"
@@ -181,9 +200,15 @@ async def callback_dev_archive_execute(callback: CallbackQuery, db: Database):
         callback: Callback query
         db: Database instance (injected)
     """
-    days = int(callback.data.split("_")[-1])
+    data = callback.data or ""
+    days = int(data.split("_")[-1])
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer()
+        return
+
+    await message_obj.edit_text(
         f"⏳ Архивирую заявки старше {days} дней...\n\n" "Это может занять некоторое время.",
         parse_mode="HTML",
     )
@@ -194,19 +219,34 @@ async def callback_dev_archive_execute(callback: CallbackQuery, db: Database):
     result = await service.archive_old_orders(days_old=days)
 
     if result.get("error"):
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer()
+            return
+
+        await message_obj.edit_text(
             f"❌ <b>Ошибка архивирования</b>\n\n" f"Ошибка: {result['error']}",
             parse_mode="HTML",
             reply_markup=get_dev_menu_keyboard(),
         )
     elif result["archived"] == 0:
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer()
+            return
+
+        await message_obj.edit_text(
             f"ℹ️ <b>Архивирование завершено</b>\n\n" f"Заявок старше {days} дней не найдено.",
             parse_mode="HTML",
             reply_markup=get_dev_menu_keyboard(),
         )
     else:
-        await callback.message.edit_text(
+        message_obj = callback.message
+        if not isinstance(message_obj, Message):
+            await callback.answer()
+            return
+
+        await message_obj.edit_text(
             f"✅ <b>Архивирование завершено!</b>\n\n"
             f"📦 Заархивировано заявок: <b>{result['archived']}</b>\n"
             f"📅 Старше: {days} дней\n"
@@ -234,7 +274,12 @@ async def callback_dev_back(callback: CallbackQuery):
     """
     db_name = os.path.basename(Config.DATABASE_PATH)
 
-    await callback.message.edit_text(
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer()
+        return
+
+    await message_obj.edit_text(
         "🔧 <b>Developer Mode</b>\n\n"
         f"📊 База данных: <code>{db_name}</code>\n\n"
         "⚠️ Все тестовые данные создаются в отдельной dev БД.\n"
@@ -255,5 +300,7 @@ async def callback_dev_close(callback: CallbackQuery):
     Args:
         callback: Callback query
     """
-    await callback.message.delete()
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.delete()
     await callback.answer("Меню закрыто")

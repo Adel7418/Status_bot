@@ -47,19 +47,31 @@ async def callback_generate_daily_report(callback: CallbackQuery, user_role: str
     if user_role not in [UserRole.ADMIN]:
         return
 
-    await callback.message.edit_text("⏳ Генерирую ежедневный отчет...")
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text("⏳ Генерирую ежедневный отчет...")
 
     try:
         from app.services.reports_notifier import ReportsNotifier
 
-        notifier = ReportsNotifier(callback.bot)
+        bot = callback.bot
+        if bot is None:
+            logger.error("Bot instance is not available for ReportsNotifier (daily report)")
+            await message_obj.edit_text("❌ Бот недоступен для генерации отчета")
+            await callback.answer()
+            return
+
+        notifier = ReportsNotifier(bot)
         await notifier.send_daily_report()
 
-        await callback.message.edit_text("✅ Ежедневный отчет успешно отправлен!")
+        await message_obj.edit_text("✅ Ежедневный отчет успешно отправлен!")
 
     except Exception as e:
         logger.error(f"Ошибка генерации ежедневного отчета: {e}")
-        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+        await message_obj.edit_text(f"❌ Ошибка генерации отчета: {e}")
 
     await callback.answer()
 
@@ -71,19 +83,31 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
     if user_role not in [UserRole.ADMIN]:
         return
 
-    await callback.message.edit_text("⏳ Генерирую еженедельный отчет...")
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text("⏳ Генерирую еженедельный отчет...")
 
     try:
         from app.services.reports_notifier import ReportsNotifier
 
-        notifier = ReportsNotifier(callback.bot)
+        bot = callback.bot
+        if bot is None:
+            logger.error("Bot instance is not available for ReportsNotifier (weekly report)")
+            await message_obj.edit_text("❌ Бот недоступен для генерации отчета")
+            await callback.answer()
+            return
+
+        notifier = ReportsNotifier(bot)
         await notifier.send_weekly_report()
 
-        await callback.message.edit_text("✅ Еженедельный отчет успешно отправлен!")
+        await message_obj.edit_text("✅ Еженедельный отчет успешно отправлен!")
 
     except Exception as e:
         logger.error(f"Ошибка генерации еженедельного отчета: {e}")
-        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+        await message_obj.edit_text(f"❌ Ошибка генерации отчета: {e}")
 
     await callback.answer()
 
@@ -95,19 +119,31 @@ async def callback_generate_monthly_report(callback: CallbackQuery, user_role: s
     if user_role not in [UserRole.ADMIN]:
         return
 
-    await callback.message.edit_text("⏳ Генерирую ежемесячный отчет...")
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    await message_obj.edit_text("⏳ Генерирую ежемесячный отчет...")
 
     try:
         from app.services.reports_notifier import ReportsNotifier
 
-        notifier = ReportsNotifier(callback.bot)
+        bot = callback.bot
+        if bot is None:
+            logger.error("Bot instance is not available for ReportsNotifier (monthly report)")
+            await message_obj.edit_text("❌ Бот недоступен для генерации отчета")
+            await callback.answer()
+            return
+
+        notifier = ReportsNotifier(bot)
         await notifier.send_monthly_report()
 
-        await callback.message.edit_text("✅ Ежемесячный отчет успешно отправлен!")
+        await message_obj.edit_text("✅ Ежемесячный отчет успешно отправлен!")
 
     except Exception as e:
         logger.error(f"Ошибка генерации ежемесячного отчета: {e}")
-        await callback.message.edit_text(f"❌ Ошибка генерации отчета: {e}")
+        await message_obj.edit_text(f"❌ Ошибка генерации отчета: {e}")
 
     await callback.answer()
 
@@ -129,6 +165,11 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
         await callback.answer("❌ Нет доступа", show_alert=True)
         return
 
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     await callback.answer("📊 Генерирую отчет...", show_alert=False)
 
     try:
@@ -145,7 +186,7 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
             from aiogram.types import FSInputFile
 
             file = FSInputFile(filepath)
-            await callback.message.answer_document(
+            await message_obj.answer_document(
                 file,
                 caption="📋 <b>Отчет по активным заявкам</b>\n\n"
                 "В файле указаны все незакрытые заявки:\n"
@@ -159,8 +200,9 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
                 parse_mode="HTML",
             )
 
-            logger.info(f"Active orders report sent to {callback.from_user.id}")
-            await callback.message.edit_text(
+            if callback.from_user:
+                logger.info(f"Active orders report sent to {callback.from_user.id}")
+            await message_obj.edit_text(
                 "✅ Отчет по активным заявкам сформирован!", reply_markup=None
             )
         else:
@@ -175,7 +217,9 @@ async def callback_export_active_orders_admin(callback: CallbackQuery, user_role
 @handle_errors
 async def callback_back_to_admin_menu(callback: CallbackQuery):
     """Возврат в главное меню администратора"""
-    await callback.message.delete()
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.delete()
     await callback.answer()
 
 
@@ -221,6 +265,11 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     db = ORMDatabase()
     await db.connect()
 
@@ -228,7 +277,7 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
         masters = await db.get_all_masters()
 
         if not masters:
-            await callback.message.edit_text(
+            await message_obj.edit_text(
                 "📝 В системе пока нет мастеров.\n\n"
                 "Используйте кнопку 'Добавить мастера' для добавления."
             )
@@ -240,7 +289,7 @@ async def callback_list_all_masters(callback: CallbackQuery, user_role: str):
         # Клавиатура со списком для управления
         keyboard = get_masters_list_keyboard(masters, action="manage_master")
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -257,9 +306,14 @@ async def callback_add_master(callback: CallbackQuery, state: FSMContext):
         callback: Callback query
         state: FSM контекст
     """
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     await state.set_state(AddMasterStates.enter_telegram_id)
 
-    await callback.message.answer(
+    await message_obj.answer(
         "➕ <b>Добавление нового мастера</b>\n\n"
         "Введите Telegram ID мастера:\n"
         "<i>(попросите мастера отправить команду /start боту и сообщить вам его ID)</i>",
@@ -267,7 +321,7 @@ async def callback_add_master(callback: CallbackQuery, state: FSMContext):
         reply_markup=get_cancel_keyboard(),
     )
 
-    await callback.message.delete()
+    await message_obj.delete()
     await callback.answer()
 
 
@@ -280,8 +334,9 @@ async def process_master_telegram_id(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
+    text = (message.text or "").strip()
     try:
-        telegram_id = int(message.text.strip())
+        telegram_id = int(text)
     except ValueError:
         await message.answer(
             "❌ Неверный формат. Введите числовой ID:", reply_markup=get_cancel_keyboard()
@@ -336,7 +391,7 @@ async def process_master_phone(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
-    phone = message.text.strip()
+    phone = (message.text or "").strip()
 
     if not validate_phone(phone):
         await message.answer(
@@ -367,7 +422,7 @@ async def process_master_specialization(message: Message, state: FSMContext):
         message: Сообщение
         state: FSM контекст
     """
-    specialization = message.text.strip()
+    specialization = (message.text or "").strip()
 
     if len(specialization) < 3:
         await message.answer(
@@ -416,6 +471,16 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
     if user_role != UserRole.ADMIN:
         return
 
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
     data = await state.get_data()
 
     db = ORMDatabase()
@@ -435,7 +500,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
 
         # Добавляем в лог
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="ADD_MASTER",
             details=f"Added master {data['telegram_id']}",
         )
@@ -443,21 +508,25 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
         # Уведомляем мастера с retry механизмом
         from app.utils import safe_send_message
 
-        result = await safe_send_message(
-            callback.bot,
-            data["telegram_id"],
-            "✅ <b>Поздравляем!</b>\n\n"
-            "Вы добавлены в систему как мастер.\n"
-            "Теперь вы можете получать заявки на ремонт.\n\n"
-            "Используйте /start для начала работы.",
-            parse_mode="HTML",
-        )
-        if not result:
-            logger.error(
-                f"Failed to send notification to master {data['telegram_id']} after retries"
+        bot = callback.bot
+        if bot is not None:
+            result = await safe_send_message(
+                bot,
+                data["telegram_id"],
+                "✅ <b>Поздравляем!</b>\n\n"
+                "Вы добавлены в систему как мастер.\n"
+                "Теперь вы можете получать заявки на ремонт.\n\n"
+                "Используйте /start для начала работы.",
+                parse_mode="HTML",
             )
+            if not result:
+                logger.error(
+                    f"Failed to send notification to master {data['telegram_id']} after retries"
+                )
+        else:
+            logger.error("Bot instance is not available to notify new master")
 
-        await callback.message.edit_text(
+        await message_obj.edit_text(
             f"✅ <b>Мастер успешно добавлен!</b>\n\n"
             f"👤 {data['user_name']}\n"
             f"🆔 ID: {data['telegram_id']}\n"
@@ -466,7 +535,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
             parse_mode="HTML",
         )
 
-        log_action(callback.from_user.id, "ADD_MASTER", f"Master ID: {data['telegram_id']}")
+        log_action(user.id, "ADD_MASTER", f"Master ID: {data['telegram_id']}")
 
     finally:
         await db.disconnect()
@@ -478,7 +547,7 @@ async def callback_confirm_add_master(callback: CallbackQuery, state: FSMContext
     from app.handlers.common import get_menu_with_counter
 
     menu_keyboard = await get_menu_with_counter([UserRole.ADMIN])
-    await callback.message.answer("Главное меню:", reply_markup=menu_keyboard)
+    await message_obj.answer("Главное меню:", reply_markup=menu_keyboard)
 
 
 @router.callback_query(F.data.startswith("manage_master:"))
@@ -493,7 +562,12 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -528,7 +602,9 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
 
         keyboard = get_master_management_keyboard(telegram_id, master.is_active)
 
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
     finally:
         await db.disconnect()
@@ -548,7 +624,12 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -563,21 +644,30 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
         # Архивируем заявки мастера
         from app.services.master_archive_service import MasterArchiveService
 
-        archive_service = MasterArchiveService()
-        archive_path = await archive_service.archive_master_orders(master.id, "deactivation")
+        archive_path = None
+        if master.id is not None:
+            archive_service = MasterArchiveService()
+            archive_path = await archive_service.archive_master_orders(master.id, "deactivation")
 
         if archive_path:
-            await callback.message.answer(
-                f"📁 <b>Архив создан</b>\n\n"
-                f"Заявки мастера {master.get_display_name()} сохранены в архиве:\n"
-                f"<code>{archive_path}</code>",
-                parse_mode="HTML",
-            )
+            message_obj = callback.message
+            if isinstance(message_obj, Message):
+                await message_obj.answer(
+                    f"📁 <b>Архив создан</b>\n\n"
+                    f"Заявки мастера {master.get_display_name()} сохранены в архиве:\n"
+                    f"<code>{archive_path}</code>",
+                    parse_mode="HTML",
+                )
 
         await db.update_master_status(telegram_id, is_active=False)
 
+        user = callback.from_user
+        if user is None:
+            await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+            return
+
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="DEACTIVATE_MASTER",
             details=f"Deactivated master {telegram_id} and archived orders",
         )
@@ -585,7 +675,7 @@ async def callback_deactivate_master(callback: CallbackQuery, user_role: str):
         # Обновляем сообщение
         await callback_manage_master(callback, user_role)
 
-        log_action(callback.from_user.id, "DEACTIVATE_MASTER", f"Master ID: {telegram_id}")
+        log_action(user.id, "DEACTIVATE_MASTER", f"Master ID: {telegram_id}")
 
     finally:
         await db.disconnect()
@@ -605,7 +695,17 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
+
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -614,7 +714,7 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         await db.update_master_status(telegram_id, is_active=True)
 
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="ACTIVATE_MASTER",
             details=f"Activated master {telegram_id}",
         )
@@ -622,7 +722,7 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         # Обновляем сообщение
         await callback_manage_master(callback, user_role)
 
-        log_action(callback.from_user.id, "ACTIVATE_MASTER", f"Master ID: {telegram_id}")
+        log_action(user.id, "ACTIVATE_MASTER", f"Master ID: {telegram_id}")
 
     finally:
         await db.disconnect()
@@ -646,7 +746,17 @@ async def callback_edit_master_specialization(
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -661,7 +771,7 @@ async def callback_edit_master_specialization(
         await state.update_data(master_telegram_id=telegram_id)
         await state.set_state(EditMasterSpecializationStates.enter_specialization)
 
-        await callback.message.edit_text(
+        await message_obj.edit_text(
             f"🔧 <b>Редактирование специализации мастера</b>\n\n"
             f"👤 Мастер: {master.get_display_name()}\n"
             f"🔧 Текущая специализация: <b>{master.specialization}</b>\n\n"
@@ -669,7 +779,7 @@ async def callback_edit_master_specialization(
             parse_mode="HTML",
         )
 
-        await callback.message.answer(
+        await message_obj.answer(
             "Введите новую специализацию или нажмите '❌ Отмена':",
             reply_markup=get_cancel_keyboard(),
         )
@@ -694,7 +804,7 @@ async def process_edit_master_specialization(message: Message, state: FSMContext
     if user_role != UserRole.ADMIN:
         return
 
-    specialization = message.text.strip()
+    specialization = (message.text or "").strip()
 
     if len(specialization) < 2:
         await message.answer(
@@ -715,6 +825,12 @@ async def process_edit_master_specialization(message: Message, state: FSMContext
 
     if not telegram_id:
         await message.answer("❌ Ошибка: не найден ID мастера. Попробуйте снова.")
+        await state.clear()
+        return
+
+    user = message.from_user
+    if user is None:
+        await message.answer("❌ Не удалось определить пользователя")
         await state.clear()
         return
 
@@ -739,7 +855,7 @@ async def process_edit_master_specialization(message: Message, state: FSMContext
 
         # Добавляем аудит
         await db.add_audit_log(
-            user_id=message.from_user.id,
+            user_id=user.id,
             action="EDIT_MASTER_SPECIALIZATION",
             details=(
                 f"master_telegram_id={telegram_id}; "
@@ -759,7 +875,7 @@ async def process_edit_master_specialization(message: Message, state: FSMContext
         )
 
         log_action(
-            message.from_user.id,
+            user.id,
             "EDIT_MASTER_SPECIALIZATION",
             f"Master ID: {telegram_id}, Old: {old_specialization}, New: {specialization}",
         )
@@ -782,7 +898,22 @@ async def callback_fire_master(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
+
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -805,11 +936,13 @@ async def callback_fire_master(callback: CallbackQuery, user_role: str):
         # Архивируем заявки мастера перед увольнением
         from app.services.master_archive_service import MasterArchiveService
 
-        archive_service = MasterArchiveService()
-        archive_path = await archive_service.archive_master_orders(master.id, "firing")
+        archive_path = None
+        if master.id is not None:
+            archive_service = MasterArchiveService()
+            archive_path = await archive_service.archive_master_orders(master.id, "firing")
 
         if archive_path:
-            await callback.message.answer(
+            await message_obj.answer(
                 f"📁 <b>Архив создан</b>\n\n"
                 f"Заявки мастера {master.get_display_name()} сохранены в архиве:\n"
                 f"<code>{archive_path}</code>",
@@ -820,7 +953,7 @@ async def callback_fire_master(callback: CallbackQuery, user_role: str):
         await db.delete_master(telegram_id)
 
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="FIRE_MASTER",
             details=f"Fired master {telegram_id} ({master.get_display_name()}) and archived orders",
         )
@@ -828,7 +961,7 @@ async def callback_fire_master(callback: CallbackQuery, user_role: str):
         # Возвращаемся к списку мастеров
         await callback_list_all_masters(callback, user_role)
 
-        log_action(callback.from_user.id, "FIRE_MASTER", f"Master ID: {telegram_id}")
+        log_action(user.id, "FIRE_MASTER", f"Master ID: {telegram_id}")
 
     finally:
         await db.disconnect()
@@ -848,7 +981,12 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
     if user_role != UserRole.ADMIN:
         return
 
-    telegram_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
 
     db = ORMDatabase()
     await db.connect()
@@ -864,7 +1002,7 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
 
         # Подсчет статистики
         total = len(orders)
-        by_status = {}
+        by_status: dict[str, int] = {}
 
         for order in orders:
             by_status[order.status] = by_status.get(order.status, 0) + 1
@@ -882,13 +1020,20 @@ async def callback_master_stats(callback: CallbackQuery, user_role: str):
             emoji = OrderStatus.get_status_emoji(status)
             name = OrderStatus.get_status_name(status)
             text += f"{emoji} {name}: {count}\n"
-        
+
         # Добавляем информацию об отказах с причинами
-        refused_orders_with_reason = [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
+        refused_orders_with_reason = [
+            o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason
+        ]
         if refused_orders_with_reason:
             text += f"\n<b>📋 Причины отказов ({len(refused_orders_with_reason)}):</b>\n"
             for order in refused_orders_with_reason[:5]:  # Показываем первые 5
-                text += f"• Заявка #{order.id}: {order.refuse_reason[:50]}...\n" if len(order.refuse_reason) > 50 else f"• Заявка #{order.id}: {order.refuse_reason}\n"
+                reason = order.refuse_reason or ""
+                text += (
+                    f"• Заявка #{order.id}: {reason[:50]}...\n"
+                    if len(reason) > 50
+                    else f"• Заявка #{order.id}: {reason}\n"
+                )
             if len(refused_orders_with_reason) > 5:
                 text += f"... и еще {len(refused_orders_with_reason) - 5} отказ(ов)\n"
 
@@ -912,7 +1057,8 @@ async def cmd_closed_order_edit(message: Message, user_role: str):
     # Извлекаем номер заявки из команды
     import re
 
-    match = re.match(r"^/closed_order(\d+)$", message.text)
+    text = message.text or ""
+    match = re.match(r"^/closed_order(\d+)$", text)
     if not match:
         await message.reply("❌ Неверный формат команды. Используйте: /closed_order123")
         return
@@ -965,7 +1111,7 @@ async def btn_users(message: Message, user_role: str):
         text = "👤 <b>Пользователи системы:</b>\n\n"
 
         # Группируем по ролям
-        by_role = {}
+        by_role: dict[str, list] = {}
         for user in users:
             if user.role not in by_role:
                 by_role[user.role] = []
@@ -1028,11 +1174,13 @@ async def callback_back_to_masters(callback: CallbackQuery, user_role: str):
     builder.row(InlineKeyboardButton(text="👥 Все мастера", callback_data="list_all_masters"))
     builder.row(InlineKeyboardButton(text="➕ Добавить мастера", callback_data="add_master"))
 
-    await callback.message.edit_text(
-        "👥 <b>Управление мастерами</b>\n\n" "Выберите действие:",
-        parse_mode="HTML",
-        reply_markup=builder.as_markup(),
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            "👥 <b>Управление мастерами</b>\n\n" "Выберите действие:",
+            parse_mode="HTML",
+            reply_markup=builder.as_markup(),
+        )
 
     await callback.answer()
 
@@ -1335,7 +1483,7 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
                 f"🔧 Техника: {order.equipment_type}\n"
                 f"📝 {order.description}\n"
             )
-            
+
             if order.scheduled_time:
                 master_notification += f"\n⏰ Время прибытия: {order.scheduled_time}"
 
@@ -1346,17 +1494,23 @@ async def callback_admin_accept_order(callback: CallbackQuery, user_role: str, u
                 parse_mode="HTML",
             )
             if result:
-                logger.info(f"ACCEPTED notification sent to master's work group {master.work_chat_id}")
+                logger.info(
+                    f"ACCEPTED notification sent to master's work group {master.work_chat_id}"
+                )
             else:
-                logger.error(f"Failed to notify master's work group {master.work_chat_id} about ACCEPTED status")
+                logger.error(
+                    f"Failed to notify master's work group {master.work_chat_id} about ACCEPTED status"
+                )
         else:
-            logger.warning(f"Master {master.telegram_id} has no work_chat_id, notification not sent")
+            logger.warning(
+                f"Master {master.telegram_id} has no work_chat_id, notification not sent"
+            )
 
         await callback.answer("Заявка принята от имени мастера!")
 
         # Получаем обновленную заявку из БД для правильной генерации клавиатуры
         order = await db.get_order_by_id(order_id)
-        
+
         # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
 
@@ -1463,17 +1617,23 @@ async def callback_admin_onsite_order(callback: CallbackQuery, user_role: str, u
                 parse_mode="HTML",
             )
             if result:
-                logger.info(f"ONSITE notification sent to master's work group {master.work_chat_id}")
+                logger.info(
+                    f"ONSITE notification sent to master's work group {master.work_chat_id}"
+                )
             else:
-                logger.error(f"Failed to notify master's work group {master.work_chat_id} about ONSITE status")
+                logger.error(
+                    f"Failed to notify master's work group {master.work_chat_id} about ONSITE status"
+                )
         else:
-            logger.warning(f"Master {master.telegram_id} has no work_chat_id, notification not sent")
+            logger.warning(
+                f"Master {master.telegram_id} has no work_chat_id, notification not sent"
+            )
 
         await callback.answer("Статус обновлен от имени мастера!")
 
         # Получаем обновленную заявку из БД для правильной генерации клавиатуры
         order = await db.get_order_by_id(order_id)
-        
+
         # Обновляем сообщение с актуальными кнопками
         from app.keyboards.inline import get_order_actions_keyboard
 
@@ -1936,8 +2096,19 @@ async def process_financial_value(message: Message, state: FSMContext, user_role
     db = ORMDatabase()
     await db.connect()
     try:
-        update_data = {field: value}
-        success = await db.update_order(order_id, update_data)
+        # Финансовые поля обновляются через update_order_amounts
+        if field == "total_amount":
+            success = await db.update_order_amounts(order_id, total_amount=value)
+        elif field == "materials_cost":
+            success = await db.update_order_amounts(order_id, materials_cost=value)
+        elif field == "master_profit":
+            success = await db.update_order_amounts(order_id, master_profit=value)
+        elif field == "company_profit":
+            success = await db.update_order_amounts(order_id, company_profit=value)
+        else:
+            # Для других полей используем update_order_field
+            success = await db.update_order_field(order_id, field, value)
+
         if success:
             order = await db.get_order_by_id(order_id)
             if order:

@@ -27,6 +27,24 @@ class ExcelStyles:
     BOLD_FONT = Font(bold=True, size=11)
     """Жирный шрифт для выделения (11pt)"""
 
+    SMALL_BOLD_FONT = Font(bold=True, size=10)
+    """Малый жирный шрифт (10pt)"""
+
+    ITALIC_FONT = Font(italic=True, size=10)
+    """Курсивный шрифт (10pt)"""
+
+    MASTER_NAME_FONT = Font(bold=True, size=11, color="FFFFFF")
+    """Шрифт для имени мастера (белый, жирный, 11pt)"""
+
+    SIMPLE_BOLD_FONT = Font(bold=True)
+    """Простой жирный шрифт без указания размера"""
+
+    SIMPLE_ITALIC_FONT = Font(italic=True)
+    """Простой курсивный шрифт без указания размера"""
+
+    BOLD_ITALIC_FONT = Font(bold=True, italic=True)
+    """Жирный курсивный шрифт"""
+
     # ======================
     # ЗАЛИВКИ (ФОНЫ)
     # ======================
@@ -52,6 +70,9 @@ class ExcelStyles:
     TABLE_HEADER_FILL = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
     """Серый фон для заголовков таблиц (#E7E6E6)"""
 
+    MASTER_HEADER_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+    """Зеленый фон для заголовков мастеров (#70AD47)"""
+
     # ======================
     # ВЫРАВНИВАНИЕ
     # ======================
@@ -67,6 +88,9 @@ class ExcelStyles:
 
     WRAP_ALIGNMENT = Alignment(horizontal="left", vertical="center", wrap_text=True)
     """Выравнивание по левому краю с переносом текста"""
+
+    WRAP_TOP_ALIGNMENT = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    """Выравнивание по левому краю с переносом текста и выравниванием по верху"""
 
     # ======================
     # ГРАНИЦЫ
@@ -90,6 +114,42 @@ class ExcelStyles:
 
     NO_BORDER = Border()
     """Без границы"""
+
+    # ======================
+    # РАЗМЕРЫ
+    # ======================
+
+    # Высоты строк
+    HEADER_ROW_HEIGHT = 25
+    """Высота строки заголовка (25)"""
+
+    SUBHEADER_ROW_HEIGHT = 20
+    """Высота строки подзаголовка (20)"""
+
+    # Ширины колонок (стандартные)
+    COL_WIDTH_ID = 12
+    """Ширина колонки ID (12)"""
+
+    COL_WIDTH_SHORT = 15
+    """Ширина короткой колонки (15)"""
+
+    COL_WIDTH_MEDIUM = 20
+    """Ширина средней колонки (20)"""
+
+    COL_WIDTH_LONG = 30
+    """Ширина длинной колонки (30)"""
+
+    COL_WIDTH_EXTRA_LONG = 40
+    """Ширина очень длинной колонки (40)"""
+
+    COL_WIDTH_PHONE = 18
+    """Ширина колонки для телефона (18)"""
+
+    COL_WIDTH_DATE = 20
+    """Ширина колонки для даты (20)"""
+
+    COL_WIDTH_MONEY = 15
+    """Ширина колонки для денежных значений (15)"""
 
     # ======================
     # КОМБИНИРОВАННЫЕ СТИЛИ

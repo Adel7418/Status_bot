@@ -33,9 +33,19 @@ async def safe_edit_message(
         reply_markup: Клавиатура
         parse_mode: Режим парсинга
     """
+    message = callback.message
+    if not isinstance(message, Message):
+        logger.warning("Callback has no accessible message to edit")
+        try:
+            await callback.answer()
+        except Exception:
+            # Игнорируем ошибки ответа на callback
+            pass
+        return
+
     try:
         # Сначала пытаемся отредактировать текст сообщения
-        await callback.message.edit_text(
+        await message.edit_text(
             text,
             parse_mode=parse_mode,
             reply_markup=reply_markup,
@@ -44,7 +54,7 @@ async def safe_edit_message(
         logger.warning(f"Could not edit message text: {e}")
         # Если не удалось отредактировать текст, пытаемся отредактировать caption
         try:
-            await callback.message.edit_caption(
+            await message.edit_caption(
                 text,
                 parse_mode=parse_mode,
                 reply_markup=reply_markup,
@@ -53,12 +63,12 @@ async def safe_edit_message(
             logger.warning(f"Could not edit message caption: {e2}")
             # Если и это не удалось, удаляем старое сообщение и отправляем новое
             try:
-                await callback.message.delete()
+                await message.delete()
             except Exception as e3:
                 logger.warning(f"Could not delete message: {e3}")
 
             # Отправляем новое сообщение
-            await callback.message.answer(
+            await message.answer(
                 text,
                 parse_mode=parse_mode,
                 reply_markup=reply_markup,
@@ -380,7 +390,12 @@ async def callback_generate_daily_report(callback: CallbackQuery, user_role: str
     """Генерация ежедневного отчета"""
     from app.utils.helpers import MOSCOW_TZ
 
-    date_str = callback.data.split("_")[-1]
+    data = callback.data or ""
+    try:
+        date_str = data.split("_")[-1]
+    except IndexError:
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
     report_date = datetime.strptime(date_str, "%Y-%m-%d")
     # Добавляем московский часовой пояс
     report_date = report_date.replace(tzinfo=MOSCOW_TZ)
@@ -389,6 +404,15 @@ async def callback_generate_daily_report(callback: CallbackQuery, user_role: str
 
     service = FinancialReportsService()
     report = await service.generate_daily_report(report_date)
+
+    if report.id is None:
+        await safe_edit_message(
+            callback,
+            "❌ Не удалось сохранить отчет в базе данных.",
+            reply_markup=get_reports_menu_keyboard(),
+        )
+        await callback.answer()
+        return
 
     if report.total_orders == 0:
         await safe_edit_message(
@@ -417,7 +441,12 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
     """Генерация еженедельного отчета"""
     from app.utils.helpers import MOSCOW_TZ
 
-    date_str = callback.data.split("_")[-1]
+    data = callback.data or ""
+    try:
+        date_str = data.split("_")[-1]
+    except IndexError:
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
     week_start = datetime.strptime(date_str, "%Y-%m-%d")
     # Добавляем московский часовой пояс
     week_start = week_start.replace(tzinfo=MOSCOW_TZ)
@@ -426,6 +455,15 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
 
     service = FinancialReportsService()
     report = await service.generate_weekly_report(week_start)
+
+    if report.id is None:
+        await safe_edit_message(
+            callback,
+            "❌ Не удалось сохранить отчет в базе данных.",
+            reply_markup=get_reports_menu_keyboard(),
+        )
+        await callback.answer()
+        return
 
     if report.total_orders == 0:
         await safe_edit_message(
@@ -454,14 +492,28 @@ async def callback_generate_weekly_report(callback: CallbackQuery, user_role: st
 @handle_errors
 async def callback_generate_monthly_report(callback: CallbackQuery, user_role: str):
     """Генерация месячного отчета"""
-    parts = callback.data.split("_")[-2:]
-    year = int(parts[0])
-    month = int(parts[1])
+    data = callback.data or ""
+    try:
+        parts = data.split("_")[-2:]
+        year = int(parts[0])
+        month = int(parts[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
 
     await safe_edit_message(callback, "⏳ Генерирую месячный отчет...")
 
     service = FinancialReportsService()
     report = await service.generate_monthly_report(year, month)
+
+    if report.id is None:
+        await safe_edit_message(
+            callback,
+            "❌ Не удалось сохранить отчет в базе данных.",
+            reply_markup=get_reports_menu_keyboard(),
+        )
+        await callback.answer()
+        return
 
     if report.total_orders == 0:
         month_name = datetime(year, month, 1).strftime("%B %Y")
@@ -507,11 +559,17 @@ async def callback_reports_list(callback: CallbackQuery, user_role: str, db: Dat
     for i, report in enumerate(reports[:5], 1):
         period_text = ""
         if report.report_type == "DAILY":
-            period_text = report.period_start.strftime("%d.%m.%Y")
+            if report.period_start is not None:
+                period_text = report.period_start.strftime("%d.%m.%Y")
         elif report.report_type == "WEEKLY":
-            period_text = f"{report.period_start.strftime('%d.%m')} - {report.period_end.strftime('%d.%m.%Y')}"
+            if report.period_start is not None and report.period_end is not None:
+                period_text = (
+                    f"{report.period_start.strftime('%d.%m')} - "
+                    f"{report.period_end.strftime('%d.%m.%Y')}"
+                )
         elif report.report_type == "MONTHLY":
-            period_text = report.period_start.strftime("%B %Y")
+            if report.period_start is not None:
+                period_text = report.period_start.strftime("%B %Y")
 
         text += (
             f"{i}. {report.report_type.lower()} ({period_text}) - {report.total_orders} заказов\n"
@@ -543,7 +601,12 @@ async def callback_reports_list(callback: CallbackQuery, user_role: str, db: Dat
 @handle_errors
 async def callback_view_report(callback: CallbackQuery, user_role: str):
     """Просмотр существующего отчета"""
-    report_id = int(callback.data.split("_")[-1])
+    data = callback.data or ""
+    try:
+        report_id = int(data.split("_")[-1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректный идентификатор отчета", show_alert=True)
+        return
 
     service = FinancialReportsService()
     report_text = await service.format_report_for_display(report_id)
@@ -571,7 +634,12 @@ async def callback_view_report(callback: CallbackQuery, user_role: str):
 @handle_errors
 async def callback_export_excel(callback: CallbackQuery, user_role: str):
     """Экспорт отчета в Excel"""
-    report_id = int(callback.data.split("_")[-1])
+    data = callback.data or ""
+    try:
+        report_id = int(data.split("_")[-1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректный идентификатор отчета", show_alert=True)
+        return
 
     await callback.answer("⏳ Создаю Excel файл...")
     await safe_edit_message(callback, "📊 Генерирую Excel отчет, подождите...")
@@ -594,7 +662,9 @@ async def callback_export_excel(callback: CallbackQuery, user_role: str):
 
         # Отправляем файл пользователю
         file = FSInputFile(filepath)
-        await callback.message.answer_document(file, caption="📄 Финансовый отчет в формате Excel")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(file, caption="📄 Финансовый отчет в формате Excel")
 
         # Возвращаем меню
         await safe_edit_message(
@@ -646,21 +716,24 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
             from aiogram.types import FSInputFile
 
             file = FSInputFile(filepath)
-            await callback.message.answer_document(
-                file,
-                caption="📋 <b>Отчет по активным заявкам</b>\n\n"
-                "В файле указаны все незакрытые заявки:\n"
-                "• Сводный лист со всеми заявками\n"
-                "• Отдельные листы для каждого мастера\n"
-                "• Статус и время создания\n"
-                "• Назначенный мастер\n"
-                "• Контакты клиента\n"
-                "• Запланированное время\n\n"
-                "Таблица обновляется при каждом запросе.",
-                parse_mode="HTML",
-            )
+            message_obj = callback.message
+            if isinstance(message_obj, Message):
+                await message_obj.answer_document(
+                    file,
+                    caption="📋 <b>Отчет по активным заявкам</b>\n\n"
+                    "В файле указаны все незакрытые заявки:\n"
+                    "• Сводный лист со всеми заявками\n"
+                    "• Отдельные листы для каждого мастера\n"
+                    "• Статус и время создания\n"
+                    "• Назначенный мастер\n"
+                    "• Контакты клиента\n"
+                    "• Запланированное время\n\n"
+                    "Таблица обновляется при каждом запросе.",
+                    parse_mode="HTML",
+                )
 
-            logger.info(f"Active orders report sent to {callback.from_user.id}")
+            if callback.from_user:
+                logger.info(f"Active orders report sent to {callback.from_user.id}")
         else:
             await callback.answer("❌ Нет активных заявок", show_alert=True)
 
@@ -673,7 +746,9 @@ async def callback_report_active_orders_excel(callback: CallbackQuery, user_role
 @handle_errors
 async def callback_back_to_main_menu(callback: CallbackQuery):
     """Возврат в главное меню"""
-    await callback.message.delete()
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.delete()
     await callback.answer()
 
 
@@ -708,10 +783,12 @@ async def callback_closed_orders_excel(callback: CallbackQuery, user_role: str):
 
     file = FSInputFile(filepath, filename=Path(filepath).name)
 
-    await callback.message.answer_document(
-        document=file,
-        caption="✅ Закрытые заказы за 30 дней",
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.answer_document(
+            document=file,
+            caption="✅ Закрытые заказы за 30 дней",
+        )
 
     await safe_edit_message(
         callback,
@@ -731,12 +808,9 @@ async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str, 
     """Показать список мастеров для выбора"""
     # Получаем всех утвержденных мастеров через ORM
     masters_data = await db.get_all_masters(only_approved=True, only_active=True)
-    
+
     # Преобразуем в формат для совместимости
-    masters = [
-        {"id": master.id, "full_name": master.get_display_name()}
-        for master in masters_data
-    ]
+    masters = [{"id": master.id, "full_name": master.get_display_name()} for master in masters_data]
 
     if not masters:
         await safe_edit_message(
@@ -784,7 +858,12 @@ async def callback_masters_stats_excel(callback: CallbackQuery, user_role: str, 
 @handle_errors
 async def callback_master_stat(callback: CallbackQuery, user_role: str):
     """Генерация отчета по выбранному мастеру"""
-    master_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        master_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректный идентификатор мастера", show_alert=True)
+        return
 
     await safe_edit_message(callback, "⏳ Генерирую отчет по мастеру...")
 
@@ -844,10 +923,12 @@ async def callback_master_stat(callback: CallbackQuery, user_role: str):
             f"Отправляем Excel файл: {filepath} (размер: {Path(filepath).stat().st_size} байт)"
         )
 
-        await callback.message.answer_document(
-            document=file,
-            caption="✅ Отчет по мастеру готов!",
-        )
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(
+                document=file,
+                caption="✅ Отчет по мастеру готов!",
+            )
 
         logger.info(f"Excel файл успешно отправлен: {filepath}")
 
@@ -934,7 +1015,12 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
     """Генерация ежедневной сводки по мастерам"""
     from app.utils.helpers import MOSCOW_TZ
 
-    date_str = callback.data.split("_")[-1]
+    data = callback.data or ""
+    try:
+        date_str = data.split("_")[-1]
+    except IndexError:
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
     report_date = datetime.strptime(date_str, "%Y-%m-%d")
     # Добавляем московский часовой пояс
     report_date = report_date.replace(tzinfo=MOSCOW_TZ)
@@ -967,16 +1053,18 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
             )
         except Exception as e:
             logger.warning(f"Could not edit message for no data: {e}")
-            await callback.message.answer(
-                f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
-                f"❌ За этот день не было завершенных заказов.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
-                    ]
-                ),
-            )
+            message_obj = callback.message
+            if isinstance(message_obj, Message):
+                await message_obj.answer(
+                    f"📊 <b>Ежедневная сводка за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                    f"❌ За этот день не было завершенных заказов.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                        ]
+                    ),
+                )
         await callback.answer()
         return
 
@@ -989,25 +1077,11 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
     file_input = BufferedInputFile(file_data, filename=f"daily_master_summary_{date_str}.xlsx")
 
     try:
-        await callback.message.answer_document(
-            document=file_input,
-            caption=f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
-                ]
-            ),
-        )
-
-        await callback.message.delete()
-    except Exception as e:
-        logger.warning(f"Could not send document or delete message: {e}")
-        # Пытаемся отправить файл как обычное сообщение
-        try:
-            await callback.message.answer(
-                f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
-                f"Файл создан: {filepath}",
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.answer_document(
+                document=file_input,
+                caption=f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -1015,6 +1089,24 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
                     ]
                 ),
             )
+
+            await message_obj.delete()
+    except Exception as e:
+        logger.warning(f"Could not send document or delete message: {e}")
+        # Пытаемся отправить файл как обычное сообщение
+        try:
+            message_obj = callback.message
+            if isinstance(message_obj, Message):
+                await message_obj.answer(
+                    f"📊 <b>Ежедневная сводка по мастерам за {report_date.strftime('%d.%m.%Y')}</b>\n\n"
+                    f"Файл создан: {filepath}",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                        ]
+                    ),
+                )
         except Exception as e2:
             logger.error(f"Could not send fallback message: {e2}")
 
@@ -1028,7 +1120,12 @@ async def callback_generate_weekly_master_report(callback: CallbackQuery, user_r
     """Генерация еженедельной сводки по мастерам"""
     from app.utils.helpers import MOSCOW_TZ
 
-    date_str = callback.data.split("_")[-1]
+    data = callback.data or ""
+    try:
+        date_str = data.split("_")[-1]
+    except IndexError:
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
     week_start = datetime.strptime(date_str, "%Y-%m-%d")
     # Добавляем московский часовой пояс
     week_start = week_start.replace(tzinfo=MOSCOW_TZ)
@@ -1065,16 +1162,20 @@ async def callback_generate_weekly_master_report(callback: CallbackQuery, user_r
 
     file_input = BufferedInputFile(file_data, filename=f"weekly_master_summary_{date_str}.xlsx")
 
-    await callback.message.answer_document(
-        document=file_input,
-        caption=f"📈 <b>Еженедельная сводка по мастерам за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
-        ),
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.answer_document(
+            document=file_input,
+            caption=f"📈 <b>Еженедельная сводка по мастерам за {week_start.strftime('%d.%m.%Y')} - {(week_start + timedelta(days=6)).strftime('%d.%m.%Y')}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
 
-    await callback.message.delete()
+        await message_obj.delete()
     await callback.answer()
 
 
@@ -1085,7 +1186,12 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
     """Генерация ежемесячной сводки по мастерам"""
     from app.utils.helpers import MOSCOW_TZ
 
-    date_str = callback.data.split("_")[-1]
+    data = callback.data or ""
+    try:
+        date_str = data.split("_")[-1]
+    except IndexError:
+        await callback.answer("❌ Некорректные данные отчета", show_alert=True)
+        return
     month_start = datetime.strptime(date_str, "%Y-%m-%d")
     # Добавляем московский часовой пояс
     month_start = month_start.replace(tzinfo=MOSCOW_TZ)
@@ -1122,16 +1228,20 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
 
     file_input = BufferedInputFile(file_data, filename=f"monthly_master_summary_{date_str}.xlsx")
 
-    await callback.message.answer_document(
-        document=file_input,
-        caption=f"📊 <b>Ежемесячная сводка по мастерам за {month_start.strftime('%B %Y')}</b>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]]
-        ),
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.answer_document(
+            document=file_input,
+            caption=f"📊 <b>Ежемесячная сводка по мастерам за {month_start.strftime('%B %Y')}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="reports_menu")]
+                ]
+            ),
+        )
 
-    await callback.message.delete()
+        await message_obj.delete()
     await callback.answer()
 
 
@@ -1139,5 +1249,7 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
 @handle_errors
 async def callback_close_menu(callback: CallbackQuery):
     """Закрытие меню"""
-    await callback.message.delete()
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.delete()
     await callback.answer()

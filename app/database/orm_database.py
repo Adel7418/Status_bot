@@ -375,12 +375,11 @@ class ORMDatabase:
             List[User]: Список пользователей с указанной ролью
         """
         async with self.get_session() as session:
-            stmt = select(User).where(
-                and_(
-                    User.deleted_at.is_(None),
-                    User.role.contains(role)
-                )
-            ).order_by(User.created_at.desc())
+            stmt = (
+                select(User)
+                .where(and_(User.deleted_at.is_(None), User.role.contains(role)))
+                .order_by(User.created_at.desc())
+            )
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -1125,29 +1124,35 @@ class ORMDatabase:
     async def get_statistics(self) -> dict[str, Any]:
         """Получение статистики"""
         async with self.get_session() as session:
-            stats = {}
+            stats: dict[str, Any] = {}
 
             # Количество пользователей по ролям
-            stmt = select(User.role, func.count(User.id).label("count")).group_by(User.role)
-            result = await session.execute(stmt)
-            stats["users_by_role"] = {row.role: row.count for row in result}
+            users_by_role_stmt = select(
+                User.role,
+                func.count(User.id).label("count"),
+            ).group_by(User.role)
+            users_by_role_result = await session.execute(users_by_role_stmt)
+            stats["users_by_role"] = {row.role: row.count for row in users_by_role_result}
 
             # Количество заявок по статусам
-            stmt = select(Order.status, func.count(Order.id).label("count")).group_by(Order.status)
-            result = await session.execute(stmt)
-            stats["orders_by_status"] = {row.status: row.count for row in result}
+            orders_by_status_stmt = select(
+                Order.status,
+                func.count(Order.id).label("count"),
+            ).group_by(Order.status)
+            orders_by_status_result = await session.execute(orders_by_status_stmt)
+            stats["orders_by_status"] = {row.status: row.count for row in orders_by_status_result}
 
             # Количество активных мастеров
-            stmt = select(func.count(Master.id).label("count")).where(
+            active_masters_stmt = select(func.count(Master.id).label("count")).where(
                 and_(Master.is_active.is_(True), Master.is_approved.is_(True))
             )
-            result = await session.execute(stmt)
-            stats["active_masters"] = result.scalar()
+            active_masters_result = await session.execute(active_masters_stmt)
+            stats["active_masters"] = active_masters_result.scalar()
 
             # Общее количество заявок
-            stmt = select(func.count(Order.id).label("count"))
-            result = await session.execute(stmt)
-            stats["total_orders"] = result.scalar()
+            total_orders_stmt = select(func.count(Order.id).label("count"))
+            total_orders_result = await session.execute(total_orders_stmt)
+            stats["total_orders"] = total_orders_result.scalar()
 
             return stats
 
@@ -1487,11 +1492,11 @@ class ORMDatabase:
         """
         async with self.get_session() as session:
             # Проверяем, существует ли уже ставка для этой специализации
-            stmt = select(SpecializationRate).where(
+            existing_rate_stmt = select(SpecializationRate).where(
                 SpecializationRate.specialization_name == specialization_name,
                 SpecializationRate.deleted_at.is_(None),
             )
-            result = await session.execute(stmt)
+            result = await session.execute(existing_rate_stmt)
             rate = result.scalar_one_or_none()
 
             if rate:
@@ -1512,13 +1517,17 @@ class ORMDatabase:
 
             # Если это ставка по умолчанию, снимаем флаг с других ставок
             if is_default:
-                stmt = select(SpecializationRate).where(
+                conditions: list[Any] = [
                     SpecializationRate.is_default.is_(True),
-                    SpecializationRate.id != rate.id if rate.id else True,
                     SpecializationRate.deleted_at.is_(None),
-                )
-                result = await session.execute(stmt)
-                other_defaults = result.scalars().all()
+                ]
+                # Для существующей записи исключаем саму ставку из выборки
+                if rate.id is not None:
+                    conditions.append(SpecializationRate.id != rate.id)
+
+                other_defaults_stmt = select(SpecializationRate).where(*conditions)
+                other_defaults_result = await session.execute(other_defaults_stmt)
+                other_defaults = other_defaults_result.scalars().all()
                 for other_rate in other_defaults:
                     other_rate.is_default = False
 

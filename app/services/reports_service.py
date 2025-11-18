@@ -3,13 +3,18 @@
 """
 
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.database import DatabaseType, get_database
 from app.repositories.order_repository_extended import OrderRepositoryExtended
 from app.utils.helpers import get_now
+
+
+if TYPE_CHECKING:
+    from app.database.db import Database as LegacyDatabase
 
 
 logger = logging.getLogger(__name__)
@@ -22,10 +27,34 @@ class ReportsService:
         self.db: DatabaseType = get_database()
         self._order_repo_extended: OrderRepositoryExtended | None = None
 
+    def _get_legacy_db(self) -> "LegacyDatabase":
+        """
+        Получить legacy-реализацию БД.
+
+        Отчеты используют прямой доступ к SQLite, поэтому
+        поддерживается только legacy Database, а не ORMDatabase.
+        """
+        from app.database.db import Database as LegacyDatabaseRuntime
+
+        if not isinstance(self.db, LegacyDatabaseRuntime):
+            raise RuntimeError("ReportsService поддерживает только legacy Database (SQLite)")
+
+        return self.db
+
+    def _get_connection(self):
+        """
+        Типобезопасно получить соединение с БД.
+
+        Предполагается, что до вызова уже выполнен self.db.connect().
+        """
+        legacy_db = self._get_legacy_db()
+        return legacy_db.get_connection()
+
     async def _get_extended_repo(self) -> OrderRepositoryExtended:
         """Получить расширенный репозиторий"""
         if self._order_repo_extended is None:
-            self._order_repo_extended = OrderRepositoryExtended(self.db.connection)
+            connection = self._get_connection()
+            self._order_repo_extended = OrderRepositoryExtended(connection)
         return self._order_repo_extended
 
     async def generate_daily_report(self) -> dict[str, Any]:
@@ -130,7 +159,8 @@ class ReportsService:
 
     async def _get_orders_stats(self, start_date, end_date) -> dict[str, Any]:
         """Получает статистику по заказам за период"""
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 COUNT(*) as total_orders,
@@ -152,22 +182,23 @@ class ReportsService:
             (start_date, end_date),
         )
 
-        row = await cursor.fetchone()
+        row_raw = await cursor.fetchone()
+        row: Mapping[str, Any] = dict(row_raw) if row_raw is not None else {}
 
         return {
-            "total_orders": row["total_orders"] or 0,
-            "new_orders": row["new_orders"] or 0,
-            "assigned_orders": row["assigned_orders"] or 0,
-            "accepted_orders": row["accepted_orders"] or 0,
-            "in_progress_orders": row["in_progress_orders"] or 0,
-            "closed_orders": row["closed_orders"] or 0,
-            "cancelled_orders": row["cancelled_orders"] or 0,
-            "out_of_city_orders": row["out_of_city_orders"] or 0,
-            "review_orders": row["review_orders"] or 0,
-            "total_amount": float(row["total_amount"] or 0),
-            "total_materials_cost": float(row["total_materials_cost"] or 0),
-            "total_master_profit": float(row["total_master_profit"] or 0),
-            "total_company_profit": float(row["total_company_profit"] or 0),
+            "total_orders": row.get("total_orders", 0) or 0,
+            "new_orders": row.get("new_orders", 0) or 0,
+            "assigned_orders": row.get("assigned_orders", 0) or 0,
+            "accepted_orders": row.get("accepted_orders", 0) or 0,
+            "in_progress_orders": row.get("in_progress_orders", 0) or 0,
+            "closed_orders": row.get("closed_orders", 0) or 0,
+            "cancelled_orders": row.get("cancelled_orders", 0) or 0,
+            "out_of_city_orders": row.get("out_of_city_orders", 0) or 0,
+            "review_orders": row.get("review_orders", 0) or 0,
+            "total_amount": float(row.get("total_amount", 0) or 0),
+            "total_materials_cost": float(row.get("total_materials_cost", 0) or 0),
+            "total_master_profit": float(row.get("total_master_profit", 0) or 0),
+            "total_company_profit": float(row.get("total_company_profit", 0) or 0),
         }
 
     async def _get_masters_stats(self, start_date, end_date) -> list[dict[str, Any]]:
@@ -180,17 +211,16 @@ class ReportsService:
         if isinstance(end_date, str):
             end_date = datetime.fromisoformat(end_date)
 
-        # Получаем всех активных мастеров
+        # Получаем всех активных мастеров и заказы за период
         from app.config import OrderStatus
 
         masters = await self.db.get_all_masters(only_active=True, only_approved=True)
+        orders_in_period = await self.db.get_orders_by_period(start_date, end_date)
 
-        result = []
+        result: list[dict[str, Any]] = []
         for master in masters:
-            # Получаем все заявки мастера
-            orders = await self.db.get_orders_by_period(
-                start_date=start_date, end_date=end_date, master_id=master.id
-            )
+            # Фильтруем заявки мастера
+            orders = [o for o in orders_in_period if o.assigned_master_id == master.id]
 
             # Подсчитываем статистику
             orders_count = len(orders)
@@ -223,13 +253,14 @@ class ReportsService:
             )
 
         # Сортируем по прибыли
-        result.sort(key=lambda x: x["total_profit"], reverse=True)
+        result.sort(key=lambda x: float(x.get("total_profit") or 0.0), reverse=True)
 
         return result
 
     async def _get_accepted_orders_details(self, start_date, end_date) -> list[dict[str, Any]]:
         """Получает детальную информацию о принятых заказах за период"""
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 o.id,
@@ -273,7 +304,8 @@ class ReportsService:
 
     async def _get_summary_stats(self, start_date, end_date) -> dict[str, Any]:
         """Получает общую статистику за период"""
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 COUNT(DISTINCT assigned_master_id) as active_masters,
@@ -286,18 +318,20 @@ class ReportsService:
             (start_date, end_date),
         )
 
-        row = await cursor.fetchone()
+        row_raw = await cursor.fetchone()
+        row: Mapping[str, Any] = dict(row_raw) if row_raw is not None else {}
 
         return {
-            "active_masters": row["active_masters"] or 0,
-            "avg_order_amount": float(row["avg_order_amount"] or 0),
-            "max_order_amount": float(row["max_order_amount"] or 0),
-            "min_order_amount": float(row["min_order_amount"] or 0),
+            "active_masters": row.get("active_masters", 0) or 0,
+            "avg_order_amount": float(row.get("avg_order_amount", 0) or 0),
+            "max_order_amount": float(row.get("max_order_amount", 0) or 0),
+            "min_order_amount": float(row.get("min_order_amount", 0) or 0),
         }
 
     async def _get_closed_orders_list(self, start_date, end_date) -> list[dict[str, Any]]:
         """Получает список закрытых заказов за период с историей"""
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 o.id,
@@ -462,7 +496,8 @@ class ReportsService:
             start_date = report.get("start_date")
             end_date = report.get("end_date")
             if start_date and end_date:
-                cursor = await self.db.connection.execute(
+                connection = self._get_connection()
+                cursor = await connection.execute(
                     """
                     SELECT equipment_type, COUNT(*) as count
                     FROM orders
@@ -857,11 +892,12 @@ class ReportsService:
             row += 1
 
             # Получаем детальную информацию по каждому мастеру
+            connection = self._get_connection()
             for master in masters:
                 master_id = master["id"]
 
                 # Получаем детальную статистику мастера
-                cursor = await self.db.connection.execute(
+                cursor = await connection.execute(
                     """
                     SELECT
                         COUNT(*) as total_orders,
@@ -881,10 +917,11 @@ class ReportsService:
                     (master_id,),
                 )
 
-                stats_row = await cursor.fetchone()
-
-                if not stats_row:
+                stats_row_raw = await cursor.fetchone()
+                if not stats_row_raw:
                     continue
+
+                stats_row: Mapping[str, Any] = dict(stats_row_raw)
 
                 # Вычисляем чистую прибыль (общая сумма - материалы)
                 total_sum = float(stats_row["total_sum"] or 0)
@@ -1039,6 +1076,7 @@ class ReportsService:
             row += 1
 
             # Получаем все заявки для каждого мастера
+            connection = self._get_connection()
             for master in masters:
                 master_id = master["id"]
                 master_name = (
@@ -1048,7 +1086,7 @@ class ReportsService:
                 )
 
                 # Получаем ВСЕ заявки мастера (активные и закрытые)
-                cursor = await self.db.connection.execute(
+                cursor = await connection.execute(
                     """
                     SELECT
                         o.id,
@@ -1227,7 +1265,7 @@ class ReportsService:
                     row += 1
 
                 # Итоги по мастеру
-                cursor = await self.db.connection.execute(
+                cursor = await connection.execute(
                     """
                     SELECT
                         COUNT(*) as total,
@@ -1242,7 +1280,17 @@ class ReportsService:
                     (master_id,),
                 )
 
-                totals = await cursor.fetchone()
+                totals_row = await cursor.fetchone()
+                totals: Mapping[str, Any] = (
+                    dict(totals_row)
+                    if totals_row is not None
+                    else {
+                        "sum_total": 0,
+                        "sum_materials": 0,
+                        "sum_master": 0,
+                        "sum_company": 0,
+                    }
+                )
 
                 cell_total = ws4[f"A{row}"]
                 cell_total.value = f"Итого по {master_name}:"

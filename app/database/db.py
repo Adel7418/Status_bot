@@ -43,18 +43,38 @@ class Database:
         self.connection: aiosqlite.Connection | None = None
         self._service_factory: ServiceFactory | None = None
 
+    def _get_connection(self) -> aiosqlite.Connection:
+        """
+        Внутренний помощник для получения активного соединения.
+
+        Гарантирует, что соединение инициализировано, чтобы mypy не видел None.
+        """
+        if self.connection is None:
+            raise RuntimeError("База данных не подключена")
+        return self.connection
+
+    def get_connection(self) -> aiosqlite.Connection:
+        """
+        Публичный accessor для безопасного доступа к соединению.
+
+        Используется сервисами/репозиториями вместо обращения к self.connection напрямую.
+        """
+        return self._get_connection()
+
     async def connect(self):
         """Подключение к базе данных"""
-        self.connection = await aiosqlite.connect(self.db_path)
-        self.connection.row_factory = aiosqlite.Row
+        connection = await aiosqlite.connect(self.db_path)
+        connection.row_factory = aiosqlite.Row
         # Устанавливаем isolation_level для правильной работы транзакций
-        await self.connection.execute("PRAGMA journal_mode=WAL")
+        await connection.execute("PRAGMA journal_mode=WAL")
+        self.connection = connection
         logger.info("Подключено к базе данных: %s", self.db_path)
 
     async def disconnect(self):
         """Отключение от базы данных"""
-        if self.connection:
-            await self.connection.close()
+        connection = self.connection
+        if connection:
+            await connection.close()
             logger.info("Отключено от базы данных")
 
     @property
@@ -68,7 +88,8 @@ class Database:
         if self._service_factory is None:
             from app.services.service_factory import ServiceFactory
 
-            self._service_factory = ServiceFactory(self.connection)
+            connection = self._get_connection()
+            self._service_factory = ServiceFactory(connection)
         return self._service_factory
 
     @asynccontextmanager
@@ -89,18 +110,17 @@ class Database:
         Raises:
             Exception: Любая ошибка внутри транзакции вызовет rollback
         """
-        if not self.connection:
-            raise RuntimeError("База данных не подключена")
+        connection = self._get_connection()
 
         # BEGIN IMMEDIATE получает эксклюзивную блокировку сразу
         # Это предотвращает race conditions в SQLite
-        await self.connection.execute("BEGIN IMMEDIATE")
+        await connection.execute("BEGIN IMMEDIATE")
         try:
-            yield self.connection
-            await self.connection.commit()
+            yield connection
+            await connection.commit()
             logger.debug("✅ Транзакция успешно завершена (commit)")
         except Exception as e:
-            await self.connection.rollback()
+            await connection.rollback()
             logger.error(f"❌ Транзакция отменена (rollback): {e}")
             raise
 
@@ -117,8 +137,10 @@ class Database:
         if not self.connection:
             await self.connect()
 
+        connection = self._get_connection()
+
         # Проверяем существование основной таблицы users
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
         )
         table_exists = await cursor.fetchone()
@@ -141,7 +163,9 @@ class Database:
         logger.warning("⚠️  Создание legacy схемы. Рекомендуется использовать Alembic!")
 
         # Минимальная схема для работы
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +179,7 @@ class Database:
         """
         )
 
-        await self.connection.execute(
+        await connection.execute(
             """
             CREATE TABLE IF NOT EXISTS masters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +195,7 @@ class Database:
         """
         )
 
-        await self.connection.execute(
+        await connection.execute(
             """
             CREATE TABLE IF NOT EXISTS orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,7 +222,7 @@ class Database:
         """
         )
 
-        await self.connection.execute(
+        await connection.execute(
             """
             CREATE TABLE IF NOT EXISTS audit_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +235,7 @@ class Database:
         """
         )
 
-        await self.connection.execute(
+        await connection.execute(
             """
             CREATE TABLE IF NOT EXISTS order_status_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,7 +251,7 @@ class Database:
         """
         )
 
-        await self.connection.commit()
+        await connection.commit()
         logger.info("[OK] Legacy схема создана")
 
     async def _create_indexes(self):
@@ -243,10 +267,12 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_audit_user_id ON audit_log(user_id)",
         ]
 
-        for index_sql in indexes:
-            await self.connection.execute(index_sql)
+        connection = self._get_connection()
 
-        await self.connection.commit()
+        for index_sql in indexes:
+            await connection.execute(index_sql)
+
+        await connection.commit()
 
     # ==================== USERS ====================
 
@@ -269,6 +295,8 @@ class Database:
         Returns:
             Объект User
         """
+        connection = self._get_connection()
+
         # Проверяем существование пользователя
         user = await self.get_user_by_telegram_id(telegram_id)
 
@@ -279,7 +307,7 @@ class Database:
                 or user.first_name != first_name
                 or user.last_name != last_name
             ):
-                await self.connection.execute(
+                await connection.execute(
                     """
                     UPDATE users
                     SET username = ?, first_name = ?, last_name = ?
@@ -287,7 +315,7 @@ class Database:
                     """,
                     (username, first_name, last_name, telegram_id),
                 )
-                await self.connection.commit()
+                await connection.commit()
                 user.username = username
                 user.first_name = first_name
                 user.last_name = last_name
@@ -338,11 +366,11 @@ class Database:
 
             # Обновляем роль в базе данных, если она изменилась
             if roles_updated:
-                await self.connection.execute(
+                await connection.execute(
                     "UPDATE users SET role = ? WHERE telegram_id = ?",
                     (user.role, telegram_id),
                 )
-                await self.connection.commit()
+                await connection.commit()
                 final_roles = user.get_roles()
                 logger.info(
                     f"Роль пользователя {telegram_id} обновлена: {current_roles} -> {final_roles}"
@@ -377,14 +405,14 @@ class Database:
         role_str = ",".join(sorted(roles))
 
         # Создаем нового пользователя
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             """
             INSERT INTO users (telegram_id, username, first_name, last_name, role)
             VALUES (?, ?, ?, ?, ?)
             """,
             (telegram_id, username, first_name, last_name, role_str),
         )
-        await self.connection.commit()
+        await connection.commit()
 
         user = User(
             id=cursor.lastrowid,
@@ -409,7 +437,9 @@ class Database:
         Returns:
             Объект User или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
         )
         row = await cursor.fetchone()
@@ -437,10 +467,12 @@ class Database:
         Returns:
             True если успешно
         """
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             "UPDATE users SET role = ? WHERE telegram_id = ?", (role, telegram_id)
         )
-        await self.connection.commit()
+        await connection.commit()
         logger.info("Роль пользователя %s изменена на %s", telegram_id, role)
         return True
 
@@ -458,6 +490,7 @@ class Database:
             True если успешно
         """
         async with self.transaction():
+            connection = self._get_connection()
             user = await self.get_user_by_telegram_id(telegram_id)
             if not user:
                 logger.error(f"Пользователь {telegram_id} не найден")
@@ -466,7 +499,7 @@ class Database:
             # Используем метод модели для добавления роли
             new_roles = user.add_role(role)
 
-            await self.connection.execute(
+            await connection.execute(
                 "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
             )
             # commit() выполнится автоматически
@@ -488,6 +521,7 @@ class Database:
             True если успешно
         """
         async with self.transaction():
+            connection = self._get_connection()
             user = await self.get_user_by_telegram_id(telegram_id)
             if not user:
                 logger.error(f"Пользователь {telegram_id} не найден")
@@ -496,7 +530,7 @@ class Database:
             # Используем метод модели для удаления роли
             new_roles = user.remove_role(role)
 
-            await self.connection.execute(
+            await connection.execute(
                 "UPDATE users SET role = ? WHERE telegram_id = ?", (new_roles, telegram_id)
             )
             # commit() выполнится автоматически
@@ -520,10 +554,12 @@ class Database:
 
         roles_str = ",".join(sorted(set(roles)))
 
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             "UPDATE users SET role = ? WHERE telegram_id = ?", (roles_str, telegram_id)
         )
-        await self.connection.commit()
+        await connection.commit()
         logger.info(f"Роли пользователя {telegram_id} установлены: {roles_str}")
         return True
 
@@ -534,7 +570,9 @@ class Database:
         Returns:
             Список пользователей
         """
-        cursor = await self.connection.execute("SELECT * FROM users ORDER BY created_at DESC")
+        connection = self._get_connection()
+
+        cursor = await connection.execute("SELECT * FROM users ORDER BY created_at DESC")
         rows = await cursor.fetchall()
 
         users = []
@@ -613,14 +651,16 @@ class Database:
         Returns:
             Объект Master
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             INSERT INTO masters (telegram_id, phone, specialization, is_approved)
             VALUES (?, ?, ?, ?)
             """,
             (telegram_id, phone, specialization, is_approved),
         )
-        await self.connection.commit()
+        await connection.commit()
 
         master = Master(
             id=cursor.lastrowid,
@@ -644,7 +684,9 @@ class Database:
         Returns:
             Объект Master или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT m.*, u.username, u.first_name, u.last_name
             FROM masters m
@@ -681,7 +723,9 @@ class Database:
         Returns:
             Объект Master или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT m.*, u.username, u.first_name, u.last_name
             FROM masters m
@@ -718,7 +762,9 @@ class Database:
         Returns:
             Объект Master или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT m.*, u.username, u.first_name, u.last_name
             FROM masters m
@@ -773,7 +819,9 @@ class Database:
 
         query += " ORDER BY m.created_at DESC"
 
-        cursor = await self.connection.execute(query, params)
+        connection = self._get_connection()
+
+        cursor = await connection.execute(query, params)
         rows = await cursor.fetchall()
 
         masters = []
@@ -808,10 +856,12 @@ class Database:
         Returns:
             True если успешно
         """
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             "UPDATE masters SET is_active = ? WHERE telegram_id = ?", (is_active, telegram_id)
         )
-        await self.connection.commit()
+        await connection.commit()
 
         logger.info(
             f"Статус мастера {telegram_id} изменен на {'активный' if is_active else 'неактивный'}"
@@ -832,13 +882,15 @@ class Database:
         # Логируем перед обновлением
         logger.info(f"Updating work_chat_id for master {telegram_id} to {work_chat_id}")
 
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             "UPDATE masters SET work_chat_id = ? WHERE telegram_id = ?", (work_chat_id, telegram_id)
         )
-        await self.connection.commit()
+        await connection.commit()
 
         # Проверяем результат обновления
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             "SELECT work_chat_id FROM masters WHERE telegram_id = ?", (telegram_id,)
         )
         result = await cursor.fetchone()
@@ -880,8 +932,10 @@ class Database:
         Returns:
             Объект Order
         """
+        connection = self._get_connection()
+
         now = get_now()
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             """
             INSERT INTO orders (equipment_type, description, client_name, client_address,
                               client_phone, master_lead_name, dispatcher_id, notes, scheduled_time, created_at, updated_at)
@@ -901,7 +955,7 @@ class Database:
                 now.isoformat(),
             ),
         )
-        await self.connection.commit()
+        await connection.commit()
 
         order = Order(
             id=cursor.lastrowid,
@@ -933,7 +987,9 @@ class Database:
         Returns:
             Объект Order или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT o.*,
                    u1.first_name || ' ' || COALESCE(u1.last_name, '') as dispatcher_name,
@@ -956,7 +1012,7 @@ class Database:
                 client_name=row["client_name"],
                 client_address=row["client_address"],
                 client_phone=row["client_phone"],
-                master_lead_name=row.get("master_lead_name"),
+                master_lead_name=(row["master_lead_name"] if "master_lead_name" in row else None),
                 status=row["status"],
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],
@@ -1054,7 +1110,9 @@ class Database:
             query += " LIMIT ?"
             params.append(limit)
 
-        cursor = await self.connection.execute(query, params)
+        connection = self._get_connection()
+
+        cursor = await connection.execute(query, params)
         rows = await cursor.fetchall()
 
         orders = []
@@ -1148,9 +1206,9 @@ class Database:
         """
         async with self.transaction():
             # Получаем текущий статус перед изменением с блокировкой
-            cursor = await self.connection.execute(
-                "SELECT status FROM orders WHERE id = ?", (order_id,)
-            )
+            connection = self._get_connection()
+
+            cursor = await connection.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
             row = await cursor.fetchone()
             if not row:
                 logger.error(f"Заявка #{order_id} не найдена")
@@ -1173,7 +1231,7 @@ class Database:
                     raise  # Пробрасываем исключение выше
 
             # Обновляем статус заявки
-            await self.connection.execute(
+            await connection.execute(
                 "UPDATE orders SET status = ?, updated_at = ? WHERE id = ?",
                 (status, get_now().isoformat(), order_id),
             )
@@ -1184,7 +1242,7 @@ class Database:
             )
             history_notes = notes or transition_description
 
-            await self.connection.execute(
+            await connection.execute(
                 """
                 INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, notes)
                 VALUES (?, ?, ?, ?, ?)
@@ -1210,7 +1268,9 @@ class Database:
         Returns:
             Список изменений статусов
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT
                 h.id,
@@ -1280,11 +1340,13 @@ class Database:
         if field not in allowed_fields:
             raise ValueError(f"Поле {field} не может быть обновлено через этот метод")
 
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             f"UPDATE orders SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",  # nosec B608
             (value, order_id),
         )
-        await self.connection.commit()
+        await connection.commit()
 
         logger.info("Order #%d: field '%s' updated", order_id, field)
         return True
@@ -1308,11 +1370,9 @@ class Database:
         Raises:
             InvalidStateTransitionError: Если переход в ASSIGNED недопустим
         """
-        async with self.transaction():
+        async with self.transaction() as connection:
             # Получаем текущий статус с блокировкой
-            cursor = await self.connection.execute(
-                "SELECT status FROM orders WHERE id = ?", (order_id,)
-            )
+            cursor = await connection.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
             row = await cursor.fetchone()
             if not row:
                 logger.error(f"Заявка #{order_id} не найдена")
@@ -1329,7 +1389,7 @@ class Database:
             )
 
             # Обновляем заявку
-            await self.connection.execute(
+            await connection.execute(
                 """
                 UPDATE orders
                 SET assigned_master_id = ?, status = ?, updated_at = ?
@@ -1397,8 +1457,9 @@ class Database:
         params.append(order_id)
 
         query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
-        await self.connection.execute(query, params)
-        await self.connection.commit()
+        connection = self._get_connection()
+        await connection.execute(query, params)
+        await connection.commit()
 
         logger.info(f"Заявка #{order_id} обновлена")
         return True
@@ -1434,7 +1495,8 @@ class Database:
 
         query += " ORDER BY o.created_at DESC"
 
-        cursor = await self.connection.execute(query, params)
+        connection = self._get_connection()
+        cursor = await connection.execute(query, params)
         rows = await cursor.fetchall()
 
         orders = []
@@ -1558,8 +1620,9 @@ class Database:
         params.append(order_id)
 
         query = f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"  # nosec B608
-        await self.connection.execute(query, params)
-        await self.connection.commit()
+        connection = self._get_connection()
+        await connection.execute(query, params)
+        await connection.commit()
 
         logger.info(f"Суммы заявки #{order_id} обновлены")
         return True
@@ -1575,11 +1638,13 @@ class Database:
             action: Действие
             details: Детали
         """
-        await self.connection.execute(
+        connection = self._get_connection()
+
+        await connection.execute(
             "INSERT INTO audit_log (user_id, action, details) VALUES (?, ?, ?)",
             (user_id, action, details),
         )
-        await self.connection.commit()
+        await connection.commit()
 
     async def get_audit_logs(self, limit: int = 100) -> list[AuditLog]:
         """
@@ -1591,7 +1656,9 @@ class Database:
         Returns:
             Список логов
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?", (limit,)
         )
         rows = await cursor.fetchall()
@@ -1620,33 +1687,38 @@ class Database:
         Returns:
             Словарь со статистикой
         """
-        stats = {}
+        stats: dict[str, Any] = {}
+        connection = self._get_connection()
 
         # Количество пользователей по ролям
-        cursor = await self.connection.execute(
-            "SELECT role, COUNT(*) as count FROM users GROUP BY role"
-        )
+        cursor = await connection.execute("SELECT role, COUNT(*) as count FROM users GROUP BY role")
         roles_stats = await cursor.fetchall()
         stats["users_by_role"] = {row["role"]: row["count"] for row in roles_stats}
 
         # Количество заявок по статусам
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             "SELECT status, COUNT(*) as count FROM orders GROUP BY status"
         )
         orders_stats = await cursor.fetchall()
         stats["orders_by_status"] = {row["status"]: row["count"] for row in orders_stats}
 
         # Количество активных мастеров
-        cursor = await self.connection.execute(
+        cursor = await connection.execute(
             "SELECT COUNT(*) as count FROM masters WHERE is_active = 1 AND is_approved = 1"
         )
         row = await cursor.fetchone()
-        stats["active_masters"] = row["count"]
+        if row is not None:
+            stats["active_masters"] = cast(int, row["count"])
+        else:
+            stats["active_masters"] = 0
 
         # Общее количество заявок
-        cursor = await self.connection.execute("SELECT COUNT(*) as count FROM orders")
+        cursor = await connection.execute("SELECT COUNT(*) as count FROM orders")
         row = await cursor.fetchone()
-        stats["total_orders"] = row["count"]
+        if row is not None:
+            stats["total_orders"] = cast(int, row["count"])
+        else:
+            stats["total_orders"] = 0
 
         return stats
 
@@ -1690,7 +1762,8 @@ class Database:
 
         query += " ORDER BY o.updated_at DESC"
 
-        cursor = await self.connection.execute(query, params)
+        connection = self._get_connection()
+        cursor = await connection.execute(query, params)
         rows = await cursor.fetchall()
 
         orders = []
@@ -1752,7 +1825,9 @@ class Database:
         Returns:
             ID созданного отчета
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             INSERT INTO financial_reports (
                 report_type, period_start, period_end, total_orders,
@@ -1774,7 +1849,7 @@ class Database:
                 report.created_at.isoformat() if report.created_at else None,
             ),
         )
-        await self.connection.commit()
+        await connection.commit()
         return cast(int, cursor.lastrowid)
 
     async def get_financial_report_by_id(self, report_id: int) -> FinancialReport | None:
@@ -1787,7 +1862,9 @@ class Database:
         Returns:
             Объект отчета или None
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM financial_reports WHERE id = ?", (report_id,)
         )
         row = await cursor.fetchone()
@@ -1822,7 +1899,9 @@ class Database:
         Returns:
             ID созданного отчета
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             INSERT INTO master_financial_reports (
                 report_id, master_id, master_name, orders_count,
@@ -1846,7 +1925,7 @@ class Database:
                 master_report.out_of_city_count,
             ),
         )
-        await self.connection.commit()
+        await connection.commit()
         return cast(int, cursor.lastrowid)
 
     async def get_master_reports_by_report_id(self, report_id: int) -> list[MasterFinancialReport]:
@@ -1859,7 +1938,9 @@ class Database:
         Returns:
             Список отчетов по мастерам
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM master_financial_reports WHERE report_id = ? ORDER BY total_master_profit DESC",
             (report_id,),
         )
@@ -1896,7 +1977,9 @@ class Database:
         Returns:
             Список отчетов
         """
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM financial_reports ORDER BY created_at DESC LIMIT ?", (limit,)
         )
         rows = await cursor.fetchall()
@@ -1936,7 +2019,9 @@ class Database:
             ID созданной записи
         """
 
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             INSERT INTO master_reports_archive (
                 master_id, period_start, period_end, file_path, file_name,
@@ -1958,7 +2043,7 @@ class Database:
                 report.notes,
             ),
         )
-        await self.connection.commit()
+        await connection.commit()
         return cast(int, cursor.lastrowid)
 
     async def get_master_archived_reports(
@@ -1976,7 +2061,9 @@ class Database:
         """
         from app.database.models import MasterReportArchive
 
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT * FROM master_reports_archive
             WHERE master_id = ?
@@ -2022,7 +2109,9 @@ class Database:
         """
         from app.database.models import MasterReportArchive
 
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             "SELECT * FROM master_reports_archive WHERE id = ?",
             (report_id,),
         )
@@ -2059,9 +2148,11 @@ class Database:
         Returns:
             True если успешно
         """
+        connection = self._get_connection()
+
         try:
             # Сначала получаем ID мастера
-            cursor = await self.connection.execute(
+            cursor = await connection.execute(
                 "SELECT id FROM masters WHERE telegram_id = ?", (telegram_id,)
             )
             row = await cursor.fetchone()
@@ -2073,17 +2164,15 @@ class Database:
             master_id = row["id"]
 
             # Удаляем мастера (каскадное удаление удалит связанные записи)
-            await self.connection.execute(
-                "DELETE FROM masters WHERE telegram_id = ?", (telegram_id,)
-            )
-            await self.connection.commit()
+            await connection.execute("DELETE FROM masters WHERE telegram_id = ?", (telegram_id,))
+            await connection.commit()
 
             logger.info(f"Master {telegram_id} (ID: {master_id}) deleted from system")
             return True
 
         except Exception as e:
             logger.error(f"Error deleting master {telegram_id}: {e}")
-            await self.connection.rollback()
+            await connection.rollback()
             return False
 
     async def get_orders_by_client_phone(self, phone: str) -> list[Order]:
@@ -2099,7 +2188,9 @@ class Database:
         if not self.connection:
             await self.connect()
 
-        cursor = await self.connection.execute(
+        connection = self._get_connection()
+
+        cursor = await connection.execute(
             """
             SELECT o.*,
                    m.first_name as master_first_name, m.last_name as master_last_name, m.username as master_username,

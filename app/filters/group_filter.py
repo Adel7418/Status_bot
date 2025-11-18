@@ -5,7 +5,7 @@
 from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 
-from app.database import Database
+from app.database import get_database
 
 
 class IsGroupChat(BaseFilter):
@@ -30,7 +30,7 @@ class IsMasterWorkGroup(BaseFilter):
             return False
 
         # Проверяем, является ли эта группа рабочей группой какого-либо мастера
-        db = Database()
+        db = get_database()
         await db.connect()
 
         try:
@@ -69,12 +69,16 @@ class IsMasterInGroup(BaseFilter):
         if message.chat.type not in ["group", "supergroup"]:
             return False
 
-        db = Database()
+        user = message.from_user
+        if not user:
+            return False
+
+        db = get_database()
         await db.connect()
 
         try:
             # Получаем мастера по telegram_id
-            master = await db.get_master_by_telegram_id(message.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
 
             if not master:
                 return False
@@ -89,7 +93,11 @@ class IsGroupOrderCallback(BaseFilter):
     """Фильтр для проверки, что callback связан с групповым взаимодействием с заказом"""
 
     async def __call__(self, callback: CallbackQuery) -> bool:
-        if callback.message.chat.type not in ["group", "supergroup"]:
+        message = callback.message
+        if not isinstance(message, Message):
+            return False
+
+        if message.chat.type not in ["group", "supergroup"]:
             return False
 
         # Проверяем, что callback связан с групповыми действиями
@@ -101,4 +109,5 @@ class IsGroupOrderCallback(BaseFilter):
             "group_dr_order",
         ]
 
-        return any(action in callback.data for action in group_actions)
+        data = callback.data or ""
+        return any(action in data for action in group_actions)

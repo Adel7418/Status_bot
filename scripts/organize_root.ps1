@@ -53,5 +53,3 @@ Get-ChildItem -LiteralPath $repoRoot -File -Filter *.log -ErrorAction SilentlyCo
 }
 
 Write-Host "Root organization completed." -ForegroundColor Green
-
-

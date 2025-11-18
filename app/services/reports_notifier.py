@@ -7,7 +7,7 @@ import logging
 from aiogram import Bot
 from aiogram.types import FSInputFile
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 
 
 logger = logging.getLogger(__name__)
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class ReportsNotifier:
     """Сервис для отправки отчетов"""
 
-    def __init__(self, bot: Bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
-        self.db = Database()
+        self.db: DatabaseType = get_database()
 
     async def send_daily_report(self):
         """Отправляет ежедневный отчет"""
@@ -148,24 +148,40 @@ class ReportsNotifier:
 
     async def _get_report_recipients(self) -> list[int]:
         """Получает список получателей отчетов (администраторы и диспетчеры)"""
+        from app.database.orm_database import ORMDatabase as ORMDatabaseRuntime
+
+        if not isinstance(self.db, ORMDatabaseRuntime):
+            # В legacy-режиме используем метод базы для получения пользователей по ролям
+            admins = await self.db.get_users_by_role("ADMIN")
+            dispatchers = await self.db.get_users_by_role("DISPATCHER")
+            recipients = [user.telegram_id for user in (admins + dispatchers) if user.telegram_id]
+            logger.info("Найдено %s получателей отчетов (legacy)", len(recipients))
+            return recipients
+
         await self.db.connect()
 
         try:
-            async with self.db.get_session() as session:
+            if self.db.session_factory is None:
+                logger.error("ORMDatabase.session_factory не инициализирован")
+                return []
+
+            async with self.db.session_factory() as session:
                 from sqlalchemy import text
-                
+
                 result = await session.execute(
-                    text("""
+                    text(
+                        """
                         SELECT telegram_id
                         FROM users
                         WHERE role LIKE '%ADMIN%' OR role LIKE '%DISPATCHER%'
-                    """)
+                        """
+                    )
                 )
-                
+
                 rows = result.fetchall()
                 recipients = [row[0] for row in rows]
 
-                logger.info(f"Найдено {len(recipients)} получателей отчетов")
+                logger.info("Найдено %s получателей отчетов", len(recipients))
                 return recipients
 
         finally:

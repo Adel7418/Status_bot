@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 
 logger = logging.getLogger(__name__)
@@ -177,8 +177,8 @@ class RateLimitMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
         """
@@ -192,6 +192,9 @@ class RateLimitMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler или None если превышен лимит
         """
+        if not isinstance(event, (Message, CallbackQuery)):
+            return await handler(event, data)
+
         user = event.from_user
 
         if not user:
@@ -212,8 +215,9 @@ class RateLimitMiddleware(BaseMiddleware):
             bucket["last_warning_sent"] = 0
 
         # Проверяем, не забанен ли пользователь
-        if bucket.get("banned_until") and bucket["banned_until"] > now:
-            remaining_ban = int(bucket["banned_until"] - now)
+        banned_until = bucket.get("banned_until")
+        if banned_until is not None and banned_until > now:
+            remaining_ban = int(banned_until - now)
 
             # Проверяем, нужно ли отправлять предупреждение
             # Отправляем максимум раз в 10 секунд для забаненных
@@ -247,11 +251,12 @@ class RateLimitMiddleware(BaseMiddleware):
             return None
 
         # Если бан истёк - сбрасываем
-        if bucket.get("banned_until") and bucket["banned_until"] <= now:
+        banned_until = bucket.get("banned_until")
+        if banned_until is not None and banned_until <= now:
             bucket["banned_until"] = None
             bucket["violations"] = 0
             bucket["violation_timestamps"] = []
-            logger.info(f"✅ Ban expired for user {user_id}. Reset violations.")
+            logger.info("✅ Ban expired for user %s. Reset violations.", user_id)
 
         # Очищаем старые нарушения
         self._clean_old_violations(user_id)
@@ -345,10 +350,12 @@ class RateLimitMiddleware(BaseMiddleware):
         Returns:
             Словарь со статистикой
         """
+        now = time.time()
         banned_users = sum(
             1
             for bucket in self.buckets.values()
-            if bucket.get("banned_until") and bucket["banned_until"] > time.time()
+            if (bucket_banned_until := bucket.get("banned_until")) is not None
+            and bucket_banned_until > now
         )
 
         users_with_violations = sum(

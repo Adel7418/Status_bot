@@ -288,6 +288,8 @@ class MasterRepository(BaseRepository[Master]):
         Returns:
             Объект Master
         """
+        row_dict = dict(row)
+
         return Master(
             id=row["id"],
             telegram_id=row["telegram_id"],
@@ -295,17 +297,13 @@ class MasterRepository(BaseRepository[Master]):
             specialization=row["specialization"],
             is_active=bool(row["is_active"]),
             is_approved=bool(row["is_approved"]),
-            work_chat_id=(
-                row["work_chat_id"]
-                if row.get("work_chat_id")
-                else None
-            ),
+            work_chat_id=row_dict.get("work_chat_id"),
             created_at=(
                 datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
                 if row["created_at"]
                 else None
             ),
-            username=(row.get("username", None)),
-            first_name=(row.get("first_name", None)),
-            last_name=(row.get("last_name", None)),
+            username=row_dict.get("username"),
+            first_name=row_dict.get("first_name"),
+            last_name=row_dict.get("last_name"),
         )

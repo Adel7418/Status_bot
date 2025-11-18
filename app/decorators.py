@@ -72,12 +72,12 @@ def handle_errors(func: Callable) -> Callable:
                         error_text, reply_markup=get_main_menu_keyboard(user_role)
                     )
                 elif isinstance(message_or_callback, CallbackQuery):
-                    await message_or_callback.message.answer(
-                        error_text, reply_markup=get_main_menu_keyboard(user_role)
-                    )
+                    msg = message_or_callback.message
+                    if isinstance(msg, Message):
+                        await msg.answer(error_text, reply_markup=get_main_menu_keyboard(user_role))
                     await message_or_callback.answer("Произошла ошибка", show_alert=True)
             except Exception as send_error:
-                logger.error(f"Failed to send error message: {send_error}")
+                logger.error("Failed to send error message: %s", send_error)
 
     return wrapper
 
@@ -189,15 +189,18 @@ def handle_database_errors(func: Callable) -> Callable:
 
             error_text = Messages.ERROR_DATABASE
 
-            if isinstance(message_or_callback, Message):
-                await message_or_callback.answer(
-                    error_text, reply_markup=get_main_menu_keyboard(user_role)
-                )
-            elif isinstance(message_or_callback, CallbackQuery):
-                await message_or_callback.message.answer(
-                    error_text, reply_markup=get_main_menu_keyboard(user_role)
-                )
-                await message_or_callback.answer("Ошибка базы данных", show_alert=True)
+            try:
+                if isinstance(message_or_callback, Message):
+                    await message_or_callback.answer(
+                        error_text, reply_markup=get_main_menu_keyboard(user_role)
+                    )
+                elif isinstance(message_or_callback, CallbackQuery):
+                    msg = message_or_callback.message
+                    if isinstance(msg, Message):
+                        await msg.answer(error_text, reply_markup=get_main_menu_keyboard(user_role))
+                    await message_or_callback.answer("Ошибка базы данных", show_alert=True)
+            except Exception as send_error:
+                logger.error("Failed to send DB error message: %s", send_error)
         finally:
             # Закрываем соединение с БД если оно было открыто
             if db and hasattr(db, "disconnect"):

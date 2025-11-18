@@ -211,6 +211,5 @@ refused_orders = len([o for o in orders if o.status == OrderStatus.REFUSED])
 
 ## Автор
 
-Claude (AI Assistant)  
+Claude (AI Assistant)
 Дата: 17 ноября 2025
-

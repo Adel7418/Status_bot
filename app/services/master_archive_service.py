@@ -1,12 +1,17 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.utils.helpers import get_now
+
+
+if TYPE_CHECKING:
+    from app.database.db import Database as LegacyDatabase
 
 
 logger = logging.getLogger(__name__)
@@ -15,8 +20,28 @@ logger = logging.getLogger(__name__)
 class MasterArchiveService:
     """Сервис для архивирования заявок мастера"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
+
+    def _get_legacy_db(self) -> "LegacyDatabase":
+        """
+        Получить legacy-реализацию БД (SQLite).
+
+        Используется для прямого выполнения SQL-запросов.
+        """
+        from app.database.db import Database as LegacyDatabaseRuntime
+
+        if not isinstance(self.db, LegacyDatabaseRuntime):
+            raise RuntimeError(
+                "MasterArchiveService поддерживает только legacy Database для raw SQL"
+            )
+
+        return self.db
+
+    def _get_connection(self):
+        """Типобезопасно получить соединение с БД."""
+        legacy_db = self._get_legacy_db()
+        return legacy_db.get_connection()
 
     async def archive_master_orders(
         self, master_id: int, reason: str = "deactivation"
@@ -51,9 +76,9 @@ class MasterArchiveService:
             archive_path = await self._create_archive(master, orders, reason)
 
             # Сохраняем информацию об архиве в базу
-            await self._save_archive_info(master.id, archive_path, reason, len(orders))
+            await self._save_archive_info(master_id, archive_path, reason, len(orders))
 
-            logger.info(f"Archived {len(orders)} orders for master {master.id} ({reason})")
+            logger.info(f"Archived {len(orders)} orders for master {master_id} ({reason})")
             return archive_path
 
         except Exception as e:
@@ -197,33 +222,8 @@ class MasterArchiveService:
         """Сохранение информации об архиве в базу данных"""
         try:
             # Проверяем, какая база данных используется
-            if hasattr(self.db, "connection"):
-                # Обычная база данных
-                await self.db.connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS master_archives (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        master_id INTEGER NOT NULL,
-                        file_path TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        order_count INTEGER NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (master_id) REFERENCES masters (id)
-                    )
-                """
-                )
-
-                await self.db.connection.execute(
-                    """
-                    INSERT INTO master_archives (master_id, file_path, reason, order_count)
-                    VALUES (?, ?, ?, ?)
-                """,
-                    (master_id, filepath, reason, order_count),
-                )
-
-                await self.db.connection.commit()
-            else:
-                # ORM база данных - используем raw SQL
+            if hasattr(self.db, "get_session"):
+                # ORM база данных - используем raw SQL через сессию
                 from sqlalchemy import text
 
                 async with self.db.get_session() as session:
@@ -259,12 +259,34 @@ class MasterArchiveService:
                     )
 
                     await session.commit()
+            else:
+                # Legacy база данных (SQLite)
+                connection = self._get_connection()
+                await connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS master_archives (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        master_id INTEGER NOT NULL,
+                        file_path TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        order_count INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (master_id) REFERENCES masters (id)
+                    )
+                """
+                )
+
+                await connection.execute(
+                    """
+                    INSERT INTO master_archives (master_id, file_path, reason, order_count)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (master_id, filepath, reason, order_count),
+                )
+
+                await connection.commit()
 
             logger.info(f"Archive info saved for master {master_id}")
 
         except Exception as e:
             logger.error(f"Error saving archive info: {e}")
-            if hasattr(self.db, "connection"):
-                await self.db.connection.rollback()
-            else:
-                await self.db.session.rollback()

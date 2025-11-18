@@ -3,11 +3,11 @@
 """
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.services.master_reports_detailed import MasterReportsService
 from app.utils.helpers import MOSCOW_TZ, get_now
 
@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 class RealtimeDailyTableService:
     """Сервис для управления ежедневными таблицами в реальном времени"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
         self.reports_service = MasterReportsService()
         self.current_table_path: Optional[str] = None
-        self.current_date = None
+        self.current_date: Optional[date] = None
 
     async def init(self):
         """Инициализация сервиса"""
@@ -34,7 +34,7 @@ class RealtimeDailyTableService:
         today = get_now().date()
         await self._ensure_current_table_exists(today)
 
-    async def _ensure_current_table_exists(self, date: datetime.date):
+    async def _ensure_current_table_exists(self, date: date):
         """Убеждаемся, что текущая таблица за указанную дату существует"""
         today_str = date.strftime("%Y%m%d")
         table_filename = f"daily_table_{today_str}.xlsx"
@@ -47,10 +47,10 @@ class RealtimeDailyTableService:
             logger.info(f"Создание новой ежедневной таблицы за {date.strftime('%d.%m.%Y')}")
             await self._create_daily_table(date)
 
-        self.current_table_path = table_path
+        self.current_table_path = str(table_path)
         self.current_date = date
 
-    async def _create_daily_table(self, date: datetime.date):
+    async def _create_daily_table(self, date: date):
         """Создает новую ежедневную таблицу"""
         # Преобразуем date в datetime с timezone
         start_datetime = datetime.combine(date, datetime.min.time()).replace(tzinfo=MOSCOW_TZ)
@@ -116,6 +116,10 @@ class RealtimeDailyTableService:
         if not self.current_date:
             return
 
+        path = self.current_table_path
+        if not path:
+            return
+
         # Создаем новую версию таблицы
         start_datetime = datetime.combine(self.current_date, datetime.min.time()).replace(
             tzinfo=MOSCOW_TZ
@@ -127,17 +131,21 @@ class RealtimeDailyTableService:
 
         if report_path and os.path.exists(report_path):
             # Заменяем текущую таблицу
-            if os.path.exists(self.current_table_path):
-                os.remove(self.current_table_path)
-            os.rename(report_path, self.current_table_path)
-            logger.info(f"Ежедневная таблица обновлена: {self.current_table_path}")
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(report_path, path)
+            logger.info(f"Ежедневная таблица обновлена: {path}")
         else:
             logger.error(f"Не удалось обновить таблицу: {report_path}")
 
     async def save_and_create_new_table(self):
         """Сохраняет текущую таблицу и создает новую пустую"""
         try:
-            if self.current_table_path and os.path.exists(self.current_table_path):
+            if (
+                self.current_table_path
+                and self.current_date
+                and os.path.exists(self.current_table_path)
+            ):
                 # Переименовываем текущую таблицу с финальным именем
                 today_str = self.current_date.strftime("%Y%m%d")
                 final_filename = f"daily_table_final_{today_str}.xlsx"

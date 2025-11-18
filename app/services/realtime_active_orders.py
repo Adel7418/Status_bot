@@ -6,7 +6,7 @@ import logging
 import os
 from pathlib import Path
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.services.active_orders_export import ActiveOrdersExportService
 
 
@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 class RealtimeActiveOrdersService:
     """Сервис для управления таблицей активных заказов в реальном времени"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
         self.export_service = ActiveOrdersExportService()
-        self.current_table_path = None
+        self.current_table_path: str | None = None
 
     async def init(self):
         """Инициализация сервиса"""

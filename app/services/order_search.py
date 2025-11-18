@@ -4,9 +4,14 @@
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
 from app.database import Database
 from app.database.models import Order
+
+
+if TYPE_CHECKING:
+    from app.database.orm_models import Order as ORMOrder
 from app.utils import format_datetime, format_phone
 
 
@@ -44,9 +49,28 @@ class OrderSearchService:
         logger.info(f"Поиск заказов по телефону: {normalized_phone}")
 
         # Используем существующий метод из базы данных
-        orders = await self.db.get_orders_by_client_phone(normalized_phone)
+        orders_raw = await self.db.get_orders_by_client_phone(normalized_phone)
 
-        logger.info(f"Найдено заказов по телефону: {len(orders)}")
+        # В legacy Database возвращаются dataclass Order, в ORMDatabase — ORM-модели.
+        # Приводим к единому dataclass Order для дальнейшей обработки.
+        orders: list[Order] = []
+
+        # Определяем тип базы на рантайме, чтобы корректно конвертировать результаты
+        from app.database.orm_database import ORMDatabase as ORMDatabaseRuntime
+
+        if isinstance(self.db, ORMDatabaseRuntime):
+            from app.database.orm_models import Order as ORMOrderRuntime
+
+            for orm_order in orders_raw:
+                if isinstance(orm_order, ORMOrderRuntime):
+                    orders.append(self._from_orm_order(orm_order))
+        else:
+            # Legacy Database возвращает dataclass Order
+            for order in orders_raw:
+                if isinstance(order, Order):
+                    orders.append(order)
+
+        logger.info("Найдено заказов по телефону: %s", len(orders))
         return orders
 
     async def search_orders_by_address(self, address: str) -> list[Order]:
@@ -225,7 +249,7 @@ class OrderSearchService:
 
         for short, full in replacements.items():
             normalized = normalized.replace(short, full)
-        
+
         return normalized
 
     async def _search_orders_by_address_in_db(self, address: str) -> list[Order]:
@@ -239,7 +263,9 @@ class OrderSearchService:
             Список найденных заказов
         """
         # Проверяем, какой тип базы данных используется
-        if hasattr(self.db, "session_factory"):
+        from app.database.orm_database import ORMDatabase as ORMDatabaseRuntime
+
+        if isinstance(self.db, ORMDatabaseRuntime):
             # ORMDatabase
             return await self._search_orders_by_address_orm(address)
         # Legacy Database
@@ -255,85 +281,39 @@ class OrderSearchService:
         Returns:
             Список найденных заказов
         """
-        from sqlalchemy import func, select
+        from sqlalchemy import select
         from sqlalchemy.orm import joinedload
 
-        from app.database.orm_models import Master, User
+        from app.database.orm_database import ORMDatabase as ORMDatabaseRuntime
+        from app.database.orm_models import Master
         from app.database.orm_models import Order as ORMOrder
 
-        async with self.db.session_factory() as session:
+        if not isinstance(self.db, ORMDatabaseRuntime) or self.db.session_factory is None:
+            raise RuntimeError("ORM search is доступен только при использовании ORMDatabase")
+
+        session_factory = self.db.session_factory
+
+        async with session_factory() as session:
             # Получаем все заказы и фильтруем в Python (из-за проблем с func.lower() и кириллицей)
             query = (
                 select(ORMOrder)
                 .options(
                     joinedload(ORMOrder.assigned_master).joinedload(Master.user),
-                    joinedload(ORMOrder.dispatcher)
+                    joinedload(ORMOrder.dispatcher),
                 )
                 .order_by(ORMOrder.created_at.desc())
             )
 
             result = await session.execute(query)
             all_orders = result.unique().scalars().all()
-            
+
             # Фильтруем в Python
-            orm_orders = []
-            for order in all_orders:
-                if address in order.client_address.lower():
-                    orm_orders.append(order)
+            orm_orders = [
+                order for order in all_orders if address in (order.client_address or "").lower()
+            ]
 
             # Конвертируем ORM модели в dataclass модели
-            orders = []
-            for orm_order in orm_orders:
-                order = Order(
-                    id=orm_order.id,
-                    equipment_type=orm_order.equipment_type,
-                    description=orm_order.description,
-                    client_name=orm_order.client_name,
-                    client_address=orm_order.client_address,
-                    client_phone=orm_order.client_phone,
-                    status=orm_order.status,
-                    assigned_master_id=orm_order.assigned_master_id,
-                    dispatcher_id=orm_order.dispatcher_id,
-                    notes=orm_order.notes,
-                    scheduled_time=orm_order.scheduled_time,
-                    total_amount=orm_order.total_amount,
-                    materials_cost=orm_order.materials_cost,
-                    master_profit=orm_order.master_profit,
-                    company_profit=orm_order.company_profit,
-                    has_review=orm_order.has_review,
-                    out_of_city=orm_order.out_of_city,
-                    created_at=orm_order.created_at,
-                    updated_at=orm_order.updated_at,
-                    rescheduled_count=orm_order.rescheduled_count,
-                    last_rescheduled_at=orm_order.last_rescheduled_at,
-                    reschedule_reason=orm_order.reschedule_reason,
-                    estimated_completion_date=orm_order.estimated_completion_date,
-                    prepayment_amount=orm_order.prepayment_amount,
-                )
-
-                # Получаем информацию о мастере и диспетчере
-                if orm_order.assigned_master:
-                    master = orm_order.assigned_master
-                    if master.user:
-                        if master.user.first_name and master.user.last_name:
-                            order.master_name = f"{master.user.first_name} {master.user.last_name}"
-                        elif master.user.first_name:
-                            order.master_name = master.user.first_name
-                        elif master.user.username:
-                            order.master_name = f"@{master.user.username}"
-
-                if orm_order.dispatcher:
-                    dispatcher = orm_order.dispatcher
-                    if dispatcher.first_name and dispatcher.last_name:
-                        order.dispatcher_name = f"{dispatcher.first_name} {dispatcher.last_name}"
-                    elif dispatcher.first_name:
-                        order.dispatcher_name = dispatcher.first_name
-                    elif dispatcher.username:
-                        order.dispatcher_name = f"@{dispatcher.username}"
-
-                orders.append(order)
-
-            return orders
+            return [self._from_orm_order(orm_order) for orm_order in orm_orders]
 
     async def _search_orders_by_address_legacy(self, address: str) -> list[Order]:
         """
@@ -345,11 +325,10 @@ class OrderSearchService:
         Returns:
             Список найденных заказов
         """
-        if not self.db.connection:
-            await self.db.connect()
-
+        # Legacy Database (aiosqlite)
         # Используем LIKE для поиска по частичному совпадению
-        cursor = await self.db.connection.execute(
+        connection = self.db.get_connection()  # type: ignore[union-attr]
+        cursor = await connection.execute(
             """
             SELECT o.*,
                    m.first_name as master_first_name, m.last_name as master_last_name, m.username as master_username,
@@ -364,54 +343,58 @@ class OrderSearchService:
         )
         rows = await cursor.fetchall()
 
-        orders = []
+        orders: list[Order] = []
         for row in rows:
-            order = Order(
-                id=row["id"],
-                equipment_type=row["equipment_type"],
-                description=row["description"],
-                client_name=row["client_name"],
-                client_address=row["client_address"],
-                client_phone=row["client_phone"],
-                status=row["status"],
-                assigned_master_id=row["assigned_master_id"],
-                dispatcher_id=row["dispatcher_id"],
-                notes=row["notes"],
-                scheduled_time=row["scheduled_time"],
-                total_amount=row["total_amount"],
-                materials_cost=row["materials_cost"],
-                master_profit=row["master_profit"],
-                company_profit=row["company_profit"],
-                has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
-                out_of_city=bool(row["out_of_city"]) if row["out_of_city"] is not None else None,
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-                rescheduled_count=row["rescheduled_count"],
-                last_rescheduled_at=row["last_rescheduled_at"],
-                reschedule_reason=row["reschedule_reason"],
-                estimated_completion_date=row["estimated_completion_date"],
-                prepayment_amount=row["prepayment_amount"],
-            )
-
             # Формируем имя мастера
+            master_name: str | None = None
             if row["master_first_name"] and row["master_last_name"]:
-                order.master_name = f"{row['master_first_name']} {row['master_last_name']}"
+                master_name = f"{row['master_first_name']} {row['master_last_name']}"
             elif row["master_first_name"]:
-                order.master_name = row["master_first_name"]
+                master_name = row["master_first_name"]
             elif row["master_username"]:
-                order.master_name = f"@{row['master_username']}"
+                master_name = f"@{row['master_username']}"
 
             # Формируем имя диспетчера
+            dispatcher_name: str | None = None
             if row["dispatcher_first_name"] and row["dispatcher_last_name"]:
-                order.dispatcher_name = (
-                    f"{row['dispatcher_first_name']} {row['dispatcher_last_name']}"
-                )
+                dispatcher_name = f"{row['dispatcher_first_name']} {row['dispatcher_last_name']}"
             elif row["dispatcher_first_name"]:
-                order.dispatcher_name = row["dispatcher_first_name"]
+                dispatcher_name = row["dispatcher_first_name"]
             elif row["dispatcher_username"]:
-                order.dispatcher_name = f"@{row['dispatcher_username']}"
+                dispatcher_name = f"@{row['dispatcher_username']}"
 
-            orders.append(order)
+            orders.append(
+                Order(
+                    id=row["id"],
+                    equipment_type=row["equipment_type"],
+                    description=row["description"],
+                    client_name=row["client_name"],
+                    client_address=row["client_address"],
+                    client_phone=row["client_phone"],
+                    status=row["status"],
+                    assigned_master_id=row["assigned_master_id"],
+                    dispatcher_id=row["dispatcher_id"],
+                    notes=row["notes"],
+                    scheduled_time=row["scheduled_time"],
+                    total_amount=row["total_amount"],
+                    materials_cost=row["materials_cost"],
+                    master_profit=row["master_profit"],
+                    company_profit=row["company_profit"],
+                    has_review=bool(row["has_review"]) if row["has_review"] is not None else None,
+                    out_of_city=bool(row["out_of_city"])
+                    if row["out_of_city"] is not None
+                    else None,
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                    rescheduled_count=row["rescheduled_count"],
+                    last_rescheduled_at=row["last_rescheduled_at"],
+                    reschedule_reason=row["reschedule_reason"],
+                    estimated_completion_date=row["estimated_completion_date"],
+                    prepayment_amount=row["prepayment_amount"],
+                    master_name=master_name,
+                    dispatcher_name=dispatcher_name,
+                )
+            )
 
         return orders
 
@@ -434,3 +417,59 @@ class OrderSearchService:
                 unique_orders.append(order)
 
         return unique_orders
+
+    def _from_orm_order(self, orm_order: "ORMOrder") -> Order:
+        """
+        Конвертация ORM-заказа в dataclass Order.
+        """
+        master_name: str | None = None
+        dispatcher_name: str | None = None
+
+        # Информация о мастере
+        if orm_order.assigned_master and orm_order.assigned_master.user:
+            user = orm_order.assigned_master.user
+            if user.first_name and user.last_name:
+                master_name = f"{user.first_name} {user.last_name}"
+            elif user.first_name:
+                master_name = user.first_name
+            elif user.username:
+                master_name = f"@{user.username}"
+
+        # Информация о диспетчере
+        if orm_order.dispatcher:
+            dispatcher = orm_order.dispatcher
+            if dispatcher.first_name and dispatcher.last_name:
+                dispatcher_name = f"{dispatcher.first_name} {dispatcher.last_name}"
+            elif dispatcher.first_name:
+                dispatcher_name = dispatcher.first_name
+            elif dispatcher.username:
+                dispatcher_name = f"@{dispatcher.username}"
+
+        return Order(
+            id=orm_order.id,
+            equipment_type=orm_order.equipment_type,
+            description=orm_order.description,
+            client_name=orm_order.client_name,
+            client_address=orm_order.client_address,
+            client_phone=orm_order.client_phone,
+            status=orm_order.status,
+            assigned_master_id=orm_order.assigned_master_id,
+            dispatcher_id=orm_order.dispatcher_id,
+            notes=orm_order.notes,
+            scheduled_time=orm_order.scheduled_time,
+            total_amount=orm_order.total_amount,
+            materials_cost=orm_order.materials_cost,
+            master_profit=orm_order.master_profit,
+            company_profit=orm_order.company_profit,
+            has_review=orm_order.has_review,
+            out_of_city=orm_order.out_of_city,
+            created_at=orm_order.created_at,
+            updated_at=orm_order.updated_at,
+            rescheduled_count=orm_order.rescheduled_count,
+            last_rescheduled_at=orm_order.last_rescheduled_at,
+            reschedule_reason=orm_order.reschedule_reason,
+            estimated_completion_date=orm_order.estimated_completion_date,
+            prepayment_amount=orm_order.prepayment_amount,
+            master_name=master_name,
+            dispatcher_name=dispatcher_name,
+        )

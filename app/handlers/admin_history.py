@@ -94,7 +94,8 @@ def get_restore_keyboard(order_id: int) -> InlineKeyboardMarkup:
 @handle_errors
 async def cmd_history(message: Message, db: Database):
     """Команда для просмотра истории заявки"""
-    args = message.text.split()
+    text = message.text or ""
+    args = text.split()
 
     if len(args) < 2:
         await message.answer(
@@ -111,7 +112,7 @@ async def cmd_history(message: Message, db: Database):
         await message.answer("❌ Неверный номер заявки")
         return
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Проверяем существование заявки
     order = await order_repo.get_by_id(order_id, include_deleted=True)
@@ -136,7 +137,7 @@ async def cmd_history(message: Message, db: Database):
 @handle_errors
 async def cmd_deleted_orders(message: Message, db: Database):
     """Команда для просмотра удаленных заявок"""
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем удаленные заявки
     deleted_orders = await order_repo.get_deleted_orders(limit=10, offset=0)
@@ -164,7 +165,8 @@ async def cmd_deleted_orders(message: Message, db: Database):
 @handle_errors
 async def cmd_search(message: Message, db: Database):
     """Команда для поиска заявок"""
-    args = message.text.split(maxsplit=1)
+    text = message.text or ""
+    args = text.split(maxsplit=1)
 
     if len(args) < 2:
         await message.answer(
@@ -180,7 +182,7 @@ async def cmd_search(message: Message, db: Database):
 
     query = args[1]
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
     search_service = SearchService(order_repo)
 
     # Поиск
@@ -199,9 +201,10 @@ async def cmd_search(message: Message, db: Database):
 @handle_errors
 async def callback_history_status(callback: CallbackQuery, db: Database):
     """Показать историю статусов"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем историю статусов
     history = await order_repo.get_status_history(order_id)
@@ -225,18 +228,21 @@ async def callback_history_status(callback: CallbackQuery, db: Database):
 
         text += "\n"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("history_changes:"))
 @handle_errors
 async def callback_history_changes(callback: CallbackQuery, db: Database):
     """Показать историю изменений полей"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем полную историю
     full_history = await order_repo.get_full_history(order_id)
@@ -260,18 +266,21 @@ async def callback_history_changes(callback: CallbackQuery, db: Database):
 
         text += "\n"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("history_audit:"))
 @handle_errors
 async def callback_history_audit(callback: CallbackQuery, db: Database):
     """Показать аудит действий"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем полную историю
     full_history = await order_repo.get_full_history(order_id)
@@ -294,18 +303,21 @@ async def callback_history_audit(callback: CallbackQuery, db: Database):
 
         text += "\n"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("history_full:"))
 @handle_errors
 async def callback_history_full(callback: CallbackQuery, db: Database):
     """Показать полную историю"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
     search_service = SearchService(order_repo)
 
     # Получаем полную историю
@@ -323,18 +335,21 @@ async def callback_history_full(callback: CallbackQuery, db: Database):
         for h in history["status_history"][:3]:
             text += f"• {h['changed_at']}: {h['old_status']} → {h['new_status']}\n"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_history_keyboard(order_id), parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("deleted_orders:"))
 @handle_errors
 async def callback_deleted_orders(callback: CallbackQuery, db: Database):
     """Показать список удаленных заявок"""
-    page = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    page = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем удаленные заявки
     page_size = 10
@@ -356,19 +371,26 @@ async def callback_deleted_orders(callback: CallbackQuery, db: Database):
         text += f"   /restore_{order.id}\n"
         text += "\n"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_deleted_orders_keyboard(page=page), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_deleted_orders_keyboard(page=page), parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("restore_order:"))
 @handle_errors
 async def callback_restore_order(callback: CallbackQuery, db: Database):
     """Восстановить удаленную заявку"""
-    order_id = int(callback.data.split(":")[1])
-    user_id = callback.from_user.id
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+    user_id = user.id
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Проверяем, что заявка удалена
     order = await order_repo.get_by_id(order_id, include_deleted=True)
@@ -392,9 +414,11 @@ async def callback_restore_order(callback: CallbackQuery, db: Database):
         text += f"🔧 {order.equipment_type}\n"
         text += f"👤 {order.client_name}\n"
         text += f"📊 Статус: {order.status}\n\n"
-        text += f"Восстановил: {callback.from_user.first_name}"
+        text += f"Восстановил: {user.first_name}"
 
-        await callback.message.edit_text(text, parse_mode="HTML")
+        message_obj = callback.message
+        if isinstance(message_obj, Message):
+            await message_obj.edit_text(text, parse_mode="HTML")
 
     else:
         await callback.answer("❌ Ошибка восстановления", show_alert=True)
@@ -404,9 +428,10 @@ async def callback_restore_order(callback: CallbackQuery, db: Database):
 @handle_errors
 async def callback_view_deleted(callback: CallbackQuery, db: Database):
     """Просмотр удаленной заявки"""
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    order_id = int(data.split(":")[1])
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Получаем заявку
     order = await order_repo.get_by_id(order_id, include_deleted=True)
@@ -423,9 +448,11 @@ async def callback_view_deleted(callback: CallbackQuery, db: Database):
     if hasattr(order, "deleted_at") and order.deleted_at:
         text += f"\n🗑 <b>Удалена:</b> {format_datetime(order.deleted_at)}"
 
-    await callback.message.edit_text(
-        text, reply_markup=get_restore_keyboard(order_id), parse_mode="HTML"
-    )
+    message_obj = callback.message
+    if isinstance(message_obj, Message):
+        await message_obj.edit_text(
+            text, reply_markup=get_restore_keyboard(order_id), parse_mode="HTML"
+        )
 
 
 # Команды для быстрого восстановления
@@ -434,7 +461,8 @@ async def callback_view_deleted(callback: CallbackQuery, db: Database):
 async def cmd_restore_order(message: Message, db: Database):
     """Команда для быстрого восстановления заявки"""
     # Проверяем формат команды
-    parts = message.text.split("_")
+    text = message.text or ""
+    parts = text.split("_")
 
     if len(parts) < 2:
         await message.answer(
@@ -451,10 +479,14 @@ async def cmd_restore_order(message: Message, db: Database):
         await message.answer("❌ Неверный номер заявки")
         return
 
-    order_repo = OrderRepositoryExtended(db.connection)
+    order_repo = OrderRepositoryExtended(db.get_connection())
 
     # Восстанавливаем
-    success = await order_repo.restore(order_id, restored_by=message.from_user.id)
+    user = message.from_user
+    if user is None:
+        await message.answer("❌ Не удалось определить пользователя")
+        return
+    success = await order_repo.restore(order_id, restored_by=user.id)
 
     if success:
         await message.answer(f"✅ Заявка #{order_id} успешно восстановлена!", parse_mode="HTML")

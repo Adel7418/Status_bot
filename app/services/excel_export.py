@@ -3,15 +3,22 @@
 """
 
 import logging
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
+import aiosqlite
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.database import DatabaseType, get_database
 from app.repositories.order_repository_extended import OrderRepositoryExtended
+from app.services.excel.styles import ExcelStyles
 from app.utils.helpers import get_now
+
+
+if TYPE_CHECKING:
+    from app.database.db import Database as LegacyDatabase
 
 
 logger = logging.getLogger(__name__)
@@ -24,10 +31,34 @@ class ExcelExportService:
         self.db: DatabaseType = get_database()
         self._order_repo_extended: OrderRepositoryExtended | None = None
 
+    def _get_legacy_db(self) -> "LegacyDatabase":
+        """
+        Получить legacy-реализацию БД.
+
+        Excel-отчеты используют прямой доступ к SQLite, поэтому
+        поддерживается только legacy Database, а не ORMDatabase.
+        """
+        from app.database.db import Database as LegacyDatabaseRuntime
+
+        if not isinstance(self.db, LegacyDatabaseRuntime):
+            raise RuntimeError("ExcelExportService поддерживает только legacy Database (SQLite)")
+
+        return self.db
+
+    def _get_connection(self) -> aiosqlite.Connection:
+        """
+        Типобезопасно получить соединение с БД.
+
+        Предполагается, что до вызова уже выполнен self.db.connect().
+        """
+        legacy_db = self._get_legacy_db()
+        return legacy_db.get_connection()
+
     async def _get_extended_repo(self) -> OrderRepositoryExtended:
         """Получить расширенный репозиторий"""
         if self._order_repo_extended is None:
-            self._order_repo_extended = OrderRepositoryExtended(self.db.connection)
+            connection = self._get_connection()
+            self._order_repo_extended = OrderRepositoryExtended(connection)
         return self._order_repo_extended
 
     async def export_report_to_excel(self, report_id: int) -> str | None:
@@ -110,34 +141,27 @@ class ExcelExportService:
             ws = wb.active
             ws.title = "Финансовый отчет"
 
-            # Стили
-            header_font = Font(bold=True, size=14, color="FFFFFF")
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            subheader_font = Font(bold=True, size=12)
-            subheader_fill = PatternFill(
-                start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
-            )
-            Font(bold=True, size=11)
-            PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+            # Стили из ExcelStyles
+            header_font = ExcelStyles.HEADER_FONT
+            header_fill = ExcelStyles.HEADER_FILL
+            subheader_font = ExcelStyles.SUBHEADER_FONT
+            subheader_fill = ExcelStyles.SUBHEADER_FILL
 
-            center_alignment = Alignment(horizontal="center", vertical="center")
-            left_alignment = Alignment(horizontal="left", vertical="center")
-            right_alignment = Alignment(horizontal="right", vertical="center")
-
-            thin_border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+            center_alignment = ExcelStyles.CENTER_ALIGNMENT
+            left_alignment = ExcelStyles.LEFT_ALIGNMENT
+            right_alignment = ExcelStyles.RIGHT_ALIGNMENT
+            thin_border = ExcelStyles.THIN_BORDER
 
             # Определяем тип отчета
             period_text = ""
-            if report.report_type == "DAILY":
+            if report.report_type == "DAILY" and report.period_start:
                 period_text = f"{report.period_start.strftime('%d.%m.%Y')}"
-            elif report.report_type == "WEEKLY":
-                period_text = f"{report.period_start.strftime('%d.%m')} - {report.period_end.strftime('%d.%m.%Y')}"
-            elif report.report_type == "MONTHLY":
+            elif report.report_type == "WEEKLY" and report.period_start and report.period_end:
+                period_text = (
+                    f"{report.period_start.strftime('%d.%m')} - "
+                    f"{report.period_end.strftime('%d.%m.%Y')}"
+                )
+            elif report.report_type == "MONTHLY" and report.period_start:
                 period_text = f"{report.period_start.strftime('%B %Y')}"
 
             # Заголовок
@@ -148,15 +172,15 @@ class ExcelExportService:
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = center_alignment
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
             ws.merge_cells(f"A{row}:H{row}")
             cell = ws[f"A{row}"]
             cell.value = f"Период: {period_text}"
-            cell.font = Font(bold=True, size=12)
+            cell.font = subheader_font
             cell.alignment = center_alignment
-            ws.row_dimensions[row].height = 20
+            ws.row_dimensions[row].height = ExcelStyles.SUBHEADER_ROW_HEIGHT
 
             row += 2
 
@@ -187,10 +211,8 @@ class ExcelExportService:
                     cell = ws.cell(row=row, column=col_idx, value=cell_value)
                     cell.border = thin_border
                     if row_data == summary_data[0]:  # Заголовок
-                        cell.font = Font(bold=True)
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
+                        cell.font = ExcelStyles.SIMPLE_BOLD_FONT
+                        cell.fill = ExcelStyles.TABLE_HEADER_FILL
                     if col_idx == 2:
                         cell.alignment = right_alignment
                     else:
@@ -222,10 +244,8 @@ class ExcelExportService:
                 ]
                 for col_idx, header in enumerate(headers, start=1):
                     cell = ws.cell(row=row, column=col_idx, value=header)
-                    cell.font = Font(bold=True)
-                    cell.fill = PatternFill(
-                        start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                    )
+                    cell.font = ExcelStyles.SIMPLE_BOLD_FONT
+                    cell.fill = ExcelStyles.TABLE_HEADER_FILL
                     cell.alignment = center_alignment
                     cell.border = thin_border
 
@@ -340,7 +360,7 @@ class ExcelExportService:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = center_alignment
-        ws.row_dimensions[row].height = 25
+        ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
         row += 1
 
@@ -363,12 +383,10 @@ class ExcelExportService:
             "Причина отказа",
         ]
 
-        table_header_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=row, column=col_idx, value=header)
-            cell.font = Font(bold=True)
-            cell.fill = table_header_fill
+            cell.font = ExcelStyles.TABLE_HEADER_FONT
+            cell.fill = ExcelStyles.TABLE_HEADER_FILL
             cell.alignment = center_alignment
             cell.border = thin_border
 
@@ -378,6 +396,7 @@ class ExcelExportService:
         await self._get_extended_repo()
 
         # Для каждого мастера
+        connection = self._get_connection()
         for master_report in master_reports:
             master_id = master_report.master_id
             master_name = master_report.master_name
@@ -386,7 +405,7 @@ class ExcelExportService:
                 continue
 
             # Получаем все заявки мастера
-            cursor = await self.db.connection.execute(
+            cursor = await connection.execute(
                 """
                 SELECT
                     o.id,
@@ -433,13 +452,11 @@ class ExcelExportService:
             # Заголовок мастера
             cell_master = ws[f"A{row}"]
             cell_master.value = f"👨‍🔧 {master_name}"
-            cell_master.font = Font(bold=True, size=11, color="FFFFFF")
-            cell_master.fill = PatternFill(
-                start_color="70AD47", end_color="70AD47", fill_type="solid"
-            )
+            cell_master.font = ExcelStyles.MASTER_NAME_FONT
+            cell_master.fill = ExcelStyles.MASTER_HEADER_FILL
             cell_master.alignment = left_alignment
             ws.merge_cells(f"A{row}:N{row}")
-            ws.row_dimensions[row].height = 20
+            ws.row_dimensions[row].height = ExcelStyles.SUBHEADER_ROW_HEIGHT
             row += 1
 
             # Заявки мастера
@@ -507,21 +524,15 @@ class ExcelExportService:
 
                     if col_idx == 2:  # ID
                         cell.alignment = center_alignment
-                        cell.font = Font(bold=True)
+                        cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                     elif col_idx == 3:  # Статус
                         cell.alignment = center_alignment
                         if order["status"] == "IN_PROGRESS":
-                            cell.fill = PatternFill(
-                                start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                            )
+                            cell.fill = ExcelStyles.HIGHLIGHT_FILL
                         elif order["status"] == "CLOSED":
-                            cell.fill = PatternFill(
-                                start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-                            )
+                            cell.fill = ExcelStyles.SUCCESS_FILL
                         elif order["status"] == "REFUSED":
-                            cell.fill = PatternFill(
-                                start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                            )
+                            cell.fill = ExcelStyles.ERROR_FILL
                     elif col_idx in [4, 5, 6, 7, 8, 14]:
                         cell.alignment = left_alignment
                     else:
@@ -532,7 +543,7 @@ class ExcelExportService:
                 row += 1
 
             # Итоги по мастеру
-            cursor = await self.db.connection.execute(
+            cursor = await connection.execute(
                 """
                 SELECT
                     SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as sum_total,
@@ -543,11 +554,21 @@ class ExcelExportService:
                 """,
                 (master_id,),
             )
-            totals = await cursor.fetchone()
+            totals_row = await cursor.fetchone()
+            totals: Mapping[str, Any] = (
+                dict(totals_row)
+                if totals_row is not None
+                else {
+                    "sum_total": 0,
+                    "sum_materials": 0,
+                    "sum_master": 0,
+                    "sum_company": 0,
+                }
+            )
 
             cell_total = ws[f"A{row}"]
             cell_total.value = f"Итого по {master_name}:"
-            cell_total.font = Font(bold=True, italic=True)
+            cell_total.font = ExcelStyles.BOLD_ITALIC_FONT
             ws.merge_cells(f"A{row}:I{row}")
 
             for col, val in [
@@ -558,7 +579,7 @@ class ExcelExportService:
             ]:
                 cell = ws[col]
                 cell.value = float(val or 0)
-                cell.font = Font(bold=True)
+                cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                 cell.number_format = "#,##0.00 ₽"
 
             row += 2
@@ -596,6 +617,7 @@ class ExcelExportService:
         right_alignment,
     ):
         """Добавляет отдельные листы для каждого мастера"""
+        connection = self._get_connection()
         for master_report in master_reports:
             master_id = master_report.master_id
             master_name = master_report.master_name
@@ -636,7 +658,7 @@ class ExcelExportService:
             for col in range(3, 14):  # C1:M1
                 ws.cell(row=row, column=col).fill = header_fill
 
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
 
@@ -657,21 +679,17 @@ class ExcelExportService:
                 "Примечания",
             ]
 
-            table_header_fill = PatternFill(
-                start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-            )
-
             for col_idx, header in enumerate(headers, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = table_header_fill
+                cell.font = ExcelStyles.TABLE_HEADER_FONT
+                cell.fill = ExcelStyles.TABLE_HEADER_FILL
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
             row += 1
 
             # Получаем все заявки мастера
-            cursor = await self.db.connection.execute(
+            cursor = await connection.execute(
                 """
                 SELECT
                     o.id, o.status, o.equipment_type, o.client_name,
@@ -703,7 +721,7 @@ class ExcelExportService:
                 # Если заказов нет, добавляем сообщение
                 cell = ws[f"A{row}"]
                 cell.value = "Заказов не найдено"
-                cell.font = Font(italic=True)
+                cell.font = ExcelStyles.SIMPLE_ITALIC_FONT
                 cell.alignment = center_alignment
                 ws.merge_cells(f"A{row}:M{row}")
                 row += 1
@@ -773,21 +791,15 @@ class ExcelExportService:
 
                         if col_idx == 1:  # ID
                             cell.alignment = center_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx == 2:  # Статус
                             cell.alignment = center_alignment
                             if order["status"] == "IN_PROGRESS":
-                                cell.fill = PatternFill(
-                                    start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.HIGHLIGHT_FILL
                             elif order["status"] == "CLOSED":
-                                cell.fill = PatternFill(
-                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.SUCCESS_FILL
                             elif order["status"] == "REFUSED":
-                                cell.fill = PatternFill(
-                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.ERROR_FILL
                         elif col_idx in [3, 4, 5, 6, 7, 13]:  # Текстовые поля
                             cell.alignment = left_alignment
                         else:  # Числовые поля
@@ -798,7 +810,7 @@ class ExcelExportService:
                     row += 1
 
                 # Итоги по мастеру
-                cursor = await self.db.connection.execute(
+                totals_cursor = await connection.execute(
                     """
                     SELECT
                         COUNT(*) as total_orders,
@@ -811,7 +823,19 @@ class ExcelExportService:
                     """,
                     (master_id,),
                 )
-                totals = await cursor.fetchone()
+                totals_row = await totals_cursor.fetchone()
+                totals: Mapping[str, Any] = (
+                    dict(totals_row)
+                    if totals_row is not None
+                    else {
+                        "total_orders": 0,
+                        "closed_orders": 0,
+                        "sum_total": 0,
+                        "sum_materials": 0,
+                        "sum_master": 0,
+                        "sum_company": 0,
+                    }
+                )
 
                 # Добавляем пустую строку
                 row += 1
@@ -836,24 +860,18 @@ class ExcelExportService:
                 for col_idx, value in enumerate(summary_data, start=1):
                     cell = ws.cell(row=row, column=col_idx, value=value)
                     cell.border = thin_border
-                    cell.font = Font(bold=True)
+                    cell.font = ExcelStyles.SIMPLE_BOLD_FONT
 
                     if col_idx == 1:  # "ИТОГО:"
                         cell.alignment = left_alignment
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
+                        cell.fill = ExcelStyles.TABLE_HEADER_FILL
                     elif col_idx in (2, 3):  # "Всего:" or "Закрыто:"
                         cell.alignment = center_alignment
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
+                        cell.fill = ExcelStyles.TABLE_HEADER_FILL
                     elif col_idx >= 9 and col_idx <= 12:  # Числовые поля
                         cell.alignment = right_alignment
                         cell.number_format = "#,##0.00 ₽"
-                        cell.fill = PatternFill(
-                            start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-                        )
+                        cell.fill = ExcelStyles.TABLE_HEADER_FILL
 
             # Ширина столбцов для листа мастера
             widths: dict[str, int] = {
@@ -887,7 +905,15 @@ class ExcelExportService:
         await self.db.connect()
 
         try:
+            # Валидация периода
+            if period_days <= 0:
+                logger.error(f"Неверный период для закрытых заказов: {period_days} дней")
+                return None
+            if period_days > 365:
+                logger.warning(f"Слишком большой период для закрытых заказов: {period_days} дней")
+
             # Имя файла
+            connection = self._get_connection()
             reports_dir = Path("reports")
             reports_dir.mkdir(exist_ok=True)
             filepath = reports_dir / "closed_orders.xlsx"
@@ -897,21 +923,13 @@ class ExcelExportService:
             ws = wb.active
             ws.title = "Закрытые заказы"
 
-            # Стили
-            header_font = Font(bold=True, size=14, color="FFFFFF")
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            table_header_fill = PatternFill(
-                start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-            )
-            center_alignment = Alignment(horizontal="center", vertical="center")
-            left_alignment = Alignment(horizontal="left", vertical="center")
-            right_alignment = Alignment(horizontal="right", vertical="center")
-            thin_border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+            # Стили из ExcelStyles
+            header_font = ExcelStyles.HEADER_FONT
+            header_fill = ExcelStyles.HEADER_FILL
+            center_alignment = ExcelStyles.CENTER_ALIGNMENT
+            left_alignment = ExcelStyles.LEFT_ALIGNMENT
+            right_alignment = ExcelStyles.RIGHT_ALIGNMENT
+            thin_border = ExcelStyles.THIN_BORDER
 
             # Заголовок
             row = 1
@@ -921,13 +939,13 @@ class ExcelExportService:
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = center_alignment
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
             ws.merge_cells(f"A{row}:K{row}")
             cell = ws[f"A{row}"]
             cell.value = f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')}"
-            cell.font = Font(bold=True, size=10)
+            cell.font = ExcelStyles.BOLD_FONT
             cell.alignment = center_alignment
 
             row += 2
@@ -949,8 +967,8 @@ class ExcelExportService:
 
             for col_idx, header in enumerate(headers, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = table_header_fill
+                cell.font = ExcelStyles.TABLE_HEADER_FONT
+                cell.fill = ExcelStyles.TABLE_HEADER_FILL
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
@@ -961,7 +979,7 @@ class ExcelExportService:
 
             start_date = get_now() - timedelta(days=period_days)
 
-            cursor = await self.db.connection.execute(
+            cursor = await connection.execute(
                 """
                 SELECT
                     o.id, o.equipment_type, o.client_name, o.created_at, o.updated_at,
@@ -983,7 +1001,7 @@ class ExcelExportService:
 
             if not orders:
                 ws[f"A{row}"] = "Нет закрытых заказов за этот период"
-                ws[f"A{row}"].font = Font(italic=True)
+                ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
                 ws.merge_cells(f"A{row}:K{row}")
             else:
                 # Выводим заказы
@@ -1034,7 +1052,7 @@ class ExcelExportService:
 
                         if col_idx == 1:
                             cell.alignment = center_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx in [2, 3, 4, 5, 6, 11]:
                             cell.alignment = left_alignment
                         else:
@@ -1047,7 +1065,7 @@ class ExcelExportService:
                 # Итоги
                 row += 1
                 ws[f"A{row}"] = "ИТОГО:"
-                ws[f"A{row}"].font = Font(bold=True, size=11)
+                ws[f"A{row}"].font = ExcelStyles.BOLD_FONT
 
                 total_sum = sum(float(o["total_amount"] or 0) for o in orders)
                 total_materials = sum(float(o["materials_cost"] or 0) for o in orders)
@@ -1062,11 +1080,9 @@ class ExcelExportService:
                 ]:
                     cell = ws[col]
                     cell.value = val
-                    cell.font = Font(bold=True, size=11)
+                    cell.font = ExcelStyles.BOLD_FONT
                     cell.number_format = "#,##0.00 ₽"
-                    cell.fill = PatternFill(
-                        start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                    )
+                    cell.fill = ExcelStyles.HIGHLIGHT_FILL
 
             # Ширина столбцов
             widths: dict[str, int] = {
@@ -1118,18 +1134,13 @@ class ExcelExportService:
             ws = wb.active
             ws.title = "Статистика мастеров"
 
-            # Стили
-            header_font = Font(bold=True, size=14, color="FFFFFF")
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            center_alignment = Alignment(horizontal="center", vertical="center")
-            left_alignment = Alignment(horizontal="left", vertical="center")
-            right_alignment = Alignment(horizontal="right", vertical="center")
-            thin_border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+            # Стили из ExcelStyles
+            header_font = ExcelStyles.HEADER_FONT
+            header_fill = ExcelStyles.HEADER_FILL
+            center_alignment = ExcelStyles.CENTER_ALIGNMENT
+            left_alignment = ExcelStyles.LEFT_ALIGNMENT
+            right_alignment = ExcelStyles.RIGHT_ALIGNMENT
+            thin_border = ExcelStyles.THIN_BORDER
 
             # Заголовок
             row = 1
@@ -1139,13 +1150,13 @@ class ExcelExportService:
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = center_alignment
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
             ws.merge_cells(f"A{row}:N{row}")
             cell = ws[f"A{row}"]
             cell.value = f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')}"
-            cell.font = Font(bold=True, size=10)
+            cell.font = ExcelStyles.BOLD_FONT
             cell.alignment = center_alignment
 
             row += 2
@@ -1169,21 +1180,18 @@ class ExcelExportService:
                 "Отзывов",
             ]
 
-            table_header_fill = PatternFill(
-                start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-            )
-
             for col_idx, header in enumerate(headers, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = table_header_fill
+                cell.font = ExcelStyles.TABLE_HEADER_FONT
+                cell.fill = ExcelStyles.TABLE_HEADER_FILL
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
             row += 1
 
             # Получаем всех мастеров
-            masters_cursor = await self.db.connection.execute(
+            connection = self._get_connection()
+            masters_cursor = await connection.execute(
                 """
                 SELECT
                     m.id,
@@ -1198,7 +1206,7 @@ class ExcelExportService:
 
             if not masters:
                 ws[f"A{row}"] = "Нет утвержденных мастеров"
-                ws[f"A{row}"].font = Font(italic=True)
+                ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
                 ws.merge_cells(f"A{row}:N{row}")
             else:
                 # Данные по каждому мастеру
@@ -1207,7 +1215,7 @@ class ExcelExportService:
                     master_name = master["full_name"]
 
                     # Получаем статистику
-                    cursor = await self.db.connection.execute(
+                    cursor = await connection.execute(
                         """
                         SELECT
                             COUNT(*) as total_orders,
@@ -1269,10 +1277,10 @@ class ExcelExportService:
 
                         if col_idx == 1:
                             cell.alignment = center_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx == 2:
                             cell.alignment = left_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx in [3, 4, 5, 6, 7, 14, 15]:
                             cell.alignment = center_alignment
                         else:
@@ -1285,14 +1293,12 @@ class ExcelExportService:
                 # ИТОГО
                 row += 1
                 ws[f"A{row}"] = "ИТОГО:"
-                ws[f"A{row}"].font = Font(bold=True, size=12)
-                ws[f"A{row}"].fill = PatternFill(
-                    start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                )
+                ws[f"A{row}"].font = ExcelStyles.SUBHEADER_FONT
+                ws[f"A{row}"].fill = ExcelStyles.HIGHLIGHT_FILL
                 ws.merge_cells(f"A{row}:B{row}")
 
                 # Суммы
-                cursor = await self.db.connection.execute(
+                cursor = await connection.execute(
                     """
                     SELECT
                         COUNT(*) as total_orders,
@@ -1311,7 +1317,23 @@ class ExcelExportService:
                     """
                 )
 
-                totals = await cursor.fetchone()
+                totals_row = await cursor.fetchone()
+                totals: Mapping[str, Any] = (
+                    dict(totals_row)
+                    if totals_row is not None
+                    else {
+                        "total_sum": 0,
+                        "materials_sum": 0,
+                        "total_orders": 0,
+                        "closed": 0,
+                        "in_work": 0,
+                        "refused": 0,
+                        "company_profit_sum": 0,
+                        "avg_check": 0,
+                        "out_of_city": 0,
+                        "reviews": 0,
+                    }
+                )
 
                 total_sum = float(totals["total_sum"] or 0)
                 materials_sum = float(totals["materials_sum"] or 0)
@@ -1320,7 +1342,7 @@ class ExcelExportService:
                     (totals["closed"] or 0) + (totals["in_work"] or 0) + (totals["refused"] or 0)
                 )
 
-                totals_data = [
+                totals_data: list[Any] = [
                     totals["total_orders"],
                     totals["closed"],
                     totals["in_work"],
@@ -1338,10 +1360,8 @@ class ExcelExportService:
 
                 for col_idx, value in enumerate(totals_data, start=3):
                     cell = ws.cell(row=row, column=col_idx, value=value)
-                    cell.font = Font(bold=True, size=11)
-                    cell.fill = PatternFill(
-                        start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                    )
+                    cell.font = ExcelStyles.BOLD_FONT
+                    cell.fill = ExcelStyles.HIGHLIGHT_FILL
                     cell.border = thin_border
 
                     if col_idx in [3, 4, 5, 6, 7, 14, 15]:
@@ -1352,7 +1372,7 @@ class ExcelExportService:
                             cell.number_format = "#,##0.00 ₽"
 
             # Ширина столбцов
-            widths = {
+            widths: dict[str, int] = {
                 "A": 12,  # ID - соответствует документации (6-12)
                 "B": 25,
                 "C": 12,
@@ -1368,8 +1388,8 @@ class ExcelExportService:
                 "M": 10,
                 "N": 10,
             }
-            for col, width in widths.items():
-                ws.column_dimensions[col].width = width
+            for col_letter, width in widths.items():
+                ws.column_dimensions[col_letter].width = width
 
             # Сохраняем файл
             wb.save(filepath)
@@ -1397,8 +1417,10 @@ class ExcelExportService:
         await self.db.connect()
 
         try:
+            connection = self._get_connection()
+
             # Получаем информацию о мастере
-            cursor = await self.db.connection.execute(
+            cursor = await connection.execute(
                 """
                 SELECT
                     m.id,
@@ -1427,7 +1449,8 @@ class ExcelExportService:
             filepath = reports_dir / f"master_{master_id}_{safe_name}.xlsx"
 
             # Получаем все заявки мастера для разделения
-            all_orders_cursor = await self.db.connection.execute(
+            connection = self._get_connection()
+            all_orders_cursor = await connection.execute(
                 """
                 SELECT
                     id, status, equipment_type, client_name, client_address, client_phone,
@@ -1458,21 +1481,14 @@ class ExcelExportService:
             # Сначала заполним лист активных заявок
             ws = ws_active
 
-            # Стили
-            header_font = Font(bold=True, size=14, color="FFFFFF")
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            subheader_fill = PatternFill(
-                start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
-            )
-            center_alignment = Alignment(horizontal="center", vertical="center")
-            left_alignment = Alignment(horizontal="left", vertical="center")
-            right_alignment = Alignment(horizontal="right", vertical="center")
-            thin_border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+            # Стили из ExcelStyles
+            header_font = ExcelStyles.HEADER_FONT
+            header_fill = ExcelStyles.HEADER_FILL
+            subheader_fill = ExcelStyles.SUBHEADER_FILL
+            center_alignment = ExcelStyles.CENTER_ALIGNMENT
+            left_alignment = ExcelStyles.LEFT_ALIGNMENT
+            right_alignment = ExcelStyles.RIGHT_ALIGNMENT
+            thin_border = ExcelStyles.THIN_BORDER
 
             # Заголовок
             row = 1
@@ -1498,7 +1514,7 @@ class ExcelExportService:
             for col in range(7, 9):  # G1:H1
                 ws.cell(row=row, column=col).fill = header_fill
 
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
             ws.merge_cells(f"A{row}:H{row}")
@@ -1506,7 +1522,7 @@ class ExcelExportService:
             cell.value = (
                 f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
             )
-            cell.font = Font(bold=True, size=10)
+            cell.font = ExcelStyles.BOLD_FONT
             cell.alignment = center_alignment
 
             row += 2
@@ -1525,8 +1541,8 @@ class ExcelExportService:
 
             for col_idx, header in enumerate(headers, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = subheader_fill
+                cell.font = ExcelStyles.TABLE_HEADER_FONT
+                cell.fill = ExcelStyles.TABLE_HEADER_FILL
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
@@ -1537,7 +1553,7 @@ class ExcelExportService:
 
             if not orders:
                 ws[f"A{row}"] = "У мастера пока нет активных заявок"
-                ws[f"A{row}"].font = Font(italic=True)
+                ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
                 ws.merge_cells(f"A{row}:H{row}")
             else:
                 # Выводим заявки
@@ -1552,6 +1568,26 @@ class ExcelExportService:
                         "REFUSED": "❌",
                     }.get(order["status"], "❓")
 
+                    # Безопасное форматирование дат
+                    created_at = ""
+                    updated_at = ""
+                    if order["created_at"]:
+                        try:
+                            dt = datetime.fromisoformat(order["created_at"])
+                            if dt.tzinfo is not None:
+                                dt = dt.replace(tzinfo=None)
+                            created_at = dt.strftime("%d.%m.%Y %H:%M")
+                        except Exception:
+                            created_at = str(order["created_at"])[:16]
+                    if order["updated_at"]:
+                        try:
+                            dt = datetime.fromisoformat(order["updated_at"])
+                            if dt.tzinfo is not None:
+                                dt = dt.replace(tzinfo=None)
+                            updated_at = dt.strftime("%d.%m.%Y %H:%M")
+                        except Exception:
+                            updated_at = str(order["updated_at"])[:16]
+
                     data = [
                         order["id"],
                         f"{status_emoji} {order['status']}",
@@ -1561,8 +1597,8 @@ class ExcelExportService:
                         if len(order["client_address"] or "") > 30
                         else (order["client_address"] or ""),
                         order["client_phone"],
-                        order["created_at"][:16] if order["created_at"] else "",
-                        order["updated_at"][:16] if order["updated_at"] else "",
+                        created_at,
+                        updated_at,
                     ]
 
                     for col_idx, value in enumerate(data, start=1):
@@ -1571,22 +1607,16 @@ class ExcelExportService:
 
                         if col_idx == 1:  # ID
                             cell.alignment = center_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx == 2:  # Статус
                             cell.alignment = center_alignment
                             # Цветовое кодирование
                             if order["status"] == "IN_PROGRESS":
-                                cell.fill = PatternFill(
-                                    start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.HIGHLIGHT_FILL
                             elif order["status"] == "CLOSED":
-                                cell.fill = PatternFill(
-                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.SUCCESS_FILL
                             elif order["status"] == "REFUSED":
-                                cell.fill = PatternFill(
-                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.ERROR_FILL
                         else:  # Текстовые поля
                             cell.alignment = left_alignment
 
@@ -1603,8 +1633,8 @@ class ExcelExportService:
                 "G": 18,  # Создана
                 "H": 18,  # Обновлена
             }
-            for col, width in widths.items():
-                ws.column_dimensions[col].width = width
+            for col_letter, width in widths.items():
+                ws.column_dimensions[col_letter].width = width
 
             # ==============================================
             # ВТОРОЙ ЛИСТ - ЗАВЕРШЕННЫЕ ЗАЯВКИ
@@ -1632,7 +1662,7 @@ class ExcelExportService:
             for col in range(7, 16):
                 ws.cell(row=row, column=col).fill = header_fill
 
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
             row += 1
             ws.merge_cells(f"A{row}:O{row}")
@@ -1640,13 +1670,13 @@ class ExcelExportService:
             cell.value = (
                 f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
             )
-            cell.font = Font(bold=True, size=10)
+            cell.font = ExcelStyles.SMALL_BOLD_FONT
             cell.alignment = center_alignment
 
             row += 2
 
             # Статистика мастера
-            stats_cursor = await self.db.connection.execute(
+            stats_cursor = await connection.execute(
                 """
                 SELECT
                     COUNT(*) as total_orders,
@@ -1662,30 +1692,44 @@ class ExcelExportService:
                 """,
                 (master_id,),
             )
-            stats = await stats_cursor.fetchone()
+            stats_row = await stats_cursor.fetchone()
+            stats: Mapping[str, Any] = (
+                dict(stats_row)
+                if stats_row is not None
+                else {
+                    "total_orders": 0,
+                    "closed": 0,
+                    "in_work": 0,
+                    "refused": 0,
+                    "total_sum": 0,
+                    "materials_sum": 0,
+                    "company_profit_sum": 0,
+                    "avg_check": 0,
+                }
+            )
 
             # Блок статистики
             ws[f"A{row}"] = "СТАТИСТИКА:"
-            ws[f"A{row}"].font = Font(bold=True, size=11)
+            ws[f"A{row}"].font = ExcelStyles.BOLD_FONT
             ws.merge_cells(f"A{row}:O{row}")
             row += 1
 
-            stat_data = [
-                ["Всего заявок:", stats["total_orders"] or 0],
-                ["Завершено:", stats["closed"] or 0],
-                ["В работе:", stats["in_work"] or 0],
-                ["Отказано:", stats["refused"] or 0],
-                ["Общая сумма:", f"{float(stats['total_sum'] or 0):,.2f} ₽"],
-                ["Материалы:", f"{float(stats['materials_sum'] or 0):,.2f} ₽"],
-                ["Сдача в кассу:", f"{float(stats['company_profit_sum'] or 0):,.2f} ₽"],
-                ["Средний чек:", f"{float(stats['avg_check'] or 0):,.2f} ₽"],
+            stat_data: list[tuple[str, Any]] = [
+                ("Всего заявок:", stats["total_orders"] or 0),
+                ("Завершено:", stats["closed"] or 0),
+                ("В работе:", stats["in_work"] or 0),
+                ("Отказано:", stats["refused"] or 0),
+                ("Общая сумма:", f"{float(stats['total_sum'] or 0):,.2f} ₽"),
+                ("Материалы:", f"{float(stats['materials_sum'] or 0):,.2f} ₽"),
+                ("Сдача в кассу:", f"{float(stats['company_profit_sum'] or 0):,.2f} ₽"),
+                ("Средний чек:", f"{float(stats['avg_check'] or 0):,.2f} ₽"),
             ]
 
             for label, value in stat_data:
                 ws[f"A{row}"] = label
-                ws[f"A{row}"].font = Font(bold=True)
+                ws[f"A{row}"].font = ExcelStyles.SIMPLE_BOLD_FONT
                 ws[f"B{row}"] = value
-                ws[f"B{row}"].font = Font(bold=True)
+                ws[f"B{row}"].font = ExcelStyles.SIMPLE_BOLD_FONT
                 ws[f"B{row}"].alignment = right_alignment
                 ws.merge_cells(f"B{row}:C{row}")
                 row += 1
@@ -1711,14 +1755,10 @@ class ExcelExportService:
                 "Причина отказа",
             ]
 
-            table_header_fill_completed = PatternFill(
-                start_color="E7E6E6", end_color="E7E6E6", fill_type="solid"
-            )
-
             for col_idx, header in enumerate(headers_completed, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = table_header_fill_completed
+                cell.font = ExcelStyles.TABLE_HEADER_FONT
+                cell.fill = ExcelStyles.TABLE_HEADER_FILL
                 cell.alignment = center_alignment
                 cell.border = thin_border
 
@@ -1727,7 +1767,7 @@ class ExcelExportService:
             # Данные завершенных заявок
             if not completed_orders:
                 ws[f"A{row}"] = "Нет завершенных заявок"
-                ws[f"A{row}"].font = Font(italic=True)
+                ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
                 ws.merge_cells(f"A{row}:O{row}")
             else:
                 for order in completed_orders:
@@ -1782,23 +1822,17 @@ class ExcelExportService:
 
                         if col_idx == 1:  # ID
                             cell.alignment = center_alignment
-                            cell.font = Font(bold=True)
+                            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                         elif col_idx == 2:  # Статус
                             cell.alignment = center_alignment
                             if order["status"] == "CLOSED":
-                                cell.fill = PatternFill(
-                                    start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.SUCCESS_FILL
                             elif order["status"] == "REFUSED":
-                                cell.fill = PatternFill(
-                                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                                )
+                                cell.fill = ExcelStyles.ERROR_FILL
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
                         elif col_idx == 15:  # Причина отказа
-                            cell.alignment = Alignment(
-                                wrap_text=True, vertical="top", horizontal="left"
-                            )
+                            cell.alignment = ExcelStyles.WRAP_TOP_ALIGNMENT
                         else:
                             cell.alignment = center_alignment if col_idx >= 13 else right_alignment
                             if col_idx >= 9 and col_idx <= 12:  # Денежные поля
@@ -1809,7 +1843,7 @@ class ExcelExportService:
                 # Итоги для завершенных
                 row += 1
                 ws[f"A{row}"] = "ИТОГО:"
-                ws[f"A{row}"].font = Font(bold=True, size=11)
+                ws[f"A{row}"].font = ExcelStyles.BOLD_FONT
                 ws.merge_cells(f"A{row}:H{row}")
 
                 # Подсчитываем суммы
@@ -1843,7 +1877,7 @@ class ExcelExportService:
                 ]:
                     cell = ws[cell_ref]
                     cell.value = val
-                    cell.font = Font(bold=True, size=11)
+                    cell.font = ExcelStyles.BOLD_FONT
                     cell.number_format = "#,##0.00 ₽"
                     cell.alignment = right_alignment
                     cell.border = thin_border
@@ -1859,7 +1893,7 @@ class ExcelExportService:
                 ws[
                     f"A{row}"
                 ] = f"Завершено: {closed_count} | Отказов: {refused_count} (с причиной: {refused_with_reason})"
-                ws[f"A{row}"].font = Font(italic=True, size=10)
+                ws[f"A{row}"].font = ExcelStyles.ITALIC_FONT
                 ws.merge_cells(f"A{row}:H{row}")
 
             # Ширина столбцов для завершенных заявок
@@ -1919,7 +1953,7 @@ class ExcelExportService:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = center_alignment
-        ws.row_dimensions[row].height = 25
+        ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
         row += 1
 
@@ -1940,7 +1974,7 @@ class ExcelExportService:
 
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=row, column=col_idx, value=header)
-            cell.font = Font(bold=True)
+            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
             cell.fill = subheader_fill
             cell.alignment = center_alignment
             cell.border = thin_border
@@ -1948,7 +1982,8 @@ class ExcelExportService:
         row += 1
 
         # Получаем все закрытые заказы за период
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 o.id, o.equipment_type, o.client_name, o.created_at, o.updated_at,
@@ -1971,7 +2006,7 @@ class ExcelExportService:
         if not orders:
             # Если нет заказов
             ws[f"A{row}"] = "Нет закрытых заказов за этот период"
-            ws[f"A{row}"].font = Font(italic=True)
+            ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
             ws.merge_cells(f"A{row}:K{row}")
         else:
             # Выводим заказы
@@ -2002,7 +2037,7 @@ class ExcelExportService:
 
                     if col_idx == 1:  # ID
                         cell.alignment = center_alignment
-                        cell.font = Font(bold=True)
+                        cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                     elif col_idx in [2, 3, 4, 5, 6, 11]:  # Текстовые поля
                         cell.alignment = left_alignment
                     else:
@@ -2015,7 +2050,7 @@ class ExcelExportService:
             # Итоги
             row += 1
             ws[f"A{row}"] = "ИТОГО:"
-            ws[f"A{row}"].font = Font(bold=True, size=11)
+            ws[f"A{row}"].font = ExcelStyles.BOLD_FONT
 
             total_sum = sum(float(o["total_amount"] or 0) for o in orders)
             total_materials = sum(float(o["materials_cost"] or 0) for o in orders)
@@ -2030,9 +2065,9 @@ class ExcelExportService:
             ]:
                 cell = ws[col]
                 cell.value = val
-                cell.font = Font(bold=True, size=11)
+                cell.font = ExcelStyles.BOLD_FONT
                 cell.number_format = "#,##0.00 ₽"
-                cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+                cell.fill = ExcelStyles.HIGHLIGHT_FILL
 
         # Ширина столбцов
         widths = {
@@ -2074,7 +2109,7 @@ class ExcelExportService:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = center_alignment
-        ws.row_dimensions[row].height = 25
+        ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
         row += 1
 
@@ -2098,7 +2133,7 @@ class ExcelExportService:
 
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=row, column=col_idx, value=header)
-            cell.font = Font(bold=True)
+            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
             cell.fill = subheader_fill
             cell.alignment = center_alignment
             cell.border = thin_border
@@ -2181,10 +2216,10 @@ class ExcelExportService:
                 # Форматирование
                 if col_idx == 1:  # ID
                     cell.alignment = center_alignment
-                    cell.font = Font(bold=True)
+                    cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                 elif col_idx == 2:  # Имя
                     cell.alignment = left_alignment
-                    cell.font = Font(bold=True)
+                    cell.font = ExcelStyles.SIMPLE_BOLD_FONT
                 elif col_idx in [3, 4, 5, 6, 13, 14]:  # Счетчики
                     cell.alignment = center_alignment
                 else:  # Денежные поля
@@ -2196,7 +2231,7 @@ class ExcelExportService:
 
         # Добавляем новую колонку "Отказов с причиной"
         ws.cell(row=2, column=15, value="Отказов с причиной")
-        ws.cell(row=2, column=15).font = Font(bold=True)
+        ws.cell(row=2, column=15).font = ExcelStyles.SIMPLE_BOLD_FONT
         ws.cell(row=2, column=15).fill = subheader_fill
         ws.cell(row=2, column=15).alignment = center_alignment
         ws.cell(row=2, column=15).border = thin_border
@@ -2226,14 +2261,13 @@ class ExcelExportService:
         # ИТОГО по всем мастерам
         row += 1
         ws[f"A{row}"] = "ИТОГО:"
-        ws[f"A{row}"].font = Font(bold=True, size=12)
-        ws[f"A{row}"].fill = PatternFill(
-            start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-        )
+        ws[f"A{row}"].font = ExcelStyles.SUBHEADER_FONT
+        ws[f"A{row}"].fill = ExcelStyles.HIGHLIGHT_FILL
         ws.merge_cells(f"A{row}:B{row}")
 
         # Суммы по всем мастерам
-        cursor = await self.db.connection.execute(
+        connection = self._get_connection()
+        cursor = await connection.execute(
             """
             SELECT
                 COUNT(*) as total_orders,
@@ -2252,7 +2286,23 @@ class ExcelExportService:
             """
         )
 
-        totals = await cursor.fetchone()
+        totals_row = await cursor.fetchone()
+        totals: Mapping[str, Any] = (
+            dict(totals_row)
+            if totals_row is not None
+            else {
+                "total_orders": 0,
+                "closed": 0,
+                "in_work": 0,
+                "refused": 0,
+                "total_sum": 0,
+                "materials_sum": 0,
+                "company_profit_sum": 0,
+                "avg_check": 0,
+                "out_of_city": 0,
+                "reviews": 0,
+            }
+        )
 
         total_sum = float(totals["total_sum"] or 0)
         materials_sum = float(totals["materials_sum"] or 0)
@@ -2275,8 +2325,8 @@ class ExcelExportService:
 
         for col_idx, value in enumerate(totals_data, start=3):
             cell = ws.cell(row=row, column=col_idx, value=value)
-            cell.font = Font(bold=True, size=11)
-            cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+            cell.font = ExcelStyles.BOLD_FONT
+            cell.fill = ExcelStyles.HIGHLIGHT_FILL
             cell.border = thin_border
 
             if col_idx in [3, 4, 5, 6, 13, 14]:  # Счетчики
@@ -2329,7 +2379,7 @@ class ExcelExportService:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = center_alignment
-        ws.row_dimensions[row].height = 25
+        ws.row_dimensions[row].height = ExcelStyles.HEADER_ROW_HEIGHT
 
         row += 1
 
@@ -2345,7 +2395,7 @@ class ExcelExportService:
 
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=row, column=col_idx, value=header)
-            cell.font = Font(bold=True)
+            cell.font = ExcelStyles.SIMPLE_BOLD_FONT
             cell.fill = subheader_fill
             cell.alignment = center_alignment
             cell.border = thin_border

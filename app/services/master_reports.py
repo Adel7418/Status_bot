@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-import aiofiles  # type: ignore[import-untyped]
+import aiofiles  # type: ignore[import-untyped, unused-ignore]
 from aiogram.types import BufferedInputFile
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -65,7 +65,9 @@ class MasterReportsService:
 
         # Фильтруем по периоду, если указан
         if period_start and period_end:
-            all_orders = [o for o in all_orders if period_start <= o.created_at <= period_end]
+            all_orders = [
+                o for o in all_orders if o.created_at and period_start <= o.created_at <= period_end
+            ]
 
         # Разделяем на активные и завершенные (включаем REFUSED в завершенные)
         active_orders = [

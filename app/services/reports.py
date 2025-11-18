@@ -47,6 +47,9 @@ class ReportsService:
         text += f"<b>Всего мастеров:</b> {len(masters)}\n\n"
 
         for master in masters:
+            if master.id is None:
+                continue
+
             orders = await self.db.get_orders_by_master(master.id, exclude_closed=False)
             total = len(orders)
             completed = len([o for o in orders if o.status == OrderStatus.CLOSED])
@@ -162,7 +165,7 @@ class ReportsService:
         # Статистика по мастерам
         by_master: dict[str, int] = {}
         for order in orders:
-            if order.assigned_master_id:
+            if order.assigned_master_id and order.master_name:
                 by_master[order.master_name] = by_master.get(order.master_name, 0) + 1
 
         if by_master:
@@ -256,6 +259,9 @@ class ReportsService:
         masters = await self.db.get_all_masters(only_approved=True)
 
         for master in masters:
+            if master.id is None:
+                continue
+
             orders = await self.db.get_orders_by_master(master.id, exclude_closed=False)
             total = len(orders)
             completed = len([o for o in orders if o.status == OrderStatus.CLOSED])
@@ -387,7 +393,9 @@ class ReportsService:
                 o for o in all_orders if o.created_at and start_date <= o.created_at <= end_date
             ]
         else:
-            orders = all_orders
+            # mypy: get_all_orders() может вернуть список ORM или legacy Order;
+            # для целей экспорта достаточно принять любой вариант.
+            orders = all_orders  # type: ignore[assignment]
 
         for order in orders:
             ws.append(

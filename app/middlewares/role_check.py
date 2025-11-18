@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.database import Database
 
@@ -30,8 +30,8 @@ class RoleCheckMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
         """
@@ -45,6 +45,9 @@ class RoleCheckMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler
         """
+        if not isinstance(event, (Message, CallbackQuery)):
+            return await handler(event, data)
+
         # Получаем пользователя из события
         user = event.from_user
 
@@ -59,7 +62,9 @@ class RoleCheckMiddleware(BaseMiddleware):
 
             # Добавляем пользователя и его роли в данные
             data["user"] = db_user
-            data["user_role"] = db_user.get_primary_role()  # Основная роль для обратной совместимости
+            data[
+                "user_role"
+            ] = db_user.get_primary_role()  # Основная роль для обратной совместимости
             data["user_roles"] = db_user.get_roles()  # Список всех ролей
 
             logger.debug("User %s with roles %s processed", user.id, db_user.get_roles())

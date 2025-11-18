@@ -389,6 +389,8 @@ class OrderRepository(BaseRepository[Order]):
         Returns:
             Объект Order
         """
+        row_dict = dict(row)
+
         return Order(
             id=row["id"],
             equipment_type=row["equipment_type"],
@@ -442,17 +444,13 @@ class OrderRepository(BaseRepository[Order]):
                 if "prepayment_amount" in row and row["prepayment_amount"] is not None
                 else None
             ),
-            rescheduled_count=(
-                row.get("rescheduled_count", 0)
-            ),
+            rescheduled_count=row_dict.get("rescheduled_count", 0),
             last_rescheduled_at=(
-                datetime.fromisoformat(row["last_rescheduled_at"]).replace(tzinfo=MOSCOW_TZ)
-                if row.get("last_rescheduled_at")
+                datetime.fromisoformat(row_dict["last_rescheduled_at"]).replace(tzinfo=MOSCOW_TZ)
+                if row_dict.get("last_rescheduled_at")
                 else None
             ),
-            reschedule_reason=(
-                row.get("reschedule_reason", None)
-            ),
+            reschedule_reason=row_dict.get("reschedule_reason"),
             created_at=(
                 datetime.fromisoformat(row["created_at"]).replace(tzinfo=MOSCOW_TZ)
                 if row["created_at"]
@@ -463,6 +461,6 @@ class OrderRepository(BaseRepository[Order]):
                 if row["updated_at"]
                 else None
             ),
-            dispatcher_name=(row.get("dispatcher_name", None)),
-            master_name=(row.get("master_name", None)),
+            dispatcher_name=row_dict.get("dispatcher_name"),
+            master_name=row_dict.get("master_name"),
         )

@@ -30,15 +30,25 @@ else:
     DatabaseType = Database
 
 
-def get_database() -> "DatabaseType":
-    """
-    Фабрика для получения экземпляра БД.
+if TYPE_CHECKING:
 
-    Используйте эту функцию вместо прямого вызова `Database()`
-    в хэндлерах и сервисах.
-    """
+    def get_database() -> DatabaseType:
+        """
+        Фабрика для получения экземпляра БД (типовая сигнатура для mypy).
+        Реальная логика выбора реализации скрыта от type checker.
+        """
+        ...
+else:
 
-    return Database()
+    def get_database() -> "DatabaseType":
+        """
+        Фабрика для получения экземпляра БД.
+
+        Используйте эту функцию вместо прямого вызова `Database()`
+        в хэндлерах и сервисах.
+        """
+
+        return Database()
 
 
 __all__ = ["Database", "DatabaseType", "get_database"]

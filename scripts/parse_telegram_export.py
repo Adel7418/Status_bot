@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import Database
+from app.database import get_database
 
 
 def parse_new_order_message(text: str) -> dict | None:
@@ -218,11 +218,11 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
 
         # Пробуем парсить как "Новая заявка"
         order_data = parse_new_order_message(text)
-        
+
         # Если не получилось, пробуем как подтверждение
         if not order_data:
             order_data = parse_order_confirmation(text)
-        
+
         if order_data:
             # Дата создания
             date_str = msg.get("date", "")
@@ -234,7 +234,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
 
             # Проверяем, есть ли номер в самих данных заявки
             order_number = order_data.get("order_number")
-            
+
             # Если нет, ищем в следующих сообщениях
             if not order_number:
                 for next_msg in messages[i+1:i+5]:  # Смотрим следующие 5 сообщений
@@ -287,7 +287,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
         return
 
     # Восстанавливаем заявки
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -359,4 +359,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

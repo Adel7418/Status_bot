@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.utils.pii_masking import mask_username
 
@@ -41,8 +41,8 @@ class LoggingMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
         """
@@ -56,12 +56,18 @@ class LoggingMiddleware(BaseMiddleware):
         Returns:
             Результат выполнения handler
         """
+        # Обрабатываем только Message/CallbackQuery; прочие события просто прокидываем дальше
+        if not isinstance(event, (Message, CallbackQuery)):
+            return await handler(event, data)
+
         # Получаем пользователя (GDPR: маскируем username)
         user = event.from_user
-        user_info = f"{user.id}"
-        if user.username:
-            masked_username = mask_username(user.username)
-            user_info += f" (@{masked_username})"
+        user_info = "unknown"
+        if user:
+            user_info = f"{user.id}"
+            if user.username:
+                masked_username = mask_username(user.username)
+                user_info += f" (@{masked_username})"
 
         # Стартуем таймер
         start_time = time.time()
@@ -88,7 +94,7 @@ class LoggingMiddleware(BaseMiddleware):
                 text_preview = "[other media]"
 
             # Логируем текст с безопасной обработкой Unicode
-            safe_text = text_preview.encode('ascii', 'replace').decode('ascii')
+            safe_text = text_preview.encode("ascii", "replace").decode("ascii")
             logger.log(
                 self.log_level,
                 f"[MSG] Message from {user_info} in {chat_type}: {safe_text}",

@@ -5,8 +5,9 @@
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import TypedDict
 
-import dateparser  # type: ignore[import-untyped]
+import dateparser  # type: ignore[import-untyped, unused-ignore]
 
 from app.utils.helpers import MOSCOW_TZ, get_now
 
@@ -68,8 +69,8 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
     # Также обработка с датой: "завтра после 15"
     day_after_pattern = r"^(завтра|сегодня)\s+после\s+(\d{1,2})(?::(\d{2}))?$"
 
-    if re.match(day_after_pattern, text_lower):
-        match = re.match(day_after_pattern, text_lower)
+    match = re.match(day_after_pattern, text_lower)
+    if match:
         day_keyword = match.group(1)
         hour = int(match.group(2))
         minute_str = match.group(3)
@@ -78,8 +79,9 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
         # Возвращаем "завтра в 16:00" или "сегодня в 16:00"
         return f"{day_keyword} в {hour:02d}:{minute:02d}"
 
-    if re.match(after_time_pattern, text_lower):
-        time_part = re.match(after_time_pattern, text_lower).group(1)
+    match = re.match(after_time_pattern, text_lower)
+    if match:
+        time_part = match.group(1)
         # Преобразуем "после 16:00" в интервал "с 16:00 до 17:00" (+1 час)
         try:
             time_parts = time_part.split(":")
@@ -99,8 +101,8 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
             return f"после {time_part}"
 
     # Обработка "после 15" без двоеточия
-    if re.match(after_time_simple, text_lower):
-        match = re.match(after_time_simple, text_lower)
+    match = re.match(after_time_simple, text_lower)
+    if match:
         hour = int(match.group(1))
 
         # Преобразуем "после 15" в "сегодня в 16:00" или "завтра в 16:00" (+1 час)
@@ -129,9 +131,9 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
     # Обработка фразы "В" + время (например, "В 17:00", "В 12")
     # Проверяем оба регистра: кириллица "В" и латиница "B"
     at_time_pattern = r"^[вВbB]\s+(\d{1,2})(?::(\d{2}))?$"
-    if re.match(at_time_pattern, text_lower):
+    match = re.match(at_time_pattern, text_lower)
+    if match:
         try:
-            match = re.match(at_time_pattern, text_lower)
             hour = int(match.group(1))
             minute_str = match.group(2)
             minute = int(minute_str) if minute_str else 0
@@ -197,8 +199,8 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
 
     # Обработка интервалов времени с датой: "завтра с 12", "сегодня с 18"
     day_start_pattern = r"^(завтра|сегодня)\s+с\s+(\d{1,2})(?::(\d{2}))?$"
-    if re.match(day_start_pattern, text_lower):
-        match = re.match(day_start_pattern, text_lower)
+    match = re.match(day_start_pattern, text_lower)
+    if match:
         day_keyword = match.group(1)
         hour = int(match.group(2))
         minute_str = match.group(3)
@@ -208,8 +210,8 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
 
     # Обработка интервалов с датой и "до": "завтра до 16", "сегодня до 18"
     day_until_pattern = r"^(завтра|сегодня)\s+до\s+(\d{1,2})(?::(\d{2}))?$"
-    if re.match(day_until_pattern, text_lower):
-        match = re.match(day_until_pattern, text_lower)
+    match = re.match(day_until_pattern, text_lower)
+    if match:
         day_keyword = match.group(1)
         end_hour = int(match.group(2))
         end_minute_str = match.group(3)
@@ -219,33 +221,33 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
         # Определяем начало интервала с учетом рабочего времени (8:00-22:00)
         if day_keyword == "завтра":
             # Для завтра начало интервала - начало рабочего дня (8:00)
-            start_time = "08:00"
+            start_time_str = "08:00"
         else:
             # Для сегодня начало интервала - текущее время или 8:00, если сейчас нерабочее время
             current_hour = now.hour
             current_minute = now.minute
             # Если текущее время в нерабочее время (22:00-8:00), начинаем с 8:00
             if current_hour >= 22 or current_hour < 8:
-                start_time = "08:00"
+                start_time_str = "08:00"
             else:
-                start_time = f"{current_hour:02d}:{current_minute:02d}"
+                start_time_str = f"{current_hour:02d}:{current_minute:02d}"
 
         # Возвращаем интервал "с X до Y" для завтрашнего дня или сегодняшнего
-        return f"{day_keyword} с {start_time} до {end_hour:02d}:{end_minute:02d}"
+        return f"{day_keyword} с {start_time_str} до {end_hour:02d}:{end_minute:02d}"
 
     # Обработка интервалов времени (например, "с 10:00 до 16:00", "10-16", "с 14 до 18")
     interval_pattern = r"^с\s+(\d{1,2})(?::\d{2})?\s+до\s+(\d{1,2})(?::\d{2})?$"
     interval_simple = r"^(\d{1,2})(?:-\s*|\s+до\s+)(\d{1,2})$"
 
-    if re.match(interval_pattern, text_lower):
-        match = re.match(interval_pattern, text_lower)
+    match = re.match(interval_pattern, text_lower)
+    if match:
         start_hour = int(match.group(1))
         end_hour = int(match.group(2))
         # Возвращаем интервал как есть, чтобы parse_natural_datetime обработал его
         return text  # Возвращаем оригинал
 
-    if re.match(interval_simple, text_lower):
-        match = re.match(interval_simple, text_lower)
+    match = re.match(interval_simple, text_lower)
+    if match:
         start_hour = int(match.group(1))
         end_hour = int(match.group(2))
         # Преобразуем "10-16" в "с 10 до 16" (формат понятный dateparser)
@@ -341,7 +343,13 @@ def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
     return text_lower
 
 
-def validate_parsed_datetime(dt: datetime, original_text: str) -> dict[str, str | bool]:
+class ParsedDateValidation(TypedDict):
+    is_valid: bool
+    error: str | None
+    warning: str | None
+
+
+def validate_parsed_datetime(dt: datetime, original_text: str) -> ParsedDateValidation:
     """
     Валидация распарсенной даты/времени
 
@@ -443,22 +451,21 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     day_interval_simple = r"^(завтра|сегодня)\s+с\s+(\d{1,2})(?::(\d{2}))?\s+до\s+(\d{1,2})(?::(\d{2}))?$"  # "завтра с 14 до 18"
 
     # Сначала проверяем формат с двоеточием в начале
-    if re.match(day_interval_with_colon, text_lower):
-        match = re.match(day_interval_with_colon, text_lower)
+    match = re.match(day_interval_with_colon, text_lower)
+    if match:
         day_keyword = match.group(1)
         start_hour = int(match.group(2))
         start_minute = int(match.group(3))
         end_hour = int(match.group(4))
         end_minute = int(match.group(5)) if match.group(5) else 0
-    elif re.match(day_interval_simple, text_lower):
-        match = re.match(day_interval_simple, text_lower)
-        day_keyword = match.group(1)
-        start_hour = int(match.group(2))
-        start_minute = int(match.group(3)) if match.group(3) else 0
-        end_hour = int(match.group(4))
-        end_minute = int(match.group(5)) if match.group(5) else 0
     else:
-        match = None
+        match = re.match(day_interval_simple, text_lower)
+        if match:
+            day_keyword = match.group(1)
+            start_hour = int(match.group(2))
+            start_minute = int(match.group(3)) if match.group(3) else 0
+            end_hour = int(match.group(4))
+            end_minute = int(match.group(5)) if match.group(5) else 0
 
     if match:
         # Определяем базовую дату
@@ -475,8 +482,8 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         return target_time, user_friendly
 
     # Обработка "с 12" (начало интервала без конца)
-    if re.match(interval_start_only, text_lower):
-        match = re.match(interval_start_only, text_lower)
+    match = re.match(interval_start_only, text_lower)
+    if match:
         start_hour = int(match.group(1))
         start_minute = int(match.group(2)) if match.group(2) else 0
 
@@ -489,8 +496,8 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         user_friendly = f"с {start_hour:02d}:{start_minute:02d}"
         return target_time, user_friendly
 
-    if re.match(interval_pattern, text_lower):
-        match = re.match(interval_pattern, text_lower)
+    match = re.match(interval_pattern, text_lower)
+    if match:
         start_hour = int(match.group(1))
         start_minute = int(match.group(2)) if match.group(2) else 0
         end_hour = int(match.group(3))
@@ -505,8 +512,8 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         user_friendly = f"с {start_hour:02d}:{start_minute:02d} до {end_hour:02d}:{end_minute:02d}"
         return target_time, user_friendly
 
-    if re.match(interval_simple, text_lower):
-        match = re.match(interval_simple, text_lower)
+    match = re.match(interval_simple, text_lower)
+    if match:
         start_hour = int(match.group(1))
         end_hour = int(match.group(2))
         now = get_now().replace(tzinfo=MOSCOW_TZ)
@@ -664,9 +671,9 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
     short_year_pattern = r"(\d{1,2})\.(\d{1,2})\.(\d{2})$"
     match = re.match(short_year_pattern, text)
     if match:
-        day, month, year = match.groups()
+        day_str, month_str, year_str = match.groups()
         # Проверяем, что год в разумных пределах (00-99)
-        year_int = int(year)
+        year_int = int(year_str)
         current_year = get_now().year
 
         # Определяем полный год
@@ -684,7 +691,7 @@ def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime |
         if full_year > current_year + 1:
             full_year = 2000 + year_int
 
-        text = f"{day}.{month}.{full_year}"
+        text = f"{day_str}.{month_str}.{full_year}"
         logger.debug(f"Исправлена короткая дата '{original_text}' -> '{text}'")
 
     # Предобработка уже выполнена выше (строка 353), используем текущий текст

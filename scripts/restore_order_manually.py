@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import Database
+from app.database import get_database
 
 
 async def restore_order(
@@ -36,7 +36,7 @@ async def restore_order(
         created_at: Дата создания (опционально)
         notes: Примечания (опционально)
     """
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:

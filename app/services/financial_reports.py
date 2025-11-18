@@ -4,11 +4,15 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.database.db import Database
+from app.database import DatabaseType, get_database
 from app.database.models import FinancialReport, MasterFinancialReport, Order
 from app.utils.helpers import get_now
+
+
+if TYPE_CHECKING:
+    from app.database.db import Database as LegacyDatabase
 
 
 logger = logging.getLogger(__name__)
@@ -17,8 +21,19 @@ logger = logging.getLogger(__name__)
 class FinancialReportsService:
     """Сервис для работы с финансовыми отчетами"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
+
+    def _get_legacy_db(self) -> "LegacyDatabase":
+        """
+        Получить legacy-реализацию БД для финансовых отчетов.
+        """
+        from app.database.db import Database as LegacyDatabaseRuntime
+
+        if not isinstance(self.db, LegacyDatabaseRuntime):
+            raise RuntimeError("FinancialReportsService поддерживает только legacy Database")
+
+        return self.db
 
     async def generate_daily_report(self, date: datetime) -> FinancialReport:
         """
@@ -101,8 +116,10 @@ class FinancialReportsService:
         await self.db.connect()
 
         try:
+            legacy_db = self._get_legacy_db()
+
             # Получаем все завершенные заказы за период
-            orders = await self.db.get_orders_by_period(period_start, period_end, status="CLOSED")
+            orders = await legacy_db.get_orders_by_period(period_start, period_end, status="CLOSED")
 
             if not orders:
                 # Создаем пустой отчет
@@ -112,7 +129,8 @@ class FinancialReportsService:
                     period_end=period_end,
                     created_at=get_now(),
                 )
-                report.id = await self.db.create_financial_report(report)
+                legacy_db = self._get_legacy_db()
+                report.id = await legacy_db.create_financial_report(report)
                 return report
 
             # Подсчитываем общие показатели
@@ -139,8 +157,8 @@ class FinancialReportsService:
                 created_at=get_now(),
             )
 
-            # Сохраняем отчет в базу
-            report.id = await self.db.create_financial_report(report)
+            # Сохраняем отчет в базу (legacy)
+            report.id = await legacy_db.create_financial_report(report)
 
             # Генерируем отчеты по мастерам
             await self._generate_master_reports(report.id, orders)
@@ -169,7 +187,8 @@ class FinancialReportsService:
         # Создаем отчеты для каждого мастера
         for master_id, master_orders in masters_orders.items():
             # Получаем информацию о мастере
-            master = await self.db.get_master_by_id(master_id)
+            legacy_db = self._get_legacy_db()
+            master = await legacy_db.get_master_by_id(master_id)
             if not master:
                 continue
 
@@ -200,7 +219,7 @@ class FinancialReportsService:
                 out_of_city_count=out_of_city_count,
             )
 
-            await self.db.create_master_financial_report(master_report)
+            await legacy_db.create_master_financial_report(master_report)
 
     async def get_report_summary(self, report_id: int) -> dict[str, Any]:
         """
@@ -215,11 +234,13 @@ class FinancialReportsService:
         await self.db.connect()
 
         try:
-            report = await self.db.get_financial_report_by_id(report_id)
+            legacy_db = self._get_legacy_db()
+
+            report = await legacy_db.get_financial_report_by_id(report_id)
             if not report:
                 return {}
 
-            master_reports = await self.db.get_master_reports_by_report_id(report_id)
+            master_reports = await legacy_db.get_master_reports_by_report_id(report_id)
 
             return {
                 "report": report,
@@ -285,7 +306,8 @@ class FinancialReportsService:
         # Статистика по типам техники
         await self.db.connect()
         try:
-            orders = await self.db.get_orders_by_period(
+            legacy_db = self._get_legacy_db()
+            orders = await legacy_db.get_orders_by_period(
                 report.period_start, report.period_end, status="CLOSED"
             )
             if orders:

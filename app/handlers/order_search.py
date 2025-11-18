@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.config import UserRole
-from app.database import Database
+from app.database import get_database
 from app.decorators import handle_errors, require_role
 from app.keyboards.inline import get_search_type_keyboard
 from app.keyboards.reply import get_cancel_keyboard
@@ -61,14 +61,19 @@ async def callback_search_by_phone(callback: CallbackQuery, state: FSMContext, u
     await callback.answer()
     await state.set_state(SearchOrderStates.enter_phone)
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    await message.edit_text(
         "📞 <b>Поиск по номеру телефона</b>\n\n"
         "Введите номер телефона клиента:\n"
         "<i>(в формате +7XXXXXXXXXX, 8XXXXXXXXXX или XXXXXXXXXX)</i>",
         parse_mode="HTML",
     )
 
-    await callback.message.answer(
+    await message.answer(
         "Введите номер телефона:",
         reply_markup=get_cancel_keyboard(),
     )
@@ -89,14 +94,19 @@ async def callback_search_by_address(callback: CallbackQuery, state: FSMContext,
     await callback.answer()
     await state.set_state(SearchOrderStates.enter_address)
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    await message.edit_text(
         "🏠 <b>Поиск по адресу</b>\n\n"
         "Введите адрес клиента:\n"
         "<i>(можно ввести часть адреса)</i>",
         parse_mode="HTML",
     )
 
-    await callback.message.answer(
+    await message.answer(
         "Введите адрес:",
         reply_markup=get_cancel_keyboard(),
     )
@@ -119,12 +129,17 @@ async def callback_search_by_phone_and_address(
     await callback.answer()
     await state.set_state(SearchOrderStates.enter_phone_and_address)
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    await message.edit_text(
         "📞🏠 <b>Поиск по телефону и адресу</b>\n\n" "Введите номер телефона и адрес клиента:",
         parse_mode="HTML",
     )
 
-    await callback.message.answer(
+    await message.answer(
         "Введите номер телефона:",
         reply_markup=get_cancel_keyboard(),
     )
@@ -143,7 +158,11 @@ async def callback_search_cancel(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.clear()
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        return
+
+    await message.edit_text(
         "❌ Поиск отменен.",
     )
 
@@ -160,7 +179,7 @@ async def process_search_phone(message: Message, state: FSMContext, user_role: s
         state: FSM контекст
         user_role: Роль пользователя
     """
-    phone = message.text.strip()
+    phone = (message.text or "").strip()
 
     # Валидация телефона
     if not validate_phone(phone):
@@ -182,7 +201,7 @@ async def process_search_phone(message: Message, state: FSMContext, user_role: s
         normalized_phone = "7" + normalized_phone
 
     # Выполняем поиск
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -223,7 +242,7 @@ async def process_search_address(message: Message, state: FSMContext, user_role:
         state: FSM контекст
         user_role: Роль пользователя
     """
-    address = message.text.strip()
+    address = (message.text or "").strip()
 
     if len(address) < 3:
         await message.answer(
@@ -233,7 +252,7 @@ async def process_search_address(message: Message, state: FSMContext, user_role:
         return
 
     # Выполняем поиск
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -278,7 +297,7 @@ async def process_search_phone_and_address(message: Message, state: FSMContext, 
 
     if "phone" not in data:
         # Первый ввод - телефон
-        phone = message.text.strip()
+        phone = (message.text or "").strip()
 
         # Валидация телефона
         if not validate_phone(phone):
@@ -308,7 +327,7 @@ async def process_search_phone_and_address(message: Message, state: FSMContext, 
         return
 
     # Второй ввод - адрес
-    address = message.text.strip()
+    address = (message.text or "").strip()
 
     if len(address) < 3:
         await message.answer(
@@ -320,7 +339,7 @@ async def process_search_phone_and_address(message: Message, state: FSMContext, 
     phone = data["phone"]
 
     # Выполняем поиск
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:

@@ -16,7 +16,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 
 from app.config import Config
-from app.database import Database
+from app.database import Database, get_database
 from app.handlers import routers
 from app.middlewares import (
     DependencyInjectionMiddleware,
@@ -203,7 +203,7 @@ async def main():
         logger.info(f"   DATABASE_PATH: {Config.DATABASE_PATH}")
         logger.info("=" * 60)
 
-        db = Database()
+        db = get_database()
         await db.connect()
 
         # ВАЖНО: Инициализируем БД ДО подключения middleware

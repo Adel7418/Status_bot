@@ -22,7 +22,7 @@ from pathlib import Path
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import Database
+from app.database import get_database
 from app.handlers.master import router as master_router
 
 logging.basicConfig(
@@ -107,8 +107,8 @@ async def test_di_injection():
     logger.info("=" * 60)
 
     try:
-        # Проверяем, что Database можно создать
-        db = Database()
+        # Проверяем, что экземпляр БД можно получить через фабрику
+        db = get_database()
         await db.connect()
 
         logger.info("✅ Database создан успешно")
@@ -187,11 +187,11 @@ def print_statistics(stats: dict):
     """
     import sys
     import io
-    
+
     # Устанавливаем UTF-8 для вывода
     if sys.stdout.encoding != 'utf-8':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    
+
     print("\n" + "=" * 60)
     print("СТАТИСТИКА РАБОТЫ HANDLERS")
     print("=" * 60)
@@ -230,11 +230,11 @@ async def main():
     """Главная функция"""
     import sys
     import io
-    
+
     # Устанавливаем UTF-8 для вывода
     if sys.stdout.encoding != 'utf-8':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    
+
     print("\n" + "=" * 60)
     print("ТЕСТИРОВАНИЕ HANDLERS В РЕАЛЬНЫХ УСЛОВИЯХ")
     print("=" * 60)
@@ -281,4 +281,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

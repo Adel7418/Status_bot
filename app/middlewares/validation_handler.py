@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.domain.order_state_machine import InvalidStateTransitionError
 
@@ -20,8 +20,8 @@ class ValidationHandlerMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
         """
@@ -38,37 +38,46 @@ class ValidationHandlerMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except InvalidStateTransitionError as e:
-            # Логируем ошибку
-            logger.warning(
-                f"State transition validation error: {e} "
-                f"(user: {event.from_user.id}, event: {type(event).__name__})"
-            )
+            # Обрабатываем только события, у которых есть пользователь и понятный контекст
+            if isinstance(event, (Message, CallbackQuery)):
+                user = event.from_user
+                user_id: int | str = user.id if user else "unknown"
 
-            # Формируем user-friendly сообщение
-            error_message = (
-                f"❌ <b>Недопустимое действие</b>\n\n"
-                f"{e!s}\n\n"
-                f"<i>Проверьте текущий статус заявки и попробуйте снова.</i>"
-            )
-
-            # Отправляем сообщение пользователю
-            if isinstance(event, CallbackQuery):
-                # Для callback query - показываем alert
-                await event.answer(
-                    f"❌ Недопустимое действие: {e.reason if e.reason else str(e)}",
-                    show_alert=True,
+                logger.warning(
+                    "State transition validation error: %s (user: %s, event: %s)",
+                    e,
+                    user_id,
+                    type(event).__name__,
                 )
-                # И обновляем сообщение
-                try:
-                    await event.message.edit_text(
-                        error_message,
-                        parse_mode="HTML",
+
+                error_message = (
+                    "❌ <b>Недопустимое действие</b>\n\n"
+                    f"{e!s}\n\n"
+                    "<i>Проверьте текущий статус заявки и попробуйте снова.</i>"
+                )
+
+                if isinstance(event, CallbackQuery):
+                    await event.answer(
+                        f"❌ Недопустимое действие: {e.reason if e.reason else str(e)}",
+                        show_alert=True,
                     )
-                except Exception as edit_error:
-                    logger.error(f"Failed to edit message: {edit_error}")
+                    message = event.message
+                    if isinstance(message, Message):
+                        try:
+                            await message.edit_text(
+                                error_message,
+                                parse_mode="HTML",
+                            )
+                        except Exception as edit_error:
+                            logger.error("Failed to edit message: %s", edit_error)
+                elif isinstance(event, Message):
+                    await event.answer(error_message, parse_mode="HTML")
             else:
-                # Для обычного сообщения - просто отвечаем
-                await event.answer(error_message, parse_mode="HTML")
+                logger.warning(
+                    "InvalidStateTransitionError outside Message/CallbackQuery: %s (event=%s)",
+                    e,
+                    type(event).__name__,
+                )
 
             # Не пробрасываем исключение дальше - обработали
             return None

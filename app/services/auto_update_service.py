@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app.database import Database
+from app.database import DatabaseType, get_database
 from app.services.excel_export import ExcelExportService
 
 
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class AutoUpdateService:
     """Сервис для автоматического обновления отчетов"""
 
-    def __init__(self):
-        self.db = Database()
+    def __init__(self) -> None:
+        self.db: DatabaseType = get_database()
         self.excel_service = ExcelExportService()
 
     async def update_all_reports(self) -> dict[str, Any]:
@@ -28,7 +28,7 @@ class AutoUpdateService:
         Returns:
             Словарь с результатами обновления
         """
-        results = {
+        results: dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "updated_reports": [],
             "errors": [],
@@ -91,9 +91,8 @@ class AutoUpdateService:
 
             if masters:
                 # Создаем детализированный отчет
-                await self.excel_service.export_master_orders_to_excel(
-                    master_id=None
-                )  # Все мастера
+                # Экспортируем все заявки по мастерам (режим "все мастера" поддерживается внутри ExcelExportService)
+                await self.excel_service.export_master_orders_to_excel(master_id=0)
                 logger.info("Детализированный отчет по мастерам обновлен")
 
         except Exception as e:
@@ -110,7 +109,7 @@ class AutoUpdateService:
             Словарь со статусом отчетов
         """
         reports_dir = Path("reports")
-        status = {"timestamp": datetime.now().isoformat(), "reports": {}}
+        status: dict[str, Any] = {"timestamp": datetime.now().isoformat(), "reports": {}}
 
         # Проверяем существование файлов отчетов
         report_files = {
@@ -152,7 +151,7 @@ class AutoUpdateService:
         Returns:
             Словарь с результатами очистки
         """
-        results = {
+        results: dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "deleted_files": [],
             "errors": [],

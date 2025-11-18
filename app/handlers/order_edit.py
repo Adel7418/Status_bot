@@ -7,7 +7,7 @@ import re
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message, ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pydantic import ValidationError
 
@@ -167,7 +167,12 @@ async def callback_edit_order(
         user_role: Роль пользователя
         db: Database instance (injected)
     """
-    order_id = int(callback.data.split(":")[1])
+    data_cb = callback.data or ""
+    parts = data_cb.split(":")
+    if len(parts) < 2:
+        await callback.answer("Некорректный формат callback данных", show_alert=True)
+        return
+    order_id = int(parts[1])
 
     order = await db.get_order_by_id(order_id)
 
@@ -208,7 +213,12 @@ async def callback_edit_order(
         )
     )
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    await message.edit_text(
         f"✏️ <b>Редактирование заявки #{order_id}</b>\n\n" f"Выберите поле для редактирования:",
         parse_mode="HTML",
         reply_markup=builder.as_markup(),
@@ -231,7 +241,12 @@ async def callback_select_field(
         user_role: Роль пользователя
         db: Database instance (injected)
     """
-    field = callback.data.split(":")[1]
+    data_cb = callback.data or ""
+    parts = data_cb.split(":")
+    if len(parts) < 2:
+        await callback.answer("Некорректный формат callback данных", show_alert=True)
+        return
+    field = parts[1]
     data = await state.get_data()
     order_id = data.get("order_id")
 
@@ -301,12 +316,17 @@ async def callback_select_field(
     elif field == "scheduled_time":
         prompt += "<i>Для очистки введите '-'</i>"
 
-    await callback.message.edit_text(
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Сообщение недоступно", show_alert=True)
+        return
+
+    await message.edit_text(
         prompt,
         parse_mode="HTML",
     )
 
-    await callback.message.answer(
+    await message.answer(
         "Для отмены нажмите кнопку ниже:",
         reply_markup=get_cancel_keyboard(),
     )
@@ -325,7 +345,7 @@ async def cancel_edit(message: Message, state: FSMContext):
     if order_id:
         await message.answer(
             "❌ Редактирование отменено",
-            reply_markup={"remove_keyboard": True},
+            reply_markup=ReplyKeyboardRemove(),
         )
         # Можно вернуть к просмотру заявки
         # TODO: показать клавиатуру с заявкой
@@ -341,10 +361,15 @@ async def callback_cancel_edit(callback: CallbackQuery, state: FSMContext):
     order_id = data.get("order_id")
     await state.clear()
 
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer()
+        return
+
     if order_id:
-        await callback.message.edit_text("❌ Редактирование отменено", reply_markup=None)
+        await message.edit_text("❌ Редактирование отменено", reply_markup=None)
     else:
-        await callback.message.edit_text("Редактирование отменено")
+        await message.edit_text("Редактирование отменено")
 
     await callback.answer()
 
@@ -353,7 +378,7 @@ async def callback_cancel_edit(callback: CallbackQuery, state: FSMContext):
 @handle_errors
 async def process_new_value(message: Message, state: FSMContext, user_role: str, db: Database):
     """
-    Обработка нового значения поля
+    Обработка нового значения поля.
 
     Args:
         message: Сообщение
@@ -370,7 +395,7 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str,
         await state.clear()
         return
 
-    new_value = message.text.strip()
+    new_value: str | None = (message.text or "").strip()
 
     # Специальная обработка для очистки поля
     if new_value == "-" and field in ["notes", "scheduled_time", "estimated_completion_date"]:
@@ -408,24 +433,17 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str,
     # Сохраняем старое значение для лога
     old_value = getattr(order, field, None)
 
-    # Обновляем поле
-    if hasattr(db, "update_order_field"):
-        # ORM метод
-        await db.update_order_field(order_id, field, new_value)
-    else:
-        # Прямой SQL
-        await db.connection.execute(
-            f"UPDATE orders SET {field} = ? WHERE id = ?",  # nosec B608
-            (new_value, order_id),
-        )
-        await db.connection.commit()
+    # Обновляем поле (и ORMDatabase, и Database имеют метод update_order_field)
+    await db.update_order_field(order_id, field, new_value)
 
     # Логируем изменение
-    await db.add_audit_log(
-        user_id=message.from_user.id,
-        action="EDIT_ORDER",
-        details=f"Order #{order_id}: {field} changed from '{old_value}' to '{new_value}'",
-    )
+    user = message.from_user
+    if user:
+        await db.add_audit_log(
+            user_id=user.id,
+            action="EDIT_ORDER",
+            details=f"Order #{order_id}: {field} changed from '{old_value}' to '{new_value}'",
+        )
 
     field_name = EDITABLE_FIELDS.get(field, field)
 
@@ -435,10 +453,11 @@ async def process_new_value(message: Message, state: FSMContext, user_role: str,
         f"<b>Старое значение:</b> {escape_html(str(old_value)) if old_value else 'Не указано'}\n"
         f"<b>Новое значение:</b> {escape_html(str(new_value)) if new_value else 'Не указано'}",
         parse_mode="HTML",
-        reply_markup={"remove_keyboard": True},
+        reply_markup=ReplyKeyboardRemove(),
     )
 
-    log_action(message.from_user.id, "EDIT_ORDER", f"Order #{order_id}, field: {field}")
+    if user:
+        log_action(user.id, "EDIT_ORDER", f"Order #{order_id}, field: {field}")
 
     await state.clear()
 

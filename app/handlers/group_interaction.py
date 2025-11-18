@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.config import OrderStatus
-from app.database import Database
+from app.database import get_database
 from app.filters import IsGroupChat, IsMasterInGroup
 from app.keyboards.inline import get_group_order_keyboard
 from app.presenters import OrderPresenter
@@ -43,7 +43,13 @@ async def check_master_work_group(master, callback: CallbackQuery) -> bool:
         return False
 
     # Проверяем, что действие выполняется в правильной группе
-    if callback.message.chat.id != master.work_chat_id:
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer(
+            "❌ Это действие доступно только из сообщения в чате", show_alert=True
+        )
+        return False
+    if message.chat.id != master.work_chat_id:
         await callback.answer(
             "❌ Вы можете работать только в своей рабочей группе!", show_alert=True
         )
@@ -61,9 +67,24 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         callback: Callback query
         user_roles: Список ролей пользователя
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -79,11 +100,11 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
             # Находим мастера по ID группы
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 logger.warning(
-                    f"Admin {callback.from_user.id} tried to accept order in group {callback.message.chat.id} without master"
+                    f"Admin {user.id} tried to accept order in group {message_obj.chat.id} without master"
                 )
                 await callback.answer(
                     "❌ В этой группе не настроена работа для мастера", show_alert=True
@@ -91,11 +112,11 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
                 return
 
             logger.info(
-                f"Admin {callback.from_user.id} acting as master {master.telegram_id} in group {callback.message.chat.id}"
+                f"Admin {user.id} acting as master {master.telegram_id} in group {message_obj.chat.id}"
             )
         else:
             # Обычная проверка для мастера
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
 
             if not master:
                 logger.warning(f"User {callback.from_user.id} is not a master")
@@ -124,13 +145,13 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         await db.update_order_status(
             order_id=order_id,
             status=OrderStatus.ACCEPTED,
-            changed_by=callback.from_user.id,
+            changed_by=user.id,
             user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Добавляем в лог
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="ACCEPT_ORDER_GROUP",
             details=f"Accepted order #{order_id} in group",
         )
@@ -160,7 +181,7 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         acceptance_text += "\n<b>Когда будете на объекте, нажмите кнопку ниже.</b>"
 
         # Обновляем сообщение в группе
-        await callback.message.edit_text(
+        await message_obj.edit_text(
             acceptance_text,
             parse_mode="HTML",
             reply_markup=get_group_order_keyboard(order, OrderStatus.ACCEPTED),
@@ -170,16 +191,22 @@ async def callback_group_accept_order(callback: CallbackQuery, user_roles: list)
         if order.dispatcher_id:
             from app.utils import safe_send_message
 
-            result = await safe_send_message(
-                callback.bot,
-                order.dispatcher_id,
-                f"✅ Мастер {master.get_display_name()} принял заявку #{order_id} в группе",
-                parse_mode="HTML",
-            )
-            if not result:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+            bot = callback.bot
+            if bot is not None:
+                result = await safe_send_message(
+                    bot,
+                    order.dispatcher_id,
+                    f"✅ Мастер {master.get_display_name()} принял заявку #{order_id} в группе",
+                    parse_mode="HTML",
+                )
+                if not result:
+                    logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+            else:
+                logger.error(
+                    "Bot instance is not available to notify dispatcher about accepted order"
+                )
 
-        log_action(callback.from_user.id, "ACCEPT_ORDER_GROUP", f"Order #{order_id}")
+        log_action(user.id, "ACCEPT_ORDER_GROUP", f"Order #{order_id}")
 
         # Отвечаем на callback после успешного выполнения
         await callback.answer("✅ Заявка принята!")
@@ -204,9 +231,24 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list,
         user_roles: Список ролей пользователя
         state: FSM контекст
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -214,9 +256,13 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list,
 
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 await callback.answer(
@@ -228,42 +274,54 @@ async def callback_group_refuse_order(callback: CallbackQuery, user_roles: list,
                 f"Admin {callback.from_user.id} refusing order as master {master.telegram_id}"
             )
         else:
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
 
         # Проверяем права
-        if not master or order.assigned_master_id != master.id:
+        if not master:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
-        
+        if order.assigned_master_id != master.id:
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
+
         # Сохраняем данные в state для последующей обработки
         await state.update_data(
             order_id=order_id,
-            group_chat_id=callback.message.chat.id,
-            group_message_id=callback.message.message_id,
-            master_id=master.id
+            group_chat_id=message_obj.chat.id,
+            group_message_id=message_obj.message_id,
+            master_id=master.id,
         )
-        
+
         # Переключаемся в состояние ввода причины отказа
         from app.states import RefuseOrderStates
+
         await state.set_state(RefuseOrderStates.enter_refuse_reason)
-        
+
         # Определяем тип действия
-        action_type = "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
-        
-        # Отправляем запрос причины в личку мастеру/админу
-        await callback.bot.send_message(
-            callback.from_user.id,
-            f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
-            f"Например: 'Слишком далеко', 'Нет запчастей', 'Некорректный адрес' и т.д.\n\n"
-            f"⚠️ Отправьте причину в ответ на это сообщение."
+        action_type = (
+            "отмены" if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отказа"
         )
-        
+
+        # Отправляем запрос причины в личку мастеру/админу
+        bot = callback.bot
+        if bot is not None:
+            await bot.send_message(
+                user.id,
+                f"📝 Укажите причину {action_type} заявки #{order_id}:\n\n"
+                f"Например: 'Слишком далеко', 'Нет запчастей', 'Некорректный адрес' и т.д.\n\n"
+                f"⚠️ Отправьте причину в ответ на это сообщение.",
+            )
+        else:
+            logger.error(
+                "Bot instance is not available to send DM with refuse reason for group order"
+            )
+
         await callback.answer(f"Проверьте личные сообщения - нужно указать причину {action_type}")
-        
+
     except Exception as e:
         logger.error(f"Error in group_refuse_order: {e}")
         await callback.answer("Произошла ошибка", show_alert=True)
@@ -280,9 +338,24 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
         callback: Callback query
         user_roles: Список ролей пользователя
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -290,9 +363,13 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
 
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 await callback.answer(
@@ -300,11 +377,9 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
                 )
                 return
 
-            logger.info(
-                f"Admin {callback.from_user.id} marking onsite as master {master.telegram_id}"
-            )
+            logger.info(f"Admin {user.id} marking onsite as master {master.telegram_id}")
         else:
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
@@ -319,19 +394,19 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
         await db.update_order_status(
             order_id=order_id,
             status=OrderStatus.ONSITE,
-            changed_by=callback.from_user.id,
+            changed_by=user.id,
             user_roles=user_roles,  # Передаём роли для валидации
         )
 
         # Добавляем в лог
         await db.add_audit_log(
-            user_id=callback.from_user.id,
+            user_id=user.id,
             action="ONSITE_ORDER_GROUP",
             details=f"Master on site for order #{order_id} in group",
         )
 
         # Обновляем сообщение в группе
-        await callback.message.edit_text(
+        await message_obj.edit_text(
             f"🏠 <b>Мастер на объекте!</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n"
             f"📋 Заявка #{order_id}\n"
@@ -351,16 +426,22 @@ async def callback_group_onsite_order(callback: CallbackQuery, user_roles: list)
         if order.dispatcher_id:
             from app.utils import safe_send_message
 
-            result = await safe_send_message(
-                callback.bot,
-                order.dispatcher_id,
-                f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
-                parse_mode="HTML",
-            )
-            if not result:
-                logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+            bot = callback.bot
+            if bot is not None:
+                result = await safe_send_message(
+                    bot,
+                    order.dispatcher_id,
+                    f"🏠 Мастер {master.get_display_name()} на объекте (Заявка #{order_id})",
+                    parse_mode="HTML",
+                )
+                if not result:
+                    logger.error(f"Failed to notify dispatcher {order.dispatcher_id} after retries")
+            else:
+                logger.error(
+                    "Bot instance is not available to notify dispatcher about onsite status"
+                )
 
-        log_action(callback.from_user.id, "ONSITE_ORDER_GROUP", f"Order #{order_id}")
+        log_action(user.id, "ONSITE_ORDER_GROUP", f"Order #{order_id}")
 
     finally:
         await db.disconnect()
@@ -380,9 +461,24 @@ async def callback_group_complete_order(
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -390,9 +486,13 @@ async def callback_group_complete_order(
 
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 await callback.answer(
@@ -401,11 +501,9 @@ async def callback_group_complete_order(
                 return
 
             is_admin_acting = True
-            logger.info(
-                f"Admin {callback.from_user.id} completing order as master {master.telegram_id}"
-            )
+            logger.info(f"Admin {user.id} completing order as master {master.telegram_id}")
         else:
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
             is_admin_acting = False
 
             # Проверяем рабочую группу
@@ -413,7 +511,10 @@ async def callback_group_complete_order(
                 return
 
         # Проверяем права
-        if not master or order.assigned_master_id != master.id:
+        if not master:
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
+        if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
@@ -421,23 +522,23 @@ async def callback_group_complete_order(
         # Если админ инициировал завершение, пишем acting_as_master_id, чтобы обработчики знали за кого действовать
         await state.update_data(
             order_id=order_id,
-            group_chat_id=callback.message.chat.id,
-            group_message_id=callback.message.message_id,
+            group_chat_id=message_obj.chat.id,
+            group_message_id=message_obj.message_id,
             acting_as_master_id=master.telegram_id if is_admin_acting else None,
-            initiator_user_id=callback.from_user.id,
+            initiator_user_id=user.id,
         )
 
         from app.states import CompleteOrderStates
 
         await state.set_state(CompleteOrderStates.enter_total_amount)
         logger.info(
-            f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {callback.from_user.id} in chat {callback.message.chat.id} (acting_as_master_id={master.telegram_id if is_admin_acting else 'self'})"
+            f"[GROUP_COMPLETE] Set state CompleteOrderStates.enter_total_amount for user {user.id} in chat {message_obj.chat.id} (acting_as_master_id={master.telegram_id if is_admin_acting else 'self'})"
         )
 
         # Запрашиваем сумму прямо в группе и открываем интерфейс ответа (ForceReply)
         from aiogram.types import ForceReply
 
-        prompt = await callback.message.reply(
+        prompt = await message_obj.reply(
             f"💰 <b>Завершение заявки #{order_id}</b>\n\n"
             f"👨‍🔧 Мастер: {master.get_display_name()}\n\n"
             f"Пожалуйста, введите <b>общую сумму заказа</b> (в рублях):\n"
@@ -451,7 +552,7 @@ async def callback_group_complete_order(
 
         await callback.answer("Введите общую сумму заказа")
 
-        log_action(callback.from_user.id, "START_COMPLETE_ORDER_GROUP", f"Order #{order_id}")
+        log_action(user.id, "START_COMPLETE_ORDER_GROUP", f"Order #{order_id}")
 
     finally:
         await db.disconnect()
@@ -467,9 +568,24 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -477,9 +593,13 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         order = await db.get_order_by_id(order_id)
 
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 await callback.answer(
@@ -487,16 +607,19 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
                 )
                 return
 
-            logger.info(f"Admin {callback.from_user.id} starting DR as master {master.telegram_id}")
+            logger.info(f"Admin {user.id} starting DR as master {master.telegram_id}")
         else:
-            master = await db.get_master_by_telegram_id(callback.from_user.id)
+            master = await db.get_master_by_telegram_id(user.id)
 
             # Проверяем рабочую группу
             if not await check_master_work_group(master, callback):
                 return
 
         # Проверяем права
-        if not master or order.assigned_master_id != master.id:
+        if not master:
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
+        if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
@@ -513,7 +636,7 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
 
-        await callback.message.reply(
+        await message_obj.reply(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
             f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
             f"<i>Если предоплаты не было - просто укажите срок.</i>",
@@ -544,9 +667,24 @@ async def callback_group_reschedule_order(
         state: FSM контекст
         user_roles: Список ролей пользователя
     """
-    order_id = int(callback.data.split(":")[1])
+    data = callback.data or ""
+    try:
+        order_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные заявки", show_alert=True)
+        return
 
-    db = Database()
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Сообщение недоступно", show_alert=True)
+        return
+
+    db = get_database()
     await db.connect()
 
     try:
@@ -567,7 +705,7 @@ async def callback_group_reschedule_order(
 
         # Если пользователь - админ в группе, ищем мастера по work_chat_id группы
         if UserRole.ADMIN in user_roles:
-            master = await db.get_master_by_work_chat_id(callback.message.chat.id)
+            master = await db.get_master_by_work_chat_id(message_obj.chat.id)
 
             if not master:
                 await callback.answer(
@@ -593,7 +731,7 @@ async def callback_group_reschedule_order(
         # Сохраняем данные в state
         await state.update_data(
             order_id=order_id,
-            reschedule_initiated_by=callback.from_user.id,
+            reschedule_initiated_by=user.id,
             is_group_reschedule=True,
         )
 
@@ -602,7 +740,7 @@ async def callback_group_reschedule_order(
 
         current_time = order.scheduled_time or "не указано"
 
-        await callback.message.reply(
+        await message_obj.reply(
             f"📅 <b>Перенос заявки #{order_id}</b>\n\n"
             f"⏰ Сейчас: {current_time}\n\n"
             f"Напишите новое время:\n"
@@ -625,8 +763,9 @@ async def cmd_order_in_group(message: Message):
         return
 
     # Извлекаем ID заказа из команды
+    text = message.text or ""
     try:
-        order_id = int(message.text.split()[1])
+        order_id = int(text.split()[1])
     except (IndexError, ValueError):
         await message.reply(
             "❌ Неверный формат команды.\n"
@@ -635,7 +774,7 @@ async def cmd_order_in_group(message: Message):
         )
         return
 
-    db = Database()
+    db = get_database()
     await db.connect()
 
     try:
@@ -661,10 +800,12 @@ async def cmd_order_in_group(message: Message):
         if order.dispatcher_name:
             text += f"📞 <b>Диспетчер:</b> {order.dispatcher_name}\n"
 
-        text += f"🔄 <b>Обновлена:</b> {format_datetime(order.updated_at)}"
+        if order.updated_at:
+            text += f"🔄 <b>Обновлена:</b> {format_datetime(order.updated_at)}"
 
         # Отправляем сообщение с клавиатурой, если это заявка мастера
-        if master and master.telegram_id == message.from_user.id:
+        user = message.from_user
+        if master and user is not None and master.telegram_id == user.id:
             keyboard = get_group_order_keyboard(order, order.status)
             await message.reply(text, parse_mode="HTML", reply_markup=keyboard)
         else:

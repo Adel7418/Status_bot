@@ -52,7 +52,10 @@ async def cmd_start(
     # Очищаем состояние FSM при команде /start
     await state.clear()
 
-    logger.info(f"START command received from user {message.from_user.id}")
+    user_from = message.from_user
+    user_id = user_from.id if user_from else "unknown"
+
+    logger.info(f"START command received from user {user_id}")
     logger.info(f"User roles: {user_roles}, User: {safe_str_user(user)}")
 
     # Проверяем, если это личное сообщение и пользователь ТОЛЬКО мастер (без ADMIN и DISPATCHER)
@@ -71,7 +74,7 @@ async def cmd_start(
             "Если у вас нет доступа к рабочей группе - обратитесь к администратору.",
             parse_mode="HTML",
         )
-        logger.info(f"Master {message.from_user.id} tried to use bot in private chat")
+        logger.info(f"Master {user_id} tried to use bot in private chat")
         return
 
     # Выбираем приветственное сообщение в зависимости от ролей
@@ -107,7 +110,7 @@ async def cmd_start(
     # Отправляем приветствие с клавиатурой
     await message.answer(welcome_text, reply_markup=menu_keyboard)
 
-    logger.info(f"User {message.from_user.id} ({', '.join(user_roles)}) started the bot")
+    logger.info(f"User {user_id} ({', '.join(user_roles)}) started the bot")
 
 
 @router.message(Command("help"))
@@ -198,7 +201,7 @@ async def cmd_help(message: Message, user_role: str, user_roles: list):
 
     await message.answer(help_text, parse_mode="HTML")
 
-    logger.info(f"User {message.from_user.id} requested help")
+    logger.info("User %s requested help", message.from_user.id if message.from_user else "unknown")
 
 
 @router.message(Command("cancel"))
@@ -219,7 +222,9 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_r
     menu_keyboard = await get_menu_with_counter(user_roles)
     await message.answer("❌ Действие отменено.", reply_markup=menu_keyboard)
 
-    logger.info(f"User {message.from_user.id} cancelled action")
+    logger.info(
+        "User %s cancelled action", message.from_user.id if message.from_user else "unknown"
+    )
 
 
 @router.message(F.text == "❌ Отмена")
@@ -303,12 +308,15 @@ async def btn_contact(message: Message):
     Args:
         message: Сообщение
     """
+    user_from = message.from_user
+    user_id = user_from.id if user_from else "unknown"
+
     contact_text = (
         "📞 <b>Контактная информация</b>\n\n"
         "Для получения доступа к системе или по любым вопросам "
         "обращайтесь к администратору.\n\n"
         "Ваш Telegram ID для регистрации:\n"
-        f"<code>{message.from_user.id}</code>\n\n"
+        f"<code>{user_id}</code>\n\n"
         "<i>Нажмите на ID чтобы скопировать</i>"
     )
 
@@ -322,7 +330,9 @@ async def debug_unhandled_message(message: Message, state: FSMContext):
     """
     current_state = await state.get_state()
     logger.info(
-        f"[DEBUG] Необработанное сообщение: '{message.text}' от пользователя {message.from_user.id}"
+        "[DEBUG] Необработанное сообщение: '%s' от пользователя %s",
+        message.text,
+        message.from_user.id if message.from_user else "unknown",
     )
     logger.info(f"[DEBUG] Текущее состояние FSM: {current_state}")
     logger.info(f"[DEBUG] Тип чата: {message.chat.type}")
@@ -344,7 +354,9 @@ async def callback_cancel(callback: CallbackQuery, state: FSMContext):
         state: FSM контекст
     """
     await state.clear()
-    await callback.message.delete()
+    msg = callback.message
+    if isinstance(msg, Message):
+        await msg.delete()
     await callback.answer("Отменено")
 
 
