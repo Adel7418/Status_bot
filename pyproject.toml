@@ -208,11 +208,9 @@ ignore = [
 "app/handlers/financial_reports.py" = [
     "DTZ007",  # naive datetime (legacy code, acceptable for user input parsing)
     "DTZ001",  # datetime without tzinfo (legacy code)
-    "ASYNC101", # blocking file operations (pre-commit ruff version)
 ]
 "app/services/reports_service.py" = [
     "PLR2004", # magic value comparison (acceptable for file generation)
-    "ASYNC101", # blocking file operations (pre-commit ruff version)
 ]
 
 [tool.ruff.lint.isort]
