@@ -1069,7 +1069,7 @@ async def callback_generate_daily_master_report(callback: CallbackQuery, user_ro
     # Отправляем файл
     from aiogram.types import BufferedInputFile
 
-    with open(filepath, "rb") as f:
+    with open(filepath, "rb") as f:  # noqa: ASYNC230
         file_data = f.read()
 
     file_input = BufferedInputFile(file_data, filename=f"daily_master_summary_{date_str}.xlsx")
@@ -1155,7 +1155,7 @@ async def callback_generate_weekly_master_report(callback: CallbackQuery, user_r
     # Отправляем файл
     from aiogram.types import BufferedInputFile
 
-    with open(filepath, "rb") as f:
+    with open(filepath, "rb") as f:  # noqa: ASYNC230
         file_data = f.read()
 
     file_input = BufferedInputFile(file_data, filename=f"weekly_master_summary_{date_str}.xlsx")
@@ -1221,7 +1221,7 @@ async def callback_generate_monthly_master_report(callback: CallbackQuery, user_
     # Отправляем файл
     from aiogram.types import BufferedInputFile
 
-    with open(filepath, "rb") as f:
+    with open(filepath, "rb") as f:  # noqa: ASYNC230
         file_data = f.read()
 
     file_input = BufferedInputFile(file_data, filename=f"monthly_master_summary_{date_str}.xlsx")
