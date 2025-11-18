@@ -187,7 +187,6 @@ ignore = [
     "PLW2901", # overwriting loop variable (acceptable in some cases)
     "F403",    # wildcard imports (used in __init__.py for convenience)
     "A003",    # class attribute shadowing builtin (normal for SQLAlchemy ORM models)
-    "ASYNC101", # async functions calling blocking operations (acceptable for file operations)
     "T201",    # print statements (acceptable in scripts)
 ]
 
@@ -209,11 +208,11 @@ ignore = [
 "app/handlers/financial_reports.py" = [
     "DTZ007",  # naive datetime (legacy code, acceptable for user input parsing)
     "DTZ001",  # datetime without tzinfo (legacy code)
-    "ASYNC101", # blocking file operations (acceptable for file downloads)
+    "ASYNC101", # blocking file operations (pre-commit ruff version)
 ]
 "app/services/reports_service.py" = [
     "PLR2004", # magic value comparison (acceptable for file generation)
-    "ASYNC101", # blocking file operations (acceptable for file generation)
+    "ASYNC101", # blocking file operations (pre-commit ruff version)
 ]
 
 [tool.ruff.lint.isort]

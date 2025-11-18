@@ -1012,7 +1012,11 @@ class Database:
                 client_name=row["client_name"],
                 client_address=row["client_address"],
                 client_phone=row["client_phone"],
-                master_lead_name=row.get("master_lead_name", None),
+                master_lead_name=(
+                    row["master_lead_name"]
+                    if "master_lead_name" in row and row["master_lead_name"] is not None
+                    else None
+                ),
                 status=row["status"],
                 assigned_master_id=row["assigned_master_id"],
                 dispatcher_id=row["dispatcher_id"],
