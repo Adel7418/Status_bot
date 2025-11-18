@@ -15,7 +15,7 @@ from app.utils.helpers import MOSCOW_TZ, get_now
 logger = logging.getLogger(__name__)
 
 
-def _preprocess_time_text(text: str) -> str:  # noqa: PLR0911
+def _preprocess_time_text(text: str) -> str:
     """
     Предобработка текста для лучшего распознавания времени
 
@@ -397,7 +397,7 @@ def validate_parsed_datetime(dt: datetime, original_text: str) -> ParsedDateVali
     return {"is_valid": True, "error": None, "warning": None}
 
 
-def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime | None, str]:  # noqa: PLR0911
+def parse_natural_datetime(text: str, validate: bool = True) -> tuple[datetime | None, str]:
     """
     Парсинг даты/времени из естественного языка на русском
 

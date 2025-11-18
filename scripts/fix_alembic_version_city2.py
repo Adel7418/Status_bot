@@ -5,8 +5,10 @@
 import asyncio
 import os
 import sys
+
 import aiosqlite
 from dotenv import load_dotenv
+
 
 # Сначала проверяем переменную окружения DATABASE_PATH (для Docker)
 # Если не установлена, загружаем из .env файла

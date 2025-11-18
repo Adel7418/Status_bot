@@ -10,6 +10,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.database import get_database
@@ -192,7 +193,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
     print()
 
     # Читаем JSON
-    with open(json_file, "r", encoding="utf-8") as f:
+    with open(json_file, encoding="utf-8") as f:
         data = json.load(f)
 
     messages = data.get("messages", [])
@@ -343,12 +344,12 @@ async def main():
         print(f"  python {sys.argv[0]} <путь_к_result.json> <dispatcher_telegram_id> [start_from]")
         print()
         print("Примеры:")
-        print(f"  # Восстановить все заявки:")
+        print("  # Восстановить все заявки:")
         print(
             f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457"
         )
         print()
-        print(f"  # Восстановить только заявки >= #45:")
+        print("  # Восстановить только заявки >= #45:")
         print(
             f"  python {sys.argv[0]} docs/history_telegram/ChatExport_2025-10-21/result.json 5765136457 45"
         )

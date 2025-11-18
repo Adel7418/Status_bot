@@ -4,9 +4,10 @@
 
 import asyncio
 import os
-import sys
+
 import aiosqlite
 from dotenv import load_dotenv
+
 
 # Загрузка переменных окружения
 load_dotenv("env.city2")
@@ -29,7 +30,7 @@ async def check_equipment_type_column():
         print(f"[INFO] Колонки в таблице orders: {', '.join(column_names)}")
 
         if "equipment_type" in column_names:
-            print(f"[OK] Колонка equipment_type существует в таблице orders")
+            print("[OK] Колонка equipment_type существует в таблице orders")
 
             # Проверяем, есть ли данные в этой колонке
             await cursor.execute(
@@ -44,12 +45,12 @@ async def check_equipment_type_column():
             )
             examples = await cursor.fetchall()
             if examples:
-                print(f"[INFO] Примеры заказов с equipment_type:")
+                print("[INFO] Примеры заказов с equipment_type:")
                 for order_id, equipment_type in examples:
                     print(f"  - Заказ #{order_id}: {equipment_type}")
         else:
-            print(f"[ERROR] Колонка equipment_type НЕ существует в таблице orders!")
-            print(f"[INFO] Нужно добавить колонку через миграцию или скрипт")
+            print("[ERROR] Колонка equipment_type НЕ существует в таблице orders!")
+            print("[INFO] Нужно добавить колонку через миграцию или скрипт")
             return False
 
         return True
@@ -75,7 +76,7 @@ async def add_equipment_type_column():
         column_names = [col[1] for col in columns]
 
         if "equipment_type" in column_names:
-            print(f"[SKIP] Колонка equipment_type уже существует")
+            print("[SKIP] Колонка equipment_type уже существует")
             return True
 
         # Добавляем колонку
@@ -87,7 +88,7 @@ async def add_equipment_type_column():
         )
 
         await conn.commit()
-        print(f"[OK] Колонка equipment_type добавлена в таблицу orders")
+        print("[OK] Колонка equipment_type добавлена в таблицу orders")
         return True
 
     except Exception as e:

@@ -20,6 +20,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.config import Config, OrderStatus, UserRole
 from app.database.orm_models import (
     AuditLog,
+    Base,
     FinancialReport,
     Master,
     MasterFinancialReport,
@@ -47,10 +48,28 @@ class ORMDatabase:
         Args:
             database_url: URL базы данных (SQLite или PostgreSQL)
         """
-        self.database_url = database_url or self._get_database_url()
+        raw_url = database_url or self._get_database_url()
+        # Преобразуем простые SQLite пути в правильный async URL формат
+        self.database_url = self._normalize_database_url(raw_url)
         self.engine: AsyncEngine | None = None
         self.session_factory: async_sessionmaker[AsyncSession] | None = None
         self._is_sqlite = self.database_url.startswith("sqlite")
+
+    def _normalize_database_url(self, url: str) -> str:
+        """
+        Нормализует URL базы данных для async SQLAlchemy
+
+        Преобразует простые SQLite пути (например, ":memory:" или "bot_database.db")
+        в правильный async URL формат (sqlite+aiosqlite:///...)
+        """
+        # Если URL уже в правильном формате (начинается с протокола), возвращаем как есть
+        if "://" in url:
+            return url
+
+        # Если это простой SQLite путь, преобразуем в async URL
+        # ":memory:" -> "sqlite+aiosqlite:///:memory:"
+        # "bot_database.db" -> "sqlite+aiosqlite:///bot_database.db"
+        return f"sqlite+aiosqlite:///{url}"
 
     def _get_database_url(self) -> str:
         """Получение URL базы данных из переменных окружения"""
@@ -59,8 +78,7 @@ class ORMDatabase:
             return database_url
 
         # Fallback на SQLite
-        db_path = Config.DATABASE_PATH
-        return f"sqlite+aiosqlite:///{db_path}"
+        return Config.DATABASE_PATH
 
     async def connect(self):
         """Подключение к базе данных"""
@@ -94,8 +112,23 @@ class ORMDatabase:
             logger.error(f"ERROR: Ошибка подключения к БД: {e}")
             import traceback
 
-            logger.error(f"ERROR: Traceback: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
             raise
+
+    async def init_db(self):
+        """
+        Инициализация базы данных (создание таблиц)
+
+        ВАЖНО: В production используйте Alembic миграции!
+        Этот метод создает таблицы напрямую и предназначен для тестов.
+        """
+        if not self.engine:
+            await self.connect()
+
+        async with self.engine.begin() as conn:
+            # Создаем все таблицы из метаданных
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("OK: База данных инициализирована (таблицы созданы)")
 
     async def disconnect(self):
         """Отключение от базы данных"""

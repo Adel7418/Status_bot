@@ -5,8 +5,8 @@
 Добавляет колонку refuse_reason в таблицу orders для хранения причин отказа
 """
 
-import sys
 import sqlite3
+import sys
 from pathlib import Path
 
 

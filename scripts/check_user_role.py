@@ -6,6 +6,7 @@ import asyncio
 import sys
 from pathlib import Path
 
+
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -29,7 +30,7 @@ async def check_user_role(telegram_id: int):
             print(f"❌ Пользователь с Telegram ID {telegram_id} не найден в базе данных")
             return
 
-        print(f"\n✅ Пользователь найден:\n")
+        print("\n✅ Пользователь найден:\n")
         print(f"   ID в базе: {user.id}")
         print(f"   Telegram ID: {user.telegram_id}")
         print(f"   Имя: {user.first_name} {user.last_name or ''}")
@@ -45,7 +46,7 @@ async def check_user_role(telegram_id: int):
             all_roles = [user.role] + roles_list
             print(f"   Все роли: {', '.join(all_roles)}")
         else:
-            print(f"   Дополнительные роли: нет")
+            print("   Дополнительные роли: нет")
 
         print(
             f"\n📊 Доступ к отчетам: {'✅ Есть' if user.role in ['admin', 'dispatcher'] else '❌ Нет'}"

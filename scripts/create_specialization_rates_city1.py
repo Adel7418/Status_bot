@@ -5,8 +5,10 @@
 import asyncio
 import os
 import sys
+
 import aiosqlite
 from dotenv import load_dotenv
+
 
 # Сначала проверяем переменную окружения DATABASE_PATH (для Docker)
 # Если не установлена, загружаем из .env файла
@@ -75,7 +77,7 @@ async def create_specialization_rates_table():
 
         await conn.commit()
         print(f"[OK] Таблица specialization_rates создана в {DATABASE_PATH}")
-        print(f"[OK] Добавлены начальные данные: электрик и сантехник - 50/50")
+        print("[OK] Добавлены начальные данные: электрик и сантехник - 50/50")
 
     except Exception as e:
         print(f"[ERROR] Ошибка при работе с базой данных: {e}")

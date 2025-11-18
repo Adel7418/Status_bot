@@ -10,7 +10,7 @@ from app.database.models import Order
 from app.repositories.order_repository import OrderRepository
 
 
-@pytest.fixture()
+@pytest.fixture
 async def db_connection():
     """Фикстура для создания тестовой БД в памяти"""
     connection = await aiosqlite.connect(":memory:")
@@ -103,13 +103,13 @@ async def db_connection():
     await connection.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def order_repository(db_connection):
     """Фикстура для OrderRepository"""
     return OrderRepository(db_connection)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def sample_dispatcher(db_connection):
     """Создание тестового диспетчера"""
     await db_connection.execute(
@@ -120,7 +120,7 @@ async def sample_dispatcher(db_connection):
     return 123456
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_create_order(order_repository, sample_dispatcher):
     """Тест создания заявки"""
     order = await order_repository.create(
@@ -142,7 +142,7 @@ async def test_create_order(order_repository, sample_dispatcher):
     assert order.dispatcher_id == sample_dispatcher
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_get_order_by_id(order_repository, sample_dispatcher):
     """Тест получения заявки по ID"""
     # Создаем заявку
@@ -164,14 +164,14 @@ async def test_get_order_by_id(order_repository, sample_dispatcher):
     assert fetched_order.client_name == "Петр Петров"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_get_order_by_id_not_found(order_repository):
     """Тест получения несуществующей заявки"""
     order = await order_repository.get_by_id(99999)
     assert order is None
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_get_all_orders(order_repository, sample_dispatcher):
     """Тест получения всех заявок"""
     # Создаем несколько заявок
@@ -200,7 +200,7 @@ async def test_get_all_orders(order_repository, sample_dispatcher):
     assert all(isinstance(order, Order) for order in orders)
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_get_all_orders_with_status_filter(order_repository, sample_dispatcher):
     """Тест получения заявок с фильтром по статусу"""
     # Создаем заявки с разными статусами
@@ -236,7 +236,7 @@ async def test_get_all_orders_with_status_filter(order_repository, sample_dispat
     assert assigned_orders[0].id == order2.id
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_update_status(order_repository, sample_dispatcher):
     """Тест обновления статуса заявки"""
     # Создаем заявку
@@ -264,7 +264,7 @@ async def test_update_status(order_repository, sample_dispatcher):
     assert updated_order.status == OrderStatus.ASSIGNED
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_update(order_repository, sample_dispatcher):
     """Тест обновления данных заявки"""
     # Создаем заявку
@@ -294,7 +294,7 @@ async def test_update(order_repository, sample_dispatcher):
     assert updated_order.scheduled_time == "15:00"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_get_status_history(order_repository, sample_dispatcher):
     """Тест получения истории статусов"""
     # Создаем заявку
@@ -323,7 +323,7 @@ async def test_get_status_history(order_repository, sample_dispatcher):
     assert history[1]["new_status"] == OrderStatus.ASSIGNED
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_transaction_rollback(order_repository, db_connection):
     """Тест отката транзакции при ошибке"""
     # Начинаем транзакцию

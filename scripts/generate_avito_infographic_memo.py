@@ -1,10 +1,11 @@
 import os
 from datetime import datetime
 
+
 try:
     from docx import Document
-    from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
 except Exception as exc:  # pragma: no cover
     raise SystemExit(
         "Не найдена библиотека python-docx. Установите: pip install python-docx"

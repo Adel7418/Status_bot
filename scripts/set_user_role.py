@@ -6,11 +6,12 @@ import asyncio
 import sys
 from pathlib import Path
 
+
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database.db import Database
 from app.config import UserRole
+from app.database.db import Database
 
 
 async def set_user_role(telegram_id: int, new_role: str):
@@ -48,7 +49,7 @@ async def set_user_role(telegram_id: int, new_role: str):
         )
         await db.connection.commit()
 
-        print(f"\n✅ Роль пользователя успешно изменена!\n")
+        print("\n✅ Роль пользователя успешно изменена!\n")
         print(f"   Telegram ID: {telegram_id}")
         print(f"   Имя: {user.first_name} {user.last_name or ''}")
         if user.username:

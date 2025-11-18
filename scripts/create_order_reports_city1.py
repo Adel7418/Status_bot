@@ -7,12 +7,14 @@ import os
 import sys
 from pathlib import Path
 
+
 # Добавляем путь к проекту в sys.path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import aiosqlite
 from dotenv import load_dotenv
+
 
 # Загружаем переменные окружения для city1
 load_dotenv("env.city1")

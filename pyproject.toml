@@ -212,6 +212,9 @@ ignore = [
 "app/services/reports_service.py" = [
     "PLR2004", # magic value comparison (acceptable for file generation)
 ]
+"app/utils/date_parser.py" = [
+    "PLR0911", # too many return statements (normal for parsing functions with multiple validation paths)
+]
 
 [tool.ruff.lint.isort]
 force-single-line = false

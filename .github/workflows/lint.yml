@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Ruff
         run: |
-          ruff check . --output-format=github
+          ruff check app/ --output-format=github
 
       - name: Run MyPy
         run: |

@@ -2,12 +2,13 @@
 Unit tests for Presenters
 """
 
-import pytest
 from datetime import datetime
 from unittest.mock import Mock
 
-from app.presenters import OrderPresenter, MasterPresenter
+import pytest
+
 from app.config import OrderStatus
+from app.presenters import MasterPresenter, OrderPresenter
 
 
 class TestOrderPresenter:

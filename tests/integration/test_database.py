@@ -11,13 +11,20 @@ from app.database import Database
 class TestDatabase:
     """Тесты для класса Database"""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_database_connection(self, db: Database):
         """Тест подключения к базе данных"""
-        assert db.connection is not None
-        assert db.connection.row_factory is not None
+        # Проверяем подключение для legacy Database
+        if hasattr(db, "connection"):
+            assert db.connection is not None
+            assert db.connection.row_factory is not None
+        # Проверяем engine для ORMDatabase
+        elif hasattr(db, "engine"):
+            assert db.engine is not None
+        else:
+            pytest.fail("Database doesn't have connection or engine attribute")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_create_and_get_user(self, db: Database):
         """Тест создания и получения пользователя"""
         telegram_id = 123456789
@@ -42,7 +49,7 @@ class TestDatabase:
         assert user2 is not None
         assert user2.telegram_id == telegram_id
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_update_user_role(self, db: Database):
         """Тест обновления роли пользователя"""
         telegram_id = 123456789
@@ -57,7 +64,7 @@ class TestDatabase:
         user = await db.get_user_by_telegram_id(telegram_id)
         assert user.role == UserRole.ADMIN
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_add_multiple_roles(self, db: Database):
         """Тест добавления множественных ролей"""
         telegram_id = 123456789
@@ -75,7 +82,7 @@ class TestDatabase:
         assert UserRole.DISPATCHER in roles
         assert UserRole.MASTER in roles
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_create_and_get_master(self, db: Database):
         """Тест создания и получения мастера"""
         telegram_id = 987654321
@@ -101,7 +108,7 @@ class TestDatabase:
         assert master2 is not None
         assert master2.telegram_id == telegram_id
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_create_and_get_order(self, db: Database):
         """Тест создания и получения заявки"""
         dispatcher_id = 111222333
@@ -130,7 +137,7 @@ class TestDatabase:
         assert order2 is not None
         assert order2.id == order.id
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_assign_master_to_order(self, db: Database):
         """Тест назначения мастера на заявку"""
         dispatcher_id = 111222333
@@ -166,7 +173,7 @@ class TestDatabase:
         assert order2.assigned_master_id == master.id
         assert order2.status == OrderStatus.ASSIGNED
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_update_order_status(self, db: Database):
         """Тест обновления статуса заявки"""
         dispatcher_id = 111222333
@@ -191,7 +198,7 @@ class TestDatabase:
         order2 = await db.get_order_by_id(order.id)
         assert order2.status == OrderStatus.CLOSED
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_all_users(self, db: Database):
         """Тест получения всех пользователей"""
         # Создаём несколько пользователей
@@ -203,7 +210,7 @@ class TestDatabase:
         users = await db.get_all_users()
         assert len(users) >= 3
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_all_masters(self, db: Database):
         """Тест получения всех мастеров"""
         # Создаём несколько мастеров
@@ -221,7 +228,7 @@ class TestDatabase:
         masters = await db.get_all_masters(only_approved=True)
         assert len(masters) >= 3
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_statistics(self, db: Database):
         """Тест получения статистики"""
         # Создаём данные

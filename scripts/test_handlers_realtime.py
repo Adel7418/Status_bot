@@ -19,11 +19,13 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+
 # Добавляем корневую директорию в путь
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.database import get_database
 from app.handlers.master import router as master_router
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +57,7 @@ def analyze_log_file(log_path: Path) -> dict:
     }
 
     try:
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             lines = f.readlines()
             stats["total_lines"] = len(lines)
 
@@ -138,7 +140,7 @@ async def test_di_injection():
             elif hasattr(db, "get_user_by_telegram_id"):
                 # Legacy Database
                 user = await db.get_user_by_telegram_id(1)  # Тестовый запрос
-                logger.info(f"✅ Подключение к БД работает (Legacy)")
+                logger.info("✅ Подключение к БД работает (Legacy)")
             else:
                 logger.warning("⚠️  Неизвестный тип Database")
         except Exception as e:
@@ -191,8 +193,8 @@ def print_statistics(stats: dict):
     Args:
         stats: Статистика из analyze_log_file
     """
-    import sys
     import io
+    import sys
 
     # Устанавливаем UTF-8 для вывода
     if sys.stdout.encoding != "utf-8":
@@ -206,13 +208,13 @@ def print_statistics(stats: dict):
         print(f"❌ Ошибка: {stats['error']}")
         return
 
-    print(f"\n📊 Общая статистика:")
+    print("\n📊 Общая статистика:")
     print(f"   Всего строк в логе: {stats['total_lines']}")
     print(f"   DI инъекций: {stats['di_injections']}")
     print(f"   Операций с БД: {stats['db_operations']}")
 
     if stats["handlers_called"]:
-        print(f"\n📋 Вызовы handlers (последние 1000 строк):")
+        print("\n📋 Вызовы handlers (последние 1000 строк):")
         for handler, count in sorted(
             stats["handlers_called"].items(), key=lambda x: x[1], reverse=True
         ):
@@ -227,15 +229,15 @@ def print_statistics(stats: dict):
         print("\n✅ Ошибок не найдено")
 
     if stats["recent_activity"]:
-        print(f"\n📝 Последняя активность:")
+        print("\n📝 Последняя активность:")
         for activity in stats["recent_activity"][-5:]:
             print(f"   {activity[:80]}...")
 
 
 async def main():
     """Главная функция"""
-    import sys
     import io
+    import sys
 
     # Устанавливаем UTF-8 для вывода
     if sys.stdout.encoding != "utf-8":
