@@ -2,7 +2,7 @@
 Unit tests for Presenters
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import Mock
 
 import pytest
@@ -56,7 +56,7 @@ class TestOrderPresenter:
         order.assigned_master_id = None
         order.notes = None
         order.scheduled_time = None
-        order.created_at = datetime(2025, 11, 16, 12, 0, tzinfo=timezone.utc)
+        order.created_at = datetime(2025, 11, 16, 12, 0, tzinfo=UTC)
 
         result = OrderPresenter.format_order_details(order, include_client_phone=True)
 
@@ -81,7 +81,7 @@ class TestOrderPresenter:
         order.assigned_master_id = None
         order.notes = None
         order.scheduled_time = None
-        order.created_at = datetime(2025, 11, 16, 15, 30, tzinfo=timezone.utc)
+        order.created_at = datetime(2025, 11, 16, 15, 30, tzinfo=UTC)
 
         result = OrderPresenter.format_order_details(order, include_client_phone=False)
 
@@ -103,7 +103,7 @@ class TestOrderPresenter:
         order.assigned_master_id = 5
         order.notes = "Срочно"
         order.scheduled_time = "16:00"
-        order.created_at = datetime(2025, 11, 16, 10, 0, tzinfo=timezone.utc)
+        order.created_at = datetime(2025, 11, 16, 10, 0, tzinfo=UTC)
 
         master = Mock()
         master.get_display_name = Mock(return_value="Сергей Мастеров")
@@ -130,7 +130,7 @@ class TestOrderPresenter:
         order.assigned_master_id = None
         order.notes = None
         order.scheduled_time = None
-        order.created_at = datetime(2025, 11, 16, 9, 0, tzinfo=timezone.utc)
+        order.created_at = datetime(2025, 11, 16, 9, 0, tzinfo=UTC)
 
         result = OrderPresenter.format_order_details(order, escape_html=True)
 

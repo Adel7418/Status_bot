@@ -43,18 +43,16 @@ def set_permissions_posix(paths: Iterable[Path]) -> None:
             os.chown(p, APP_UID, APP_GID)  # type: ignore[attr-defined]  # nosec S103 - chown используется только с фиксированными UID/GID для Docker setup
         # Allow rwx for all to avoid permission surprises
         with contextlib.suppress(Exception):
-            os.chmod(
-                p, 0o777
-            )  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
+            os.chmod(p, 0o777)  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
 
 
 def grant_windows_acl(path: Path) -> None:
     # Grant Full control to Everyone on folder recursively
     # SDDL SID for Everyone: S-1-1-0; icacls supports name "Everyone" as well
     with contextlib.suppress(Exception):
-        subprocess.run(  # nosec S603 - icacls используется только с фиксированными параметрами и локальными путями
+        subprocess.run(  # nosec S603,S607 - icacls используется только с фиксированными параметрами и локальными путями
             [
-                "icacls",
+                "icacls",  # nosec S607 - icacls is a standard Windows utility in system PATH
                 str(path),
                 "/grant",
                 "Everyone:(OI)(CI)F",
