@@ -241,14 +241,14 @@ class MasterReportsService:
         )
 
         # Заголовок
-        ws.merge_cells("A1:L1")
+        ws.merge_cells("A1:P1")
         ws["A1"] = f"ЗАВЕРШЕННЫЕ ЗАЯВКИ - {master.get_display_name()}"
         ws["A1"].font = Font(bold=True, size=14, color="FFFFFF")
         ws["A1"].fill = header_fill
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
         # Дата последнего обновления
-        ws.merge_cells("A2:L2")
+        ws.merge_cells("A2:P2")
         ws["A2"] = f"📅 Последнее обновление: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')} (UTC)"
         ws["A2"].alignment = Alignment(horizontal="center")
         ws["A2"].font = Font(italic=True, color="666666")
@@ -261,10 +261,14 @@ class MasterReportsService:
             "Клиент",
             "Телефон",
             "Адрес",
+            "Создана",
+            "Обновлена",
             "Общая сумма",
             "Материалы",
             "Прибыль мастера",
             "Прибыль компании",
+            "Выезд",
+            "Отзыв",
             "Дата завершения",
             "Причина отказа",
         ]
@@ -305,6 +309,16 @@ class MasterReportsService:
             ws.cell(row=row_num, column=4, value=order.client_name or "").border = border
             ws.cell(row=row_num, column=5, value=order.client_phone or "").border = border
             ws.cell(row=row_num, column=6, value=order.client_address or "").border = border
+            ws.cell(
+                row=row_num,
+                column=7,
+                value=format_datetime(order.created_at) if order.created_at else "",
+            ).border = border
+            ws.cell(
+                row=row_num,
+                column=8,
+                value=format_datetime(order.updated_at) if order.updated_at else "",
+            ).border = border
 
             # Сумма заказов без учета расходного материала
             amount = (order.total_amount or 0) - (order.materials_cost or 0)
@@ -312,19 +326,29 @@ class MasterReportsService:
             master_profit = order.master_profit or 0
             company_profit = order.company_profit or 0
 
-            ws.cell(row=row_num, column=7, value=f"{amount:.2f}").border = border
-            ws.cell(row=row_num, column=8, value=f"{materials:.2f}").border = border
-            ws.cell(row=row_num, column=9, value=f"{master_profit:.2f}").border = border
-            ws.cell(row=row_num, column=10, value=f"{company_profit:.2f}").border = border
+            ws.cell(row=row_num, column=9, value=f"{amount:.2f}").border = border
+            ws.cell(row=row_num, column=10, value=f"{materials:.2f}").border = border
+            ws.cell(row=row_num, column=11, value=f"{master_profit:.2f}").border = border
+            ws.cell(row=row_num, column=12, value=f"{company_profit:.2f}").border = border
             ws.cell(
                 row=row_num,
-                column=11,
+                column=13,
+                value="✅" if order.out_of_city else "",
+            ).border = border
+            ws.cell(
+                row=row_num,
+                column=14,
+                value="Да" if order.has_review else "",
+            ).border = border
+            ws.cell(
+                row=row_num,
+                column=15,
                 value=format_datetime(order.updated_at) if order.updated_at else "",
             ).border = border
 
             # Причина отказа
             refuse_reason = order.refuse_reason if hasattr(order, "refuse_reason") else None
-            refuse_cell = ws.cell(row=row_num, column=12, value=refuse_reason or "")
+            refuse_cell = ws.cell(row=row_num, column=16, value=refuse_reason or "")
             refuse_cell.border = border
             if refuse_reason:
                 refuse_cell.alignment = Alignment(wrap_text=True)
@@ -340,12 +364,12 @@ class MasterReportsService:
         row_num += 1
         ws.cell(row=row_num, column=1, value="ИТОГО:").font = Font(bold=True)
         ws.cell(row=row_num, column=3, value=f"{len(orders)} завершенных").font = Font(bold=True)
-        ws.cell(row=row_num, column=7, value=f"{total_amount:.2f} ₽").font = Font(bold=True)
-        ws.cell(row=row_num, column=8, value=f"{total_materials:.2f} ₽").font = Font(bold=True)
-        ws.cell(row=row_num, column=9, value=f"{total_master_profit:.2f} ₽").font = Font(
+        ws.cell(row=row_num, column=9, value=f"{total_amount:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=10, value=f"{total_materials:.2f} ₽").font = Font(bold=True)
+        ws.cell(row=row_num, column=11, value=f"{total_master_profit:.2f} ₽").font = Font(
             bold=True, color="4472C4"
         )
-        ws.cell(row=row_num, column=10, value=f"{total_company_profit:.2f} ₽").font = Font(
+        ws.cell(row=row_num, column=12, value=f"{total_company_profit:.2f} ₽").font = Font(
             bold=True
         )
 
@@ -378,13 +402,15 @@ class MasterReportsService:
             )
 
         # Автоширина столбцов
-        for col_num in range(1, 13):
+        for col_num in range(1, 17):
             ws.column_dimensions[get_column_letter(col_num)].width = 15
         ws.column_dimensions["A"].width = 12  # № Заявки
         ws.column_dimensions["B"].width = 12  # Статус
         ws.column_dimensions["C"].width = 18  # Оборудование
         ws.column_dimensions["F"].width = 30  # Адрес
-        ws.column_dimensions["L"].width = 35  # Причина отказа - делаем шире
+        ws.column_dimensions["G"].width = 18  # Создана
+        ws.column_dimensions["H"].width = 18  # Обновлена
+        ws.column_dimensions["P"].width = 35  # Причина отказа - делаем шире
 
     async def get_master_archived_reports(self, master_id: int, limit: int = 10):
         """
