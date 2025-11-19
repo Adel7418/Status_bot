@@ -606,13 +606,28 @@ async def process_refuse_reason(message: Message, state: FSMContext):
         if order.dispatcher_id:
             from app.utils import safe_send_message
 
+            # Формируем текст уведомления в зависимости от того, кто отказал
+            if UserRole.MASTER in user_roles and master:
+                # Отказ от мастера
+                notification_text = (
+                    f"❌ Мастер {master.get_display_name()} {action_type} заявку #{order_id}\n"
+                    f"📝 Причина: {refuse_reason}"
+                )
+            else:
+                # Отказ от админа/диспетчера
+                user = await db.get_user_by_telegram_id(message.from_user.id)
+                user_name = user.get_display_name() if user else "Администратор"
+                notification_text = (
+                    f"❌ {user_name} {action_type} заявку #{order_id}\n"
+                    f"📝 Причина: {refuse_reason}"
+                )
+
             result = await safe_send_message(
                 message.bot,
                 order.dispatcher_id,
-                f"❌ Мастер {master.get_display_name() if master else 'Администратор'} {action_type} заявку #{order_id}\n"
-                f"📝 Причина: {refuse_reason}\n\n"
-                f"Необходимо назначить другого мастера.",
+                notification_text,
                 parse_mode="HTML",
+                max_attempts=3,
             )
             if not result:
                 logger.error(
