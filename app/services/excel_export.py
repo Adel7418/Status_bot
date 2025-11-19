@@ -28,6 +28,37 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _get_status_display_text(status: str, assigned_master_id: int | None = None) -> str:
+    """
+    Получить отображаемый текст статуса для экспорта.
+
+    Args:
+        status: Статус заявки
+        assigned_master_id: ID назначенного мастера (для определения Отказ/Отмена)
+
+    Returns:
+        Текст статуса на русском языке
+    """
+    if status == "REFUSED":
+        # Если мастер был назначен - это отказ мастера, иначе - отмена диспетчером
+        if assigned_master_id:
+            return "Отказ"
+        return "Отмена"
+
+    # Для остальных статусов используем стандартные названия
+    status_names = {
+        "NEW": "Новая",
+        "ASSIGNED": "Назначена",
+        "ACCEPTED": "Принята",
+        "IN_PROGRESS": "В работе",
+        "ONSITE": "На объекте",
+        "COMPLETED": "Завершена",
+        "CLOSED": "Завершена",
+        "DR": "ДР",
+    }
+    return status_names.get(status, status)
+
+
 class ExcelExportService:
     """Сервис для экспорта отчетов в Excel"""
 
@@ -204,9 +235,9 @@ class ExcelExportService:
             summary_data: list[list[str | int | float]] = [
                 ["Показатель", "Значение"],
                 ["Всего заказов", int(report.total_orders or 0)],
-                ["Общая сумма", f"{report.total_amount:,.2f} ₽"],
+                ["Общая сумма без материала", f"{report.total_net_profit:,.2f} ₽"],
+                ["Общая сумма с расходным материалом", f"{report.total_amount:,.2f} ₽"],
                 ["Расходный материал", f"{report.total_materials_cost:,.2f} ₽"],
-                ["Чистая прибыль", f"{report.total_net_profit:,.2f} ₽"],
                 ["Средний чек", f"{report.average_check:,.2f} ₽"],
                 ["", ""],
                 ["Прибыль компании", f"{report.total_company_profit:,.2f} ₽"],
@@ -417,6 +448,7 @@ class ExcelExportService:
                 SELECT
                     o.id,
                     o.status,
+                    o.assigned_master_id,
                     o.equipment_type,
                     o.client_name,
                     o.client_address,
@@ -477,6 +509,11 @@ class ExcelExportService:
                     "REFUSED": "❌",
                 }.get(order["status"], "❓")
 
+                # Получаем текст статуса
+                status_text = _get_status_display_text(
+                    order["status"], order.get("assigned_master_id")
+                )
+
                 notes = []
                 if order["out_of_city"]:
                     notes.append("Выезд")
@@ -508,7 +545,7 @@ class ExcelExportService:
                 data = [
                     "",
                     order["id"],
-                    f"{status_emoji} {order['status']}",
+                    f"{status_emoji} {status_text}",
                     order["equipment_type"],
                     order["client_name"],
                     (
@@ -701,7 +738,7 @@ class ExcelExportService:
             cursor = await connection.execute(
                 """
                 SELECT
-                    o.id, o.status, o.equipment_type, o.client_name,
+                    o.id, o.status, o.assigned_master_id, o.equipment_type, o.client_name,
                     o.client_address, o.client_phone, o.created_at, o.updated_at,
                     o.total_amount, o.materials_cost, o.master_profit, o.company_profit,
                     o.notes, o.scheduled_time, o.out_of_city, o.has_review
@@ -746,6 +783,11 @@ class ExcelExportService:
                         "REFUSED": "❌",
                     }.get(order["status"], "❓")
 
+                    # Получаем текст статуса
+                    status_text = _get_status_display_text(
+                        order["status"], order.get("assigned_master_id")
+                    )
+
                     notes = []
                     if order["out_of_city"]:
                         notes.append("Выезд")
@@ -778,7 +820,7 @@ class ExcelExportService:
 
                     data = [
                         order["id"],
-                        f"{status_emoji} {order['status']}",
+                        f"{status_emoji} {status_text}",
                         order["equipment_type"],
                         order["client_name"],
                         (
@@ -970,7 +1012,6 @@ class ExcelExportService:
                 "Создано",
                 "Закрыто",
                 "Сумма",
-                "Материалы",
                 "Прибыль мастера",
                 "Прибыль компании",
                 "Доп. инфо",
@@ -1013,7 +1054,7 @@ class ExcelExportService:
             if not orders:
                 ws[f"A{row}"] = "Нет закрытых заказов за этот период"
                 ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
-                ws.merge_cells(f"A{row}:K{row}")
+                ws.merge_cells(f"A{row}:J{row}")
             else:
                 # Выводим заказы
                 for order in orders:
@@ -1051,7 +1092,6 @@ class ExcelExportService:
                         created_at,
                         updated_at,
                         float(order["total_amount"] or 0),
-                        float(order["materials_cost"] or 0),
                         float(order["master_profit"] or 0),
                         float(order["company_profit"] or 0),
                         ", ".join(additional_info) if additional_info else "-",
@@ -1064,11 +1104,11 @@ class ExcelExportService:
                         if col_idx == 1:
                             cell.alignment = center_alignment
                             cell.font = ExcelStyles.SIMPLE_BOLD_FONT
-                        elif col_idx in [2, 3, 4, 5, 6, 11]:
+                        elif col_idx in [2, 3, 4, 5, 6, 10]:
                             cell.alignment = left_alignment
                         else:
                             cell.alignment = right_alignment
-                            if col_idx >= 7 and col_idx <= 10:
+                            if col_idx >= 7 and col_idx <= 9:
                                 cell.number_format = "#,##0.00 ₽"
 
                     row += 1
@@ -1104,10 +1144,9 @@ class ExcelExportService:
                 "E": 18,
                 "F": 18,
                 "G": 15,
-                "H": 15,
+                "H": 18,
                 "I": 18,
-                "J": 18,
-                "K": 22,
+                "J": 22,
             }
             for col_letter, width in widths.items():
                 ws.column_dimensions[col_letter].width = width
@@ -1182,8 +1221,6 @@ class ExcelExportService:
                 "Отказано",
                 "Прочие статусы",
                 "Общая сумма",
-                "Материалы",
-                "Чистая прибыль",
                 "Прибыль компании",
                 "Сдача в кассу",
                 "Средний чек",
@@ -1218,7 +1255,7 @@ class ExcelExportService:
             if not masters:
                 ws[f"A{row}"] = "Нет утвержденных мастеров"
                 ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
-                ws.merge_cells(f"A{row}:N{row}")
+                ws.merge_cells(f"A{row}:M{row}")
             else:
                 # Данные по каждому мастеру
                 for master in masters:
@@ -1254,8 +1291,6 @@ class ExcelExportService:
 
                     # Вычисляем данные
                     total_sum = float(stats_row["total_sum"] or 0)
-                    materials = float(stats_row["materials_sum"] or 0)
-                    net_profit = total_sum - materials
                     cash_to_company = float(stats_row["company_profit_sum"] or 0)
                     other_statuses = (stats_row["total_orders"] or 0) - (
                         (stats_row["closed"] or 0)
@@ -1273,8 +1308,6 @@ class ExcelExportService:
                         stats_row["refused"] or 0,
                         other_statuses,
                         total_sum,
-                        materials,
-                        net_profit,
                         cash_to_company,
                         cash_to_company,
                         float(stats_row["avg_check"] or 0),
@@ -1292,11 +1325,11 @@ class ExcelExportService:
                         elif col_idx == 2:
                             cell.alignment = left_alignment
                             cell.font = ExcelStyles.SIMPLE_BOLD_FONT
-                        elif col_idx in [3, 4, 5, 6, 7, 14, 15]:
+                        elif col_idx in [3, 4, 5, 6, 7, 12, 13]:
                             cell.alignment = center_alignment
                         else:
                             cell.alignment = right_alignment
-                            if col_idx >= 8 and col_idx <= 13:
+                            if col_idx >= 8 and col_idx <= 11:
                                 cell.number_format = "#,##0.00 ₽"
 
                     row += 1
@@ -1317,7 +1350,6 @@ class ExcelExportService:
                         SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
                         SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
                         SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
-                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
                         SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
                         AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check,
                         SUM(CASE WHEN status = 'CLOSED' AND out_of_city = 1 THEN 1 ELSE 0 END) as out_of_city,
@@ -1334,7 +1366,6 @@ class ExcelExportService:
                     if totals_row is not None
                     else {
                         "total_sum": 0,
-                        "materials_sum": 0,
                         "total_orders": 0,
                         "closed": 0,
                         "in_work": 0,
@@ -1347,8 +1378,6 @@ class ExcelExportService:
                 )
 
                 total_sum = float(totals["total_sum"] or 0)
-                materials_sum = float(totals["materials_sum"] or 0)
-                net_profit_total = total_sum - materials_sum
                 others_total = (totals["total_orders"] or 0) - (
                     (totals["closed"] or 0) + (totals["in_work"] or 0) + (totals["refused"] or 0)
                 )
@@ -1360,8 +1389,6 @@ class ExcelExportService:
                     totals["refused"],
                     others_total,
                     total_sum,
-                    materials_sum,
-                    net_profit_total,
                     float(totals["company_profit_sum"] or 0),
                     float(totals["company_profit_sum"] or 0),
                     float(totals["avg_check"] or 0),
@@ -1375,11 +1402,11 @@ class ExcelExportService:
                     cell.fill = ExcelStyles.HIGHLIGHT_FILL
                     cell.border = thin_border
 
-                    if col_idx in [3, 4, 5, 6, 7, 14, 15]:
+                    if col_idx in [3, 4, 5, 6, 7, 12, 13]:
                         cell.alignment = center_alignment
                     else:
                         cell.alignment = right_alignment
-                        if col_idx >= 8 and col_idx <= 13:
+                        if col_idx >= 8 and col_idx <= 11:
                             cell.number_format = "#,##0.00 ₽"
 
             # Ширина столбцов
@@ -1391,13 +1418,12 @@ class ExcelExportService:
                 "E": 12,
                 "F": 12,
                 "G": 15,
-                "H": 15,
-                "I": 15,
-                "J": 18,
-                "K": 15,
-                "L": 15,
+                "H": 18,
+                "I": 18,
+                "J": 15,
+                "K": 10,
+                "L": 10,
                 "M": 10,
-                "N": 10,
             }
             for col_letter, width in widths.items():
                 ws.column_dimensions[col_letter].width = width
@@ -1470,6 +1496,7 @@ class ExcelExportService:
                             all_orders.append({
                                 "id": order.id,
                                 "status": order.status,
+                                "assigned_master_id": order.assigned_master_id,
                                 "equipment_type": order.equipment_type,
                                 "client_name": order.client_name,
                                 "client_address": order.client_address,
@@ -1517,7 +1544,7 @@ class ExcelExportService:
                 all_orders_cursor = await connection.execute(
                     """
                     SELECT
-                        id, status, equipment_type, client_name, client_address, client_phone,
+                        id, status, assigned_master_id, equipment_type, client_name, client_address, client_phone,
                         created_at, updated_at, total_amount, materials_cost,
                         master_profit, company_profit, out_of_city, has_review, refuse_reason
                     FROM orders
@@ -1640,6 +1667,11 @@ class ExcelExportService:
                         "REFUSED": "❌",
                     }.get(order["status"], "❓")
 
+                    # Получаем текст статуса
+                    status_text = _get_status_display_text(
+                        order["status"], order.get("assigned_master_id")
+                    )
+
                     # Безопасное форматирование дат
                     created_at = ""
                     updated_at = ""
@@ -1662,7 +1694,7 @@ class ExcelExportService:
 
                     data = [
                         order["id"],
-                        f"{status_emoji} {order['status']}",
+                        f"{status_emoji} {status_text}",
                         order["equipment_type"],
                         order["client_name"],
                         (
@@ -1912,7 +1944,6 @@ class ExcelExportService:
                 "Создана",
                 "Обновлена",
                 "Сумма",
-                "Материалы",
                 "Прибыль мастера",
                 "Прибыль компании",
                 "Выезд",
@@ -1933,13 +1964,18 @@ class ExcelExportService:
             if not completed_orders:
                 ws[f"A{row}"] = "Нет завершенных заявок"
                 ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
-                ws.merge_cells(f"A{row}:O{row}")
+                ws.merge_cells(f"A{row}:N{row}")
             else:
                 for order in completed_orders:
                     status_emoji = {
                         "CLOSED": "🔒",
                         "REFUSED": "❌",
                     }.get(order["status"], "❓")
+
+                    # Получаем текст статуса
+                    status_text = _get_status_display_text(
+                        order["status"], order.get("assigned_master_id")
+                    )
 
                     # Безопасное форматирование дат
                     created_at = ""
@@ -1949,7 +1985,7 @@ class ExcelExportService:
                             dt = datetime.fromisoformat(order["created_at"])
                             if dt.tzinfo is not None:
                                 dt = dt.replace(tzinfo=None)
-                            created_at = dt.strftime("%d.%м.%Y %H:%M")
+                            created_at = dt.strftime("%d.%m.%Y %H:%M")
                         except Exception:
                             created_at = str(order["created_at"])[:16]
                     if order["updated_at"]:
@@ -1963,7 +1999,7 @@ class ExcelExportService:
 
                     data = [
                         order["id"],
-                        f"{status_emoji} {order['status']}",
+                        f"{status_emoji} {status_text}",
                         order["equipment_type"],
                         order["client_name"],
                         (
@@ -1974,10 +2010,7 @@ class ExcelExportService:
                         order["client_phone"],
                         created_at,
                         updated_at,
-                        float(
-                            (order["total_amount"] or 0) - (order["materials_cost"] or 0)
-                        ),  # Чистая прибыль
-                        float(order["materials_cost"] or 0),
+                        float(order["total_amount"] or 0),
                         float(order["master_profit"] or 0),
                         float(order["company_profit"] or 0),
                         "Да" if order["out_of_city"] else "",
@@ -2000,11 +2033,11 @@ class ExcelExportService:
                                 cell.fill = ExcelStyles.ERROR_FILL
                         elif col_idx in [3, 4, 5, 6, 7, 8]:  # Текстовые поля
                             cell.alignment = left_alignment
-                        elif col_idx == 15:  # Причина отказа
+                        elif col_idx == 14:  # Причина отказа
                             cell.alignment = ExcelStyles.WRAP_TOP_ALIGNMENT
                         else:
-                            cell.alignment = center_alignment if col_idx >= 13 else right_alignment
-                            if col_idx >= 9 and col_idx <= 12:  # Денежные поля
+                            cell.alignment = center_alignment if col_idx >= 12 else right_alignment
+                            if col_idx >= 9 and col_idx <= 11:  # Денежные поля
                                 cell.number_format = "#,##0.00 ₽"
 
                     row += 1
@@ -2018,11 +2051,6 @@ class ExcelExportService:
                 # Подсчитываем суммы
                 total_sum_completed = sum(
                     float(o["total_amount"] or 0)
-                    for o in completed_orders
-                    if o["status"] == "CLOSED"
-                )
-                total_materials_completed = sum(
-                    float(o["materials_cost"] or 0)
                     for o in completed_orders
                     if o["status"] == "CLOSED"
                 )
@@ -2040,9 +2068,8 @@ class ExcelExportService:
                 # Добавляем суммы на ту же строку что и "ИТОГО:"
                 for cell_ref, val in [
                     (f"I{row}", total_sum_completed),
-                    (f"J{row}", total_materials_completed),
-                    (f"K{row}", total_master_profit_completed),
-                    (f"L{row}", total_company_profit_completed),
+                    (f"J{row}", total_master_profit_completed),
+                    (f"K{row}", total_company_profit_completed),
                 ]:
                     cell = ws[cell_ref]
                     cell.value = val
@@ -2076,12 +2103,11 @@ class ExcelExportService:
                 "G": 18,
                 "H": 18,
                 "I": 15,
-                "J": 15,
+                "J": 18,
                 "K": 18,
-                "L": 18,
+                "L": 10,
                 "M": 10,
-                "N": 10,
-                "O": 45,  # Причина отказа
+                "N": 45,  # Причина отказа
             }
             for col_letter, width in widths_completed.items():
                 ws.column_dimensions[col_letter].width = width
@@ -2135,7 +2161,6 @@ class ExcelExportService:
             "Создано",
             "Закрыто",
             "Сумма",
-            "Материалы",
             "Прибыль мастера",
             "Прибыль компании",
             "Доп. инфо",
@@ -2176,7 +2201,7 @@ class ExcelExportService:
             # Если нет заказов
             ws[f"A{row}"] = "Нет закрытых заказов за этот период"
             ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
-            ws.merge_cells(f"A{row}:K{row}")
+            ws.merge_cells(f"A{row}:J{row}")
         else:
             # Выводим заказы
             for order in orders:
@@ -2194,7 +2219,6 @@ class ExcelExportService:
                     order["created_at"][:16] if order["created_at"] else "",
                     order["updated_at"][:16] if order["updated_at"] else "",
                     float(order["total_amount"] or 0),
-                    float(order["materials_cost"] or 0),
                     float(order["master_profit"] or 0),
                     float(order["company_profit"] or 0),
                     ", ".join(additional_info) if additional_info else "-",
@@ -2207,11 +2231,11 @@ class ExcelExportService:
                     if col_idx == 1:  # ID
                         cell.alignment = center_alignment
                         cell.font = ExcelStyles.SIMPLE_BOLD_FONT
-                    elif col_idx in [2, 3, 4, 5, 6, 11]:  # Текстовые поля
+                    elif col_idx in [2, 3, 4, 5, 6, 10]:  # Текстовые поля
                         cell.alignment = left_alignment
                     else:
                         cell.alignment = right_alignment
-                        if col_idx >= 7 and col_idx <= 10:  # Денежные поля
+                        if col_idx >= 7 and col_idx <= 9:  # Денежные поля
                             cell.number_format = "#,##0.00 ₽"
 
                 row += 1
@@ -2222,15 +2246,13 @@ class ExcelExportService:
             ws[f"A{row}"].font = ExcelStyles.BOLD_FONT
 
             total_sum = sum(float(o["total_amount"] or 0) for o in orders)
-            total_materials = sum(float(o["materials_cost"] or 0) for o in orders)
             total_master_profit = sum(float(o["master_profit"] or 0) for o in orders)
             total_company_profit = sum(float(o["company_profit"] or 0) for o in orders)
 
             for col, val in [
                 (f"G{row}", total_sum),
-                (f"H{row}", total_materials),
-                (f"I{row}", total_master_profit),
-                (f"J{row}", total_company_profit),
+                (f"H{row}", total_master_profit),
+                (f"I{row}", total_company_profit),
             ]:
                 cell = ws[col]
                 cell.value = val
@@ -2247,10 +2269,9 @@ class ExcelExportService:
             "E": 18,
             "F": 18,
             "G": 15,
-            "H": 15,
+            "H": 18,
             "I": 18,
-            "J": 18,
-            "K": 22,
+            "J": 22,
         }
         for col, width in widths.items():
             ws.column_dimensions[col].width = width
@@ -2272,7 +2293,7 @@ class ExcelExportService:
 
         # Заголовок
         row = 1
-        ws.merge_cells(f"A{row}:N{row}")
+        ws.merge_cells(f"A{row}:L{row}")
         cell = ws[f"A{row}"]
         cell.value = "РАСШИРЕННАЯ СТАТИСТИКА ПО МАСТЕРАМ"
         cell.font = header_font
@@ -2291,8 +2312,6 @@ class ExcelExportService:
             "В работе",
             "Отказано",
             "Общая сумма",
-            "Материалы",
-            "Чистая прибыль",
             "Прибыль компании",
             "Сдача в кассу",
             "Средний чек",
@@ -2335,9 +2354,6 @@ class ExcelExportService:
             refused = len([o for o in orders if o.status == OrderStatus.REFUSED])
 
             total_sum = sum(o.total_amount or 0 for o in orders if o.status == OrderStatus.CLOSED)
-            materials_sum = sum(
-                o.materials_cost or 0 for o in orders if o.status == OrderStatus.CLOSED
-            )
             company_profit_sum = sum(
                 o.company_profit or 0 for o in orders if o.status == OrderStatus.CLOSED
             )
@@ -2356,8 +2372,6 @@ class ExcelExportService:
             avg_check = sum(closed_amounts) / len(closed_amounts) if closed_amounts else 0
 
             # Вычисляем данные
-            materials = float(materials_sum)
-            net_profit = total_sum - materials
             cash_to_company = float(company_profit_sum)
 
             # Данные по мастеру
@@ -2369,8 +2383,6 @@ class ExcelExportService:
                 in_work,
                 refused,
                 total_sum,
-                materials,
-                net_profit,
                 cash_to_company,
                 cash_to_company,  # Сдача в кассу = прибыль компании
                 float(avg_check),
@@ -2389,21 +2401,21 @@ class ExcelExportService:
                 elif col_idx == 2:  # Имя
                     cell.alignment = left_alignment
                     cell.font = ExcelStyles.SIMPLE_BOLD_FONT
-                elif col_idx in [3, 4, 5, 6, 13, 14]:  # Счетчики
+                elif col_idx in [3, 4, 5, 6, 11, 12]:  # Счетчики
                     cell.alignment = center_alignment
                 else:  # Денежные поля
                     cell.alignment = right_alignment
-                    if col_idx >= 7 and col_idx <= 12:
+                    if col_idx >= 7 and col_idx <= 10:
                         cell.number_format = "#,##0.00 ₽"
 
             row += 1
 
         # Добавляем новую колонку "Отказов с причиной"
-        ws.cell(row=2, column=15, value="Отказов с причиной")
-        ws.cell(row=2, column=15).font = ExcelStyles.SIMPLE_BOLD_FONT
-        ws.cell(row=2, column=15).fill = subheader_fill
-        ws.cell(row=2, column=15).alignment = center_alignment
-        ws.cell(row=2, column=15).border = thin_border
+        ws.cell(row=2, column=13, value="Отказов с причиной")
+        ws.cell(row=2, column=13).font = ExcelStyles.SIMPLE_BOLD_FONT
+        ws.cell(row=2, column=13).fill = subheader_fill
+        ws.cell(row=2, column=13).alignment = center_alignment
+        ws.cell(row=2, column=13).border = thin_border
 
         # Пересчитываем для добавления колонки "Отказов с причиной"
         row_idx = 3
@@ -2421,7 +2433,7 @@ class ExcelExportService:
                 [o for o in orders if o.status == OrderStatus.REFUSED and o.refuse_reason]
             )
 
-            cell = ws.cell(row=row_idx, column=15, value=refused_with_reason)
+            cell = ws.cell(row=row_idx, column=13, value=refused_with_reason)
             cell.border = thin_border
             cell.alignment = center_alignment
 
