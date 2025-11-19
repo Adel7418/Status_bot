@@ -202,6 +202,12 @@ ignore = [
 "app/database/orm_models.py" = ["A003"]  # class attribute shadowing builtin (normal for SQLAlchemy)
 "app/keyboards/inline.py" = ["A003"]  # class attribute shadowing builtin (normal for enums)
 "create_order_reports_table.py" = ["T201"]  # print statements (acceptable in scripts)
+"scripts/**/*.py" = [
+    "S103",  # os.chmod with permissive mask (intentional for Docker setup)
+    "S603",  # subprocess call (intentional for Docker setup with fixed parameters)
+    "S607",  # partial executable path (intentional for Docker setup - standard utilities in PATH)
+    "T201",  # print statements (acceptable in scripts)
+]
 "app/handlers/**/*.py" = [
     "PLR0911", # too many return statements (normal for handlers with early returns)
 ]
