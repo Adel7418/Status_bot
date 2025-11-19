@@ -53,9 +53,15 @@ class TestEquipmentType:
         """Тест получения всех типов техники"""
         types = EquipmentType.all_types()
         assert EquipmentType.WASHING_MACHINE in types
+        assert EquipmentType.DRYER in types
+        assert EquipmentType.OVEN in types
         assert EquipmentType.DISHWASHER in types
+        assert EquipmentType.COFFEE_MACHINE in types
+        assert EquipmentType.PLUMBING in types
+        assert EquipmentType.ELECTRICAL in types
+        assert EquipmentType.WATER_HEATER in types
         assert EquipmentType.TV in types
-        assert len(types) == 8
+        assert len(types) == 9
 
 
 class TestConfig:

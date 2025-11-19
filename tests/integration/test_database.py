@@ -177,9 +177,19 @@ class TestDatabase:
     async def test_update_order_status(self, db: Database):
         """Тест обновления статуса заявки"""
         dispatcher_id = 111222333
+        master_telegram_id = 444555666
 
-        # Создаём пользователя
+        # Создаём пользователей
         await db.get_or_create_user(telegram_id=dispatcher_id)
+        await db.get_or_create_user(telegram_id=master_telegram_id)
+
+        # Создаём мастера
+        master = await db.create_master(
+            telegram_id=master_telegram_id,
+            phone="+79991234567",
+            specialization="Стиральные машины",
+            is_approved=True,
+        )
 
         # Создаём заявку
         order = await db.create_order(
@@ -191,8 +201,24 @@ class TestDatabase:
             dispatcher_id=dispatcher_id,
         )
 
-        # Обновляем статус
-        await db.update_order_status(order.id, OrderStatus.CLOSED)
+        # Переходим через допустимые статусы: NEW → ASSIGNED → ACCEPTED → ONSITE → CLOSED
+        # NEW → ASSIGNED: требуется роль DISPATCHER или ADMIN
+        await db.update_order_status(
+            order.id, OrderStatus.ASSIGNED, user_roles=[UserRole.DISPATCHER]
+        )
+        await db.assign_master_to_order(order.id, master.id)
+        # ASSIGNED → ACCEPTED: требуется роль MASTER или ADMIN
+        await db.update_order_status(
+            order.id, OrderStatus.ACCEPTED, user_roles=[UserRole.MASTER]
+        )
+        # ACCEPTED → ONSITE: требуется роль MASTER или ADMIN
+        await db.update_order_status(
+            order.id, OrderStatus.ONSITE, user_roles=[UserRole.MASTER]
+        )
+        # ONSITE → CLOSED: требуется роль MASTER или ADMIN
+        await db.update_order_status(
+            order.id, OrderStatus.CLOSED, user_roles=[UserRole.MASTER]
+        )
 
         # Проверяем
         order2 = await db.get_order_by_id(order.id)
