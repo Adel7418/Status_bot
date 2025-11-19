@@ -290,7 +290,9 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
+                except (
+                    Exception
+                ):  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -322,7 +324,9 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
+                except (
+                    Exception
+                ):  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -357,7 +361,9 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
+                except (
+                    Exception
+                ):  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
                     pass
             adjusted_width = max_length + 2
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -420,7 +426,9 @@ class ReportsService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(cell.value)
-                except Exception:  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
+                except (
+                    Exception
+                ):  # nosec B110 - игнорирование ошибок при обработке ячеек Excel не критично
                     pass
             adjusted_width = min((max_length + 2), 50)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width
