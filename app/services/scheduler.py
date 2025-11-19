@@ -7,7 +7,7 @@ import contextlib
 import logging
 import os
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 class OrderAlert(TypedDict):
     """Типизация для алертов о заявках"""
 
-    order: OrderType
+    order: Any  # LegacyOrder | ORMOrder
     time: timedelta
 
 
