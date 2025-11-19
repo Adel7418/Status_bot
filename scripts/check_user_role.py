@@ -2,6 +2,7 @@
 """
 Скрипт для проверки роли пользователя по Telegram ID
 """
+
 import asyncio
 import sys
 from pathlib import Path
