@@ -5,7 +5,7 @@
 repos:
   # Общие проверки файлов
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: trailing-whitespace
         name: Удаление trailing whitespace
@@ -84,8 +84,10 @@ repos:
   #       stages: [pre-push]
 
 # Конфигурация для отдельных хуков
+# Используем python3.11 для совместимости с GitHub Actions runner
+# Если локально нет Python 3.11, можно установить его или использовать SKIP=1 для pre-commit
 default_language_version:
-  python: python3.13
+  python: python3.11
 
 # Какие файлы исключить
 exclude: |
