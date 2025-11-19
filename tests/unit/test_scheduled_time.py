@@ -67,7 +67,7 @@ class TestScheduledTimeValidation:
         assert is_valid, f"Должно быть валидным: '{time_input}', но получена ошибка: {error}"
 
     @pytest.mark.parametrize(
-        "time_input,expected_error",
+        ("time_input", "expected_error"),
         [
             ("12", "Время/инструкция слишком короткие"),
             ("ab", "Время/инструкция слишком короткие"),

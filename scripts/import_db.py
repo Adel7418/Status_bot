@@ -42,7 +42,7 @@ def import_database(
     cursor.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
     )
-    existing_tables = set(row[0] for row in cursor.fetchall())
+    existing_tables = {row[0] for row in cursor.fetchall()}
 
     # Импорт данных
     total_rows = 0
@@ -167,4 +167,6 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    import sys
+
+    sys.exit(main())

@@ -10,6 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import aiofiles
+
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -193,8 +195,9 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
     print()
 
     # Читаем JSON
-    with open(json_file, encoding="utf-8") as f:
-        data = json.load(f)
+    async with aiofiles.open(json_file, encoding="utf-8") as f:
+        content = await f.read()
+        data = json.loads(content)
 
     messages = data.get("messages", [])
     print(f"Всего сообщений в экспорте: {len(messages)}")
@@ -230,7 +233,7 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
             try:
                 created_at = datetime.fromisoformat(date_str.replace("T", " "))
                 order_data["created_at"] = created_at.strftime("%Y-%m-%d %H:%M:%S")
-            except:
+            except (ValueError, AttributeError):
                 order_data["created_at"] = None
 
             # Проверяем, есть ли номер в самих данных заявки
@@ -255,12 +258,15 @@ async def parse_and_restore(json_file: str, dispatcher_id: int, start_from: int 
                         order_number = num
                         break
 
-            if order_number and order_number not in restored_order_numbers:
-                # Фильтруем по номеру заявки
-                if order_number >= start_from:
-                    order_data["order_number"] = order_number
-                    orders_to_restore.append(order_data)
-                    restored_order_numbers.add(order_number)
+            # Фильтруем по номеру заявки
+            if (
+                order_number
+                and order_number not in restored_order_numbers
+                and order_number >= start_from
+            ):
+                order_data["order_number"] = order_number
+                orders_to_restore.append(order_data)
+                restored_order_numbers.add(order_number)
 
     print(f"Найдено заявок для восстановления (>= #{start_from}): {len(orders_to_restore)}")
     print()

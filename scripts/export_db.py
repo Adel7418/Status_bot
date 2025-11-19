@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def export_database(db_path: str = "bot_database.db", output_path: str = None) -> str:
+def export_database(db_path: str = "bot_database.db", output_path: str | None = None) -> str:
     """
     Экспорт данных из SQLite в JSON
 
@@ -128,4 +128,6 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    import sys
+
+    sys.exit(main())

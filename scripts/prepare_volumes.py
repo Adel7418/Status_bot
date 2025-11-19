@@ -15,6 +15,7 @@ On Windows: grants Full Control to Everyone via icacls (best-effort).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import platform
 import subprocess
@@ -37,24 +38,20 @@ def is_windows() -> bool:
 
 def set_permissions_posix(paths: Iterable[Path]) -> None:
     for p in paths:
-        try:
+        # chown may fail on some filesystems; ignore
+        with contextlib.suppress(Exception):
             os.chown(p, APP_UID, APP_GID)  # type: ignore[attr-defined]  # nosec S103 - chown используется только с фиксированными UID/GID для Docker setup
-        except Exception:
-            # chown may fail on some filesystems; ignore
-            pass
-        try:
-            # Allow rwx for all to avoid permission surprises
+        # Allow rwx for all to avoid permission surprises
+        with contextlib.suppress(Exception):
             os.chmod(
                 p, 0o777
             )  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
-        except Exception:
-            pass
 
 
 def grant_windows_acl(path: Path) -> None:
     # Grant Full control to Everyone on folder recursively
     # SDDL SID for Everyone: S-1-1-0; icacls supports name "Everyone" as well
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(  # nosec S603 - icacls используется только с фиксированными параметрами и локальными путями
             [
                 "icacls",
@@ -69,8 +66,6 @@ def grant_windows_acl(path: Path) -> None:
             stderr=subprocess.DEVNULL,
             shell=False,
         )
-    except Exception:
-        pass
 
 
 def set_permissions_windows(paths: Iterable[Path]) -> None:

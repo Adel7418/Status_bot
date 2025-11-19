@@ -139,7 +139,7 @@ async def test_di_injection():
                     )
             elif hasattr(db, "get_user_by_telegram_id"):
                 # Legacy Database
-                user = await db.get_user_by_telegram_id(1)  # Тестовый запрос
+                await db.get_user_by_telegram_id(1)  # Тестовый запрос
                 logger.info("✅ Подключение к БД работает (Legacy)")
             else:
                 logger.warning("⚠️  Неизвестный тип Database")
@@ -254,7 +254,7 @@ async def main():
     print()
 
     # 2. Проверка регистрации handlers
-    handlers_info = check_handler_registration()
+    check_handler_registration()
     print()
 
     # 3. Анализ логов
