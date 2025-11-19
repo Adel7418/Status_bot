@@ -40,7 +40,19 @@ jobs:
         echo "Python version: $PYTHON_VERSION"
         if [ "$PYTHON_VERSION" = "3.13" ]; then
           echo "Skipping asyncpg for Python 3.13"
-          python -c "with open('requirements.txt', 'r') as f: lines = f.readlines(); f2 = open('requirements_no_asyncpg.txt', 'w'); [f2.write(line) for line in lines if not line.strip().startswith('asyncpg')]; f2.close()"
+          # Filter out asyncpg line and replace sqlalchemy[asyncio] with sqlalchemy
+          python -c "
+          with open('requirements.txt', 'r') as f:
+              lines = f.readlines()
+          with open('requirements_no_asyncpg.txt', 'w') as f:
+              for line in lines:
+                  # Skip asyncpg lines
+                  if 'asyncpg' in line.lower():
+                      continue
+                  # Replace sqlalchemy[asyncio] with sqlalchemy
+                  line = line.replace('sqlalchemy[asyncio]', 'sqlalchemy')
+                  f.write(line)
+          "
           cat requirements_no_asyncpg.txt
           pip install -r requirements_no_asyncpg.txt
         else
