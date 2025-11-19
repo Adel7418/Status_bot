@@ -32,15 +32,15 @@ jobs:
         sudo apt-get install -y build-essential python3-dev libpq-dev
 
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip setuptools wheel
         # Skip asyncpg on Python 3.13 as it doesn't build yet (not used in code)
-        if [ "${{ matrix.python-version }}" = "3.13" ]; then
-          while IFS= read -r line; do
-            if [[ ! "$line" =~ ^asyncpg ]]; then
-              pip install "$line" || true
-            fi
-          done < requirements.txt
+        PYTHON_VERSION="${{ matrix.python-version }}"
+        if [ "$PYTHON_VERSION" = "3.13" ]; then
+          echo "Skipping asyncpg for Python 3.13"
+          grep -v "^asyncpg" requirements.txt > requirements_no_asyncpg.txt
+          pip install -r requirements_no_asyncpg.txt
         else
           pip install -r requirements.txt
         fi
