@@ -306,7 +306,8 @@ class MasterReportsService:
             ws.cell(row=row_num, column=5, value=order.client_phone or "").border = border
             ws.cell(row=row_num, column=6, value=order.client_address or "").border = border
 
-            amount = order.total_amount or 0
+            # Сумма заказов без учета расходного материала
+            amount = (order.total_amount or 0) - (order.materials_cost or 0)
             materials = order.materials_cost or 0
             master_profit = order.master_profit or 0
             company_profit = order.company_profit or 0

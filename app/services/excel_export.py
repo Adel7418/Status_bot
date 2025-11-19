@@ -1814,7 +1814,7 @@ class ExcelExportService:
                         order["client_phone"],
                         created_at,
                         updated_at,
-                        float(order["total_amount"] or 0),
+                        float((order["total_amount"] or 0) - (order["materials_cost"] or 0)),  # Чистая прибыль
                         float(order["materials_cost"] or 0),
                         float(order["master_profit"] or 0),
                         float(order["company_profit"] or 0),

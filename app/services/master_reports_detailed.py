@@ -224,7 +224,9 @@ class MasterReportsService:
                 }
 
             master_stats[master_id]["orders"].append(order)
-            master_stats[master_id]["total_amount"] += order.total_amount or 0
+            # Сумма заказов без учета расходного материала
+            order_amount = (order.total_amount or 0) - (order.materials_cost or 0)
+            master_stats[master_id]["total_amount"] += order_amount
             master_stats[master_id]["handover_amount"] += order.company_profit or 0
 
         # Сортируем мастеров по сумме заказов (по убыванию)
