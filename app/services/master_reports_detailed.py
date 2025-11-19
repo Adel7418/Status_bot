@@ -104,7 +104,7 @@ class MasterReportsService:
             # Создаем сводный лист
             summary_sheet = wb.create_sheet("Сводка")
             await self._create_summary_sheet(
-                summary_sheet, orders, period_name, start_date, end_date
+                summary_sheet, orders, period_name, start_date, end_date, report_type
             )
 
             # Получаем всех активных и одобренных мастеров
@@ -171,6 +171,7 @@ class MasterReportsService:
         period_name: str,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
+        report_type: str = "daily",
     ):
         """Создание сводного листа"""
         # Стили
@@ -198,12 +199,29 @@ class MasterReportsService:
         cell.fill = header_fill
         cell.alignment = center_alignment
         ws.row_dimensions[1].height = 30
+        # Определяем количество столбцов в зависимости от типа отчета
+        is_monthly = report_type == "monthly"
+        num_cols = (
+            6 if is_monthly else 5
+        )  # 6 столбцов для ежемесячной (с материалами), 5 для остальных
+
         # Растягиваем заголовок на несколько столбцов
-        for col in range(2, 6):  # A1:E1
+        for col in range(2, num_cols + 1):
             ws.cell(row=1, column=col).fill = header_fill
 
         # Заголовки столбцов
-        headers = ["Мастер", "Кол-во заявок", "Сумма заявок", "Сумма к сдаче", "Средний чек"]
+        if is_monthly:
+            headers = [
+                "Мастер",
+                "Кол-во заявок",
+                "Сумма заявок",
+                "Материалы",
+                "Сумма к сдаче",
+                "Средний чек",
+            ]
+        else:
+            headers = ["Мастер", "Кол-во заявок", "Сумма заявок", "Сумма к сдаче", "Средний чек"]
+
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=3, column=col_idx, value=header)
             cell.font = header_font
@@ -220,13 +238,15 @@ class MasterReportsService:
                     "name": order.master_name or "Неизвестен",
                     "orders": [],
                     "total_amount": 0,
+                    "materials_cost": 0,
                     "handover_amount": 0,
                 }
 
             master_stats[master_id]["orders"].append(order)
-            # Сумма заказов без учета расходного материала
-            order_amount = (order.total_amount or 0) - (order.materials_cost or 0)
+            # Сумма заказов включает расходный материал
+            order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
             master_stats[master_id]["total_amount"] += order_amount
+            master_stats[master_id]["materials_cost"] += order.materials_cost or 0
             master_stats[master_id]["handover_amount"] += order.company_profit or 0
 
         # Сортируем мастеров по сумме заказов (по убыванию)
@@ -238,19 +258,30 @@ class MasterReportsService:
         row = 4
         total_orders = 0
         total_amount = 0
+        total_materials = 0
         total_handover = 0
 
         for _master_id, stats in sorted_masters:
             order_count = len(stats["orders"])
             avg_check = stats["total_amount"] / order_count if order_count > 0 else 0
 
-            data = [
-                stats["name"],
-                order_count,
-                stats["total_amount"],
-                stats["handover_amount"],
-                avg_check,
-            ]
+            if is_monthly:
+                data = [
+                    stats["name"],
+                    order_count,
+                    stats["total_amount"],
+                    stats["materials_cost"],
+                    stats["handover_amount"],
+                    avg_check,
+                ]
+            else:
+                data = [
+                    stats["name"],
+                    order_count,
+                    stats["total_amount"],
+                    stats["handover_amount"],
+                    avg_check,
+                ]
 
             for col_idx, value in enumerate(data, start=1):
                 cell = ws.cell(row=row, column=col_idx, value=value)
@@ -260,11 +291,15 @@ class MasterReportsService:
                 cell.alignment = left_alignment if col_idx == 1 else center_alignment
 
                 # Форматируем числа
-                if col_idx in [3, 4, 5]:  # Суммы
+                if is_monthly:
+                    if col_idx in [3, 4, 5, 6]:  # Суммы (включая материалы)
+                        cell.number_format = "#,##0.00"
+                elif col_idx in [3, 4, 5]:  # Суммы
                     cell.number_format = "#,##0.00"
 
             total_orders += order_count
             total_amount += stats["total_amount"]
+            total_materials += stats["materials_cost"]
             total_handover += stats["handover_amount"]
             row += 1
 
@@ -279,10 +314,17 @@ class MasterReportsService:
 
         ws.cell(row=row + 1, column=3, value="Общее").font = total_font
         ws.cell(row=row + 1, column=3).fill = total_fill
-        ws.cell(row=row + 1, column=4, value="")
-        ws.cell(row=row + 1, column=5, value="")
 
-        total_data = [total_orders, total_amount, total_handover, total_avg]
+        if is_monthly:
+            ws.cell(row=row + 1, column=4, value="")
+            ws.cell(row=row + 1, column=5, value="")
+            ws.cell(row=row + 1, column=6, value="")
+            total_data = [total_orders, total_amount, total_materials, total_handover, total_avg]
+        else:
+            ws.cell(row=row + 1, column=4, value="")
+            ws.cell(row=row + 1, column=5, value="")
+            total_data = [total_orders, total_amount, total_handover, total_avg]
+
         for col_idx, value in enumerate(total_data, start=2):
             cell = ws.cell(row=row + 2, column=col_idx, value=value)
             cell.font = total_font
@@ -312,7 +354,11 @@ class MasterReportsService:
             cell.font = subheader_font
             cell.fill = subheader_fill
             cell.alignment = left_alignment
-            ws.merge_cells(f"A{row}:E{row}")
+            # Объединяем ячейки в зависимости от количества столбцов
+            if is_monthly:
+                ws.merge_cells(f"A{row}:F{row}")
+            else:
+                ws.merge_cells(f"A{row}:E{row}")
             row += 1
 
             # Заголовки столбцов
@@ -355,7 +401,11 @@ class MasterReportsService:
                 row += 1
 
         # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
-        column_widths: dict[str, int] = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
+        column_widths: dict[str, int]
+        if is_monthly:
+            column_widths = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18}
+        else:
+            column_widths = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
         for col_letter, width in column_widths.items():
             ws.column_dimensions[col_letter].width = width
 
