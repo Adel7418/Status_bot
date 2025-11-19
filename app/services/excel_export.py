@@ -1500,24 +1500,30 @@ class ExcelExportService:
                         # Преобразуем ORM объекты в словари для совместимости
                         all_orders = []
                         for order in all_orders_orm:
-                            all_orders.append({
-                                "id": order.id,
-                                "status": order.status,
-                                "assigned_master_id": order.assigned_master_id,
-                                "equipment_type": order.equipment_type,
-                                "client_name": order.client_name,
-                                "client_address": order.client_address,
-                                "client_phone": order.client_phone,
-                                "created_at": order.created_at.isoformat() if order.created_at else None,
-                                "updated_at": order.updated_at.isoformat() if order.updated_at else None,
-                                "total_amount": order.total_amount,
-                                "materials_cost": order.materials_cost,
-                                "master_profit": order.master_profit,
-                                "company_profit": order.company_profit,
-                                "out_of_city": order.out_of_city,
-                                "has_review": order.has_review,
-                                "refuse_reason": order.refuse_reason,
-                            })
+                            all_orders.append(
+                                {
+                                    "id": order.id,
+                                    "status": order.status,
+                                    "assigned_master_id": order.assigned_master_id,
+                                    "equipment_type": order.equipment_type,
+                                    "client_name": order.client_name,
+                                    "client_address": order.client_address,
+                                    "client_phone": order.client_phone,
+                                    "created_at": (
+                                        order.created_at.isoformat() if order.created_at else None
+                                    ),
+                                    "updated_at": (
+                                        order.updated_at.isoformat() if order.updated_at else None
+                                    ),
+                                    "total_amount": order.total_amount,
+                                    "materials_cost": order.materials_cost,
+                                    "master_profit": order.master_profit,
+                                    "company_profit": order.company_profit,
+                                    "out_of_city": order.out_of_city,
+                                    "has_review": order.has_review,
+                                    "refuse_reason": order.refuse_reason,
+                                }
+                            )
                         master = {"full_name": master_name, "phone": master_phone}
                 else:
                     logger.error("Expected ORMDatabase but got different type")
@@ -1624,7 +1630,11 @@ class ExcelExportService:
             row += 1
             ws.merge_cells(f"A{row}:H{row}")
             cell = ws[f"A{row}"]
-            master_phone = master.get("phone", "") if isinstance(master, dict) else getattr(master, "phone", "")
+            master_phone = (
+                master.get("phone", "")
+                if isinstance(master, dict)
+                else getattr(master, "phone", "")
+            )
             cell.value = (
                 f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master_phone}"
             )
@@ -1780,7 +1790,11 @@ class ExcelExportService:
             row += 1
             ws.merge_cells(f"A{row}:O{row}")
             cell = ws[f"A{row}"]
-            master_phone = master.get("phone", "") if isinstance(master, dict) else getattr(master, "phone", "")
+            master_phone = (
+                master.get("phone", "")
+                if isinstance(master, dict)
+                else getattr(master, "phone", "")
+            )
             cell.value = (
                 f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master_phone}"
             )
@@ -1797,60 +1811,57 @@ class ExcelExportService:
                 if isinstance(self.db, ORMDatabase):
                     async with self.db.get_session() as session:
                         # Получаем статистику через ORM
-                        stats_stmt = (
-                            select(
-                                func.count(Order.id).label("total_orders"),
-                                func.sum(
-                                    case((Order.status == OrderStatus.CLOSED, 1), else_=0)
-                                ).label("closed"),
-                                func.sum(
-                                    case(
-                                        (
-                                            Order.status.in_(
-                                                [
-                                                    OrderStatus.ASSIGNED,
-                                                    OrderStatus.ONSITE,
-                                                    OrderStatus.ACCEPTED,
-                                                ]
-                                            ),
-                                            1,
+                        stats_stmt = select(
+                            func.count(Order.id).label("total_orders"),
+                            func.sum(case((Order.status == OrderStatus.CLOSED, 1), else_=0)).label(
+                                "closed"
+                            ),
+                            func.sum(
+                                case(
+                                    (
+                                        Order.status.in_(
+                                            [
+                                                OrderStatus.ASSIGNED,
+                                                OrderStatus.ONSITE,
+                                                OrderStatus.ACCEPTED,
+                                            ]
                                         ),
-                                        else_=0,
-                                    )
-                                ).label("in_work"),
-                                func.sum(
-                                    case((Order.status == OrderStatus.REFUSED, 1), else_=0)
-                                ).label("refused"),
-                                func.sum(
-                                    case(
-                                        (Order.status == OrderStatus.CLOSED, Order.total_amount),
-                                        else_=0,
-                                    )
-                                ).label("total_sum"),
-                                func.sum(
-                                    case(
-                                        (Order.status == OrderStatus.CLOSED, Order.materials_cost),
-                                        else_=0,
-                                    )
-                                ).label("materials_sum"),
-                                func.sum(
-                                    case(
-                                        (Order.status == OrderStatus.CLOSED, Order.company_profit),
-                                        else_=0,
-                                    )
-                                ).label("company_profit_sum"),
-                                func.avg(
-                                    case(
-                                        (Order.status == OrderStatus.CLOSED, Order.total_amount),
-                                        else_=None,
-                                    )
-                                ).label("avg_check"),
-                            )
-                            .where(
-                                and_(
-                                    Order.assigned_master_id == master_id,
-                                    Order.deleted_at.is_(None),
+                                        1,
+                                    ),
+                                    else_=0,
                                 )
+                            ).label("in_work"),
+                            func.sum(case((Order.status == OrderStatus.REFUSED, 1), else_=0)).label(
+                                "refused"
+                            ),
+                            func.sum(
+                                case(
+                                    (Order.status == OrderStatus.CLOSED, Order.total_amount),
+                                    else_=0,
+                                )
+                            ).label("total_sum"),
+                            func.sum(
+                                case(
+                                    (Order.status == OrderStatus.CLOSED, Order.materials_cost),
+                                    else_=0,
+                                )
+                            ).label("materials_sum"),
+                            func.sum(
+                                case(
+                                    (Order.status == OrderStatus.CLOSED, Order.company_profit),
+                                    else_=0,
+                                )
+                            ).label("company_profit_sum"),
+                            func.avg(
+                                case(
+                                    (Order.status == OrderStatus.CLOSED, Order.total_amount),
+                                    else_=None,
+                                )
+                            ).label("avg_check"),
+                        ).where(
+                            and_(
+                                Order.assigned_master_id == master_id,
+                                Order.deleted_at.is_(None),
                             )
                         )
                         stats_result = await session.execute(stats_stmt)
@@ -1861,10 +1872,12 @@ class ExcelExportService:
                             "in_work": stats_row.in_work or 0 if stats_row else 0,
                             "refused": stats_row.refused or 0 if stats_row else 0,
                             "total_sum": float(stats_row.total_sum or 0) if stats_row else 0.0,
-                            "materials_sum": float(stats_row.materials_sum or 0) if stats_row else 0.0,
-                            "company_profit_sum": float(stats_row.company_profit_sum or 0)
-                            if stats_row
-                            else 0.0,
+                            "materials_sum": (
+                                float(stats_row.materials_sum or 0) if stats_row else 0.0
+                            ),
+                            "company_profit_sum": (
+                                float(stats_row.company_profit_sum or 0) if stats_row else 0.0
+                            ),
                             "avg_check": float(stats_row.avg_check or 0) if stats_row else 0.0,
                         }
                 else:
