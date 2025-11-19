@@ -35,9 +35,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         # Skip asyncpg on Python 3.13 as it doesn't build yet (not used in code)
-        if [ "${{ matrix.python-version }}" == "3.13" ]; then
-          sed '/^asyncpg/d' requirements.txt > requirements_ci.txt
-          pip install -r requirements_ci.txt || pip install -r requirements.txt --ignore-installed asyncpg
+        if [ "${{ matrix.python-version }}" = "3.13" ]; then
+          while IFS= read -r line; do
+            if [[ ! "$line" =~ ^asyncpg ]]; then
+              pip install "$line" || true
+            fi
+          done < requirements.txt
         else
           pip install -r requirements.txt
         fi
