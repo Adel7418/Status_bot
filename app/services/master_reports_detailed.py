@@ -494,9 +494,12 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
+                # Сумма заказов включает расходный материал (как в сводке)
+                total_order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
+
                 data = [
                     order.id,
-                    order.total_amount or 0,
+                    total_order_amount,
                     order.materials_cost or 0,
                     order.equipment_type or "",
                     order.company_profit or 0,
@@ -510,9 +513,12 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
+                # Сумма заказов включает расходный материал (как в сводке)
+                total_order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
+
                 data = [
                     order.id,
-                    order.total_amount or 0,
+                    total_order_amount,
                     order.equipment_type or "",
                     order.company_profit or 0,
                     completion_date,
@@ -535,7 +541,7 @@ class MasterReportsService:
                 cell.font = data_font
                 cell.border = thin_border
                 # Для ежемесячных: колонка 1 (№ Заказа) и 4 (Тип техники) - выравнивание по левому краю
-                # Для остальных: колонка 1 (№ Заказа) и 3 (Тип техники) - выравнивание по левому краю
+                # Для еженедельных и ежедневных: колонка 1 (№ Заказа) и 3 (Тип техники) - выравнивание по левому краю
                 if report_type == "monthly":
                     cell.alignment = left_alignment if col_idx in [1, 4] else center_alignment
                 else:

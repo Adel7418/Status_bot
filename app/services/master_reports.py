@@ -233,6 +233,8 @@ class MasterReportsService:
         header_font = Font(bold=True, size=11, color="FFFFFF")
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left_alignment = Alignment(horizontal="left", vertical="center")
+        right_alignment = Alignment(horizontal="right", vertical="center")
         border = Border(
             left=Side(style="thin"),
             right=Side(style="thin"),
@@ -348,6 +350,61 @@ class MasterReportsService:
         ws.cell(row=row_num, column=10, value=f"{total_company_profit:.2f} ₽").font = Font(
             bold=True
         )
+
+        # Сводная таблица по мастерам (финансовые показатели)
+        row_summary = row_num + 2
+        summary_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        summary_header_font = Font(bold=True, size=12, color="000000")
+        summary_data_font = Font(bold=True, size=11)
+
+        # Заголовок сводной таблицы
+        ws.merge_cells(f"A{row_summary}:D{row_summary}")
+        ws.cell(row=row_summary, column=1, value="СВОДНАЯ ТАБЛИЦА ПО МАСТЕРУ:").font = summary_header_font
+        ws.cell(row=row_summary, column=1).fill = summary_fill
+        row_summary += 1
+
+        # Заголовки сводной таблицы
+        summary_headers = ["Показатель", "Сумма"]
+        for col_idx, header in enumerate(summary_headers, start=1):
+            cell = ws.cell(row=row_summary, column=col_idx, value=header)
+            cell.font = summary_header_font
+            cell.fill = summary_fill
+            cell.border = border
+            cell.alignment = header_alignment
+
+        # Данные сводной таблицы
+        summary_data = [
+            ("Общая сумма заказов", total_amount + total_materials),
+            ("Сумма материалов", total_materials),
+            ("Прибыль мастера", total_master_profit),
+            ("Прибыль компании", total_company_profit),
+            ("Всего завершено заявок", len(orders)),
+        ]
+
+        row_summary += 1
+        for label, value in summary_data:
+            # Название показателя
+            cell_label = ws.cell(row=row_summary, column=1, value=label)
+            cell_label.font = summary_data_font
+            cell_label.border = border
+            cell_label.alignment = left_alignment
+
+            # Значение
+            if isinstance(value, int | float):
+                if label == "Всего завершено заявок":
+                    # Для количества заявок - без форматирования валюты
+                    cell_value = ws.cell(row=row_summary, column=2, value=int(value))
+                else:
+                    # Для сумм - с форматированием валюты
+                    cell_value = ws.cell(row=row_summary, column=2, value=f"{value:.2f} ₽")
+                cell_value.alignment = right_alignment
+            else:
+                cell_value = ws.cell(row=row_summary, column=2, value=value)
+                cell_value.alignment = left_alignment
+
+            cell_value.font = summary_data_font
+            cell_value.border = border
+            row_summary += 1
 
         # Статистика по отказам
         refused_orders_list = [o for o in orders if o.status == OrderStatus.REFUSED]
