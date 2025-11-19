@@ -47,8 +47,7 @@ def set_permissions_posix(paths: Iterable[Path]) -> None:
 
 
 def grant_windows_acl(path: Path) -> None:
-    # Grant Full control to Everyone on folder recursively
-    # SDDL SID for Everyone: S-1-1-0; icacls supports name "Everyone" as well
+    # Grant Full control to Everyone on folder recursively. SDDL SID for Everyone: S-1-1-0; icacls supports name "Everyone" as well
     with contextlib.suppress(Exception):
         subprocess.run(  # nosec S603,S607 - icacls используется только с фиксированными параметрами и локальными путями
             [
