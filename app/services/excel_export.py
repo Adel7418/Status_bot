@@ -10,8 +10,12 @@ from typing import TYPE_CHECKING, Any
 
 import aiosqlite
 from openpyxl import Workbook
+from sqlalchemy import and_, case, func, select
+from sqlalchemy.orm import joinedload
 
+from app.config import OrderStatus
 from app.database import DatabaseType, get_database
+from app.database.orm_models import Master, Order
 from app.repositories.order_repository_extended import OrderRepositoryExtended
 from app.services.excel.styles import ExcelStyles
 from app.utils.helpers import get_now
@@ -31,23 +35,26 @@ class ExcelExportService:
         self.db: DatabaseType = get_database()
         self._order_repo_extended: OrderRepositoryExtended | None = None
 
+    def _is_orm_database(self) -> bool:
+        """Проверка, является ли БД ORM"""
+        from app.database.orm_database import ORMDatabase
+
+        return isinstance(self.db, ORMDatabase)
+
     def _get_legacy_db(self) -> "LegacyDatabase":
         """
-        Получить legacy-реализацию БД.
-
-        Excel-отчеты используют прямой доступ к SQLite, поэтому
-        поддерживается только legacy Database, а не ORMDatabase.
+        Получить legacy-реализацию БД (для обратной совместимости).
         """
         from app.database.db import Database as LegacyDatabaseRuntime
 
         if not isinstance(self.db, LegacyDatabaseRuntime):
-            raise RuntimeError("ExcelExportService поддерживает только legacy Database (SQLite)")
+            raise RuntimeError("Метод требует legacy Database (SQLite)")
 
         return self.db
 
     def _get_connection(self) -> aiosqlite.Connection:
         """
-        Типобезопасно получить соединение с БД.
+        Типобезопасно получить соединение с БД (только для legacy).
 
         Предполагается, что до вызова уже выполнен self.db.connect().
         """
@@ -1421,28 +1428,105 @@ class ExcelExportService:
         await self.db.connect()
 
         try:
-            connection = self._get_connection()
+            # Получаем информацию о мастере и заявки через ORM или legacy
+            if self._is_orm_database():
+                from app.database.orm_database import ORMDatabase
 
-            # Получаем информацию о мастере
-            cursor = await connection.execute(
-                """
-                SELECT
-                    m.id,
-                    u.first_name || ' ' || COALESCE(u.last_name, '') as full_name,
-                    m.phone
-                FROM masters m
-                LEFT JOIN users u ON m.telegram_id = u.telegram_id
-                WHERE m.id = ?
-                """,
-                (master_id,),
-            )
-            master = await cursor.fetchone()
+                if isinstance(self.db, ORMDatabase):
+                    async with self.db.get_session() as session:
+                        # Получаем мастера с загрузкой пользователя
+                        stmt = (
+                            select(Master)
+                            .options(joinedload(Master.user))
+                            .where(Master.id == master_id)
+                        )
+                        result = await session.execute(stmt)
+                        master_obj = result.scalar_one_or_none()
 
-            if not master:
-                logger.error(f"Master {master_id} not found")
-                return None
+                        if not master_obj:
+                            logger.error(f"Master {master_id} not found")
+                            return None
 
-            master_name = master["full_name"]
+                        master_name = master_obj.get_display_name()
+                        master_phone = master_obj.phone or ""
+
+                        # Получаем все заявки мастера
+                        orders_stmt = (
+                            select(Order)
+                            .where(
+                                and_(
+                                    Order.assigned_master_id == master_id,
+                                    Order.deleted_at.is_(None),
+                                )
+                            )
+                            .order_by(Order.created_at.desc())
+                        )
+                        orders_result = await session.execute(orders_stmt)
+                        all_orders_orm = list(orders_result.scalars().all())
+
+                        # Преобразуем ORM объекты в словари для совместимости
+                        all_orders = []
+                        for order in all_orders_orm:
+                            all_orders.append({
+                                "id": order.id,
+                                "status": order.status,
+                                "equipment_type": order.equipment_type,
+                                "client_name": order.client_name,
+                                "client_address": order.client_address,
+                                "client_phone": order.client_phone,
+                                "created_at": order.created_at.isoformat() if order.created_at else None,
+                                "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+                                "total_amount": order.total_amount,
+                                "materials_cost": order.materials_cost,
+                                "master_profit": order.master_profit,
+                                "company_profit": order.company_profit,
+                                "out_of_city": order.out_of_city,
+                                "has_review": order.has_review,
+                                "refuse_reason": order.refuse_reason,
+                            })
+                        master = {"full_name": master_name, "phone": master_phone}
+                else:
+                    logger.error("Expected ORMDatabase but got different type")
+                    return None
+            else:
+                # Legacy путь
+                connection = self._get_connection()
+
+                # Получаем информацию о мастере
+                cursor = await connection.execute(
+                    """
+                    SELECT
+                        m.id,
+                        u.first_name || ' ' || COALESCE(u.last_name, '') as full_name,
+                        m.phone
+                    FROM masters m
+                    LEFT JOIN users u ON m.telegram_id = u.telegram_id
+                    WHERE m.id = ?
+                    """,
+                    (master_id,),
+                )
+                master = await cursor.fetchone()
+
+                if not master:
+                    logger.error(f"Master {master_id} not found")
+                    return None
+
+                master_name = master["full_name"]
+
+                # Получаем все заявки мастера для разделения
+                all_orders_cursor = await connection.execute(
+                    """
+                    SELECT
+                        id, status, equipment_type, client_name, client_address, client_phone,
+                        created_at, updated_at, total_amount, materials_cost,
+                        master_profit, company_profit, out_of_city, has_review, refuse_reason
+                    FROM orders
+                    WHERE assigned_master_id = ? AND deleted_at IS NULL
+                    ORDER BY created_at DESC
+                    """,
+                    (master_id,),
+                )
+                all_orders = await all_orders_cursor.fetchall()
 
             # Имя файла
             reports_dir = Path("reports")
@@ -1451,22 +1535,6 @@ class ExcelExportService:
                 c for c in master_name if c.isalnum() or c in (" ", "-", "_")
             ).strip()
             filepath = reports_dir / f"master_{master_id}_{safe_name}.xlsx"
-
-            # Получаем все заявки мастера для разделения
-            connection = self._get_connection()
-            all_orders_cursor = await connection.execute(
-                """
-                SELECT
-                    id, status, equipment_type, client_name, client_address, client_phone,
-                    created_at, updated_at, total_amount, materials_cost,
-                    master_profit, company_profit, out_of_city, has_review, refuse_reason
-                FROM orders
-                WHERE assigned_master_id = ? AND deleted_at IS NULL
-                ORDER BY created_at DESC
-                """,
-                (master_id,),
-            )
-            all_orders = await all_orders_cursor.fetchall()
 
             # Разделяем заявки на активные и завершенные
             active_orders = [o for o in all_orders if o["status"] not in ["CLOSED", "REFUSED"]]
@@ -1522,8 +1590,9 @@ class ExcelExportService:
             row += 1
             ws.merge_cells(f"A{row}:H{row}")
             cell = ws[f"A{row}"]
+            master_phone = master.get("phone", "") if isinstance(master, dict) else getattr(master, "phone", "")
             cell.value = (
-                f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
+                f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master_phone}"
             )
             cell.font = ExcelStyles.BOLD_FONT
             cell.alignment = center_alignment
@@ -1672,8 +1741,9 @@ class ExcelExportService:
             row += 1
             ws.merge_cells(f"A{row}:O{row}")
             cell = ws[f"A{row}"]
+            master_phone = master.get("phone", "") if isinstance(master, dict) else getattr(master, "phone", "")
             cell.value = (
-                f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master['phone']}"
+                f"Обновлено: {get_now().strftime('%d.%m.%Y %H:%M')} | Телефон: {master_phone}"
             )
             cell.font = ExcelStyles.SMALL_BOLD_FONT
             cell.alignment = center_alignment
@@ -1681,37 +1751,127 @@ class ExcelExportService:
             row += 2
 
             # Статистика мастера
-            stats_cursor = await connection.execute(
-                """
-                SELECT
-                    COUNT(*) as total_orders,
-                    SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
-                    SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
-                    SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
-                    SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
-                    SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
-                    AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
-                FROM orders
-                WHERE assigned_master_id = ? AND deleted_at IS NULL
-                """,
-                (master_id,),
-            )
-            stats_row = await stats_cursor.fetchone()
-            stats: Mapping[str, Any] = (
-                dict(stats_row)
-                if stats_row is not None
-                else {
-                    "total_orders": 0,
-                    "closed": 0,
-                    "in_work": 0,
-                    "refused": 0,
-                    "total_sum": 0,
-                    "materials_sum": 0,
-                    "company_profit_sum": 0,
-                    "avg_check": 0,
-                }
-            )
+            stats: Mapping[str, Any]
+            if self._is_orm_database():
+                from app.database.orm_database import ORMDatabase
+
+                if isinstance(self.db, ORMDatabase):
+                    async with self.db.get_session() as session:
+                        # Получаем статистику через ORM
+                        stats_stmt = (
+                            select(
+                                func.count(Order.id).label("total_orders"),
+                                func.sum(
+                                    case((Order.status == OrderStatus.CLOSED, 1), else_=0)
+                                ).label("closed"),
+                                func.sum(
+                                    case(
+                                        (
+                                            Order.status.in_(
+                                                [
+                                                    OrderStatus.ASSIGNED,
+                                                    OrderStatus.ONSITE,
+                                                    OrderStatus.ACCEPTED,
+                                                ]
+                                            ),
+                                            1,
+                                        ),
+                                        else_=0,
+                                    )
+                                ).label("in_work"),
+                                func.sum(
+                                    case((Order.status == OrderStatus.REFUSED, 1), else_=0)
+                                ).label("refused"),
+                                func.sum(
+                                    case(
+                                        (Order.status == OrderStatus.CLOSED, Order.total_amount),
+                                        else_=0,
+                                    )
+                                ).label("total_sum"),
+                                func.sum(
+                                    case(
+                                        (Order.status == OrderStatus.CLOSED, Order.materials_cost),
+                                        else_=0,
+                                    )
+                                ).label("materials_sum"),
+                                func.sum(
+                                    case(
+                                        (Order.status == OrderStatus.CLOSED, Order.company_profit),
+                                        else_=0,
+                                    )
+                                ).label("company_profit_sum"),
+                                func.avg(
+                                    case(
+                                        (Order.status == OrderStatus.CLOSED, Order.total_amount),
+                                        else_=None,
+                                    )
+                                ).label("avg_check"),
+                            )
+                            .where(
+                                and_(
+                                    Order.assigned_master_id == master_id,
+                                    Order.deleted_at.is_(None),
+                                )
+                            )
+                        )
+                        stats_result = await session.execute(stats_stmt)
+                        stats_row = stats_result.first()
+                        stats = {
+                            "total_orders": stats_row.total_orders or 0 if stats_row else 0,
+                            "closed": stats_row.closed or 0 if stats_row else 0,
+                            "in_work": stats_row.in_work or 0 if stats_row else 0,
+                            "refused": stats_row.refused or 0 if stats_row else 0,
+                            "total_sum": float(stats_row.total_sum or 0) if stats_row else 0.0,
+                            "materials_sum": float(stats_row.materials_sum or 0) if stats_row else 0.0,
+                            "company_profit_sum": float(stats_row.company_profit_sum or 0)
+                            if stats_row
+                            else 0.0,
+                            "avg_check": float(stats_row.avg_check or 0) if stats_row else 0.0,
+                        }
+                else:
+                    stats = {
+                        "total_orders": 0,
+                        "closed": 0,
+                        "in_work": 0,
+                        "refused": 0,
+                        "total_sum": 0.0,
+                        "materials_sum": 0.0,
+                        "company_profit_sum": 0.0,
+                        "avg_check": 0.0,
+                    }
+            else:
+                connection = self._get_connection()
+                stats_cursor = await connection.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total_orders,
+                        SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as closed,
+                        SUM(CASE WHEN status IN ('ASSIGNED', 'ONSITE', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
+                        SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
+                        SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
+                        AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check
+                    FROM orders
+                    WHERE assigned_master_id = ? AND deleted_at IS NULL
+                    """,
+                    (master_id,),
+                )
+                stats_row = await stats_cursor.fetchone()
+                stats = (
+                    dict(stats_row)
+                    if stats_row is not None
+                    else {
+                        "total_orders": 0,
+                        "closed": 0,
+                        "in_work": 0,
+                        "refused": 0,
+                        "total_sum": 0,
+                        "materials_sum": 0,
+                        "company_profit_sum": 0,
+                        "avg_check": 0,
+                    }
+                )
 
             # Блок статистики
             ws[f"A{row}"] = "СТАТИСТИКА:"
