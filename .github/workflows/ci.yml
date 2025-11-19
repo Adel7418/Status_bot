@@ -41,13 +41,34 @@ jobs:
         if [ "$PYTHON_VERSION" = "3.13" ]; then
           echo "Skipping asyncpg for Python 3.13"
           # Filter out asyncpg line and replace sqlalchemy[asyncio] with sqlalchemy
-          python -c "import sys; lines = open('requirements.txt', 'r').readlines(); f = open('requirements_no_asyncpg.txt', 'w'); [f.write(line.replace('sqlalchemy[asyncio]', 'sqlalchemy')) for line in lines if 'asyncpg' not in line.lower()]; f.close()"
+          python3 -c "import sys; f1 = open('requirements.txt', 'r'); lines = f1.readlines(); f1.close(); f2 = open('requirements_no_asyncpg.txt', 'w'); [print('Skipping line: ' + line.strip()) if 'asyncpg' in line.lower() else (f2.write(line.replace('sqlalchemy[asyncio]', 'sqlalchemy') if 'sqlalchemy[asyncio]' in line else line), print('Replaced sqlalchemy[asyncio] with sqlalchemy') if 'sqlalchemy[asyncio]' in line else None) for line in lines]; f2.close()"
+          echo "Filtered requirements file:"
           cat requirements_no_asyncpg.txt
+          echo "Verifying asyncpg is not in file:"
+          if grep -qi asyncpg requirements_no_asyncpg.txt; then
+            echo "ERROR: asyncpg still found in filtered file!"
+            exit 1
+          fi
+          echo "OK: asyncpg not found"
+          echo "Verifying sqlalchemy[asyncio] is replaced:"
+          if grep -q "sqlalchemy\[asyncio\]" requirements_no_asyncpg.txt; then
+            echo "ERROR: sqlalchemy[asyncio] still found!"
+            exit 1
+          fi
+          echo "OK: sqlalchemy[asyncio] replaced with sqlalchemy"
           pip install -r requirements_no_asyncpg.txt
+          # Also filter requirements-dev.txt if it includes requirements.txt
+          if grep -q "^-r requirements.txt" requirements-dev.txt; then
+            echo "Filtering requirements-dev.txt to use filtered requirements"
+            sed 's|-r requirements.txt|-r requirements_no_asyncpg.txt|' requirements-dev.txt > requirements-dev_no_asyncpg.txt
+            pip install -r requirements-dev_no_asyncpg.txt
+          else
+            pip install -r requirements-dev.txt
+          fi
         else
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
         fi
-        pip install -r requirements-dev.txt
 
     - name: Run tests with pytest
       run: |
