@@ -1221,6 +1221,7 @@ class ExcelExportService:
                 "Отказано",
                 "Прочие статусы",
                 "Общая сумма",
+                "Материалы",
                 "Прибыль компании",
                 "Сдача в кассу",
                 "Средний чек",
@@ -1255,7 +1256,7 @@ class ExcelExportService:
             if not masters:
                 ws[f"A{row}"] = "Нет утвержденных мастеров"
                 ws[f"A{row}"].font = ExcelStyles.SIMPLE_ITALIC_FONT
-                ws.merge_cells(f"A{row}:M{row}")
+                ws.merge_cells(f"A{row}:N{row}")
             else:
                 # Данные по каждому мастеру
                 for master in masters:
@@ -1291,6 +1292,7 @@ class ExcelExportService:
 
                     # Вычисляем данные
                     total_sum = float(stats_row["total_sum"] or 0)
+                    materials_sum = float(stats_row["materials_sum"] or 0)
                     cash_to_company = float(stats_row["company_profit_sum"] or 0)
                     other_statuses = (stats_row["total_orders"] or 0) - (
                         (stats_row["closed"] or 0)
@@ -1308,6 +1310,7 @@ class ExcelExportService:
                         stats_row["refused"] or 0,
                         other_statuses,
                         total_sum,
+                        materials_sum,
                         cash_to_company,
                         cash_to_company,
                         float(stats_row["avg_check"] or 0),
@@ -1325,11 +1328,11 @@ class ExcelExportService:
                         elif col_idx == 2:
                             cell.alignment = left_alignment
                             cell.font = ExcelStyles.SIMPLE_BOLD_FONT
-                        elif col_idx in [3, 4, 5, 6, 7, 12, 13]:
+                        elif col_idx in [3, 4, 5, 6, 7, 13, 14]:
                             cell.alignment = center_alignment
                         else:
                             cell.alignment = right_alignment
-                            if col_idx >= 8 and col_idx <= 11:
+                            if col_idx >= 8 and col_idx <= 12:
                                 cell.number_format = "#,##0.00 ₽"
 
                     row += 1
@@ -1350,6 +1353,7 @@ class ExcelExportService:
                         SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS', 'ACCEPTED') THEN 1 ELSE 0 END) as in_work,
                         SUM(CASE WHEN status = 'REFUSED' THEN 1 ELSE 0 END) as refused,
                         SUM(CASE WHEN status = 'CLOSED' THEN total_amount ELSE 0 END) as total_sum,
+                        SUM(CASE WHEN status = 'CLOSED' THEN materials_cost ELSE 0 END) as materials_sum,
                         SUM(CASE WHEN status = 'CLOSED' THEN company_profit ELSE 0 END) as company_profit_sum,
                         AVG(CASE WHEN status = 'CLOSED' THEN total_amount ELSE NULL END) as avg_check,
                         SUM(CASE WHEN status = 'CLOSED' AND out_of_city = 1 THEN 1 ELSE 0 END) as out_of_city,
@@ -1366,6 +1370,7 @@ class ExcelExportService:
                     if totals_row is not None
                     else {
                         "total_sum": 0,
+                        "materials_sum": 0,
                         "total_orders": 0,
                         "closed": 0,
                         "in_work": 0,
@@ -1378,6 +1383,7 @@ class ExcelExportService:
                 )
 
                 total_sum = float(totals["total_sum"] or 0)
+                materials_sum_total = float(totals["materials_sum"] or 0)
                 others_total = (totals["total_orders"] or 0) - (
                     (totals["closed"] or 0) + (totals["in_work"] or 0) + (totals["refused"] or 0)
                 )
@@ -1389,6 +1395,7 @@ class ExcelExportService:
                     totals["refused"],
                     others_total,
                     total_sum,
+                    materials_sum_total,
                     float(totals["company_profit_sum"] or 0),
                     float(totals["company_profit_sum"] or 0),
                     float(totals["avg_check"] or 0),
