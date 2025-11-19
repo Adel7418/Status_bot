@@ -28,7 +28,7 @@ repos:
         name: Проверка line endings
         args: ['--fix=lf']
 
-  # Ruff - быстрый линтер и форматтер
+  # Ruff - быстрый линтер (форматтер отключен, используем Black)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.3
     hooks:
@@ -36,9 +36,10 @@ repos:
         name: Ruff linter
         args: [--fix, --exit-non-zero-on-fix]
         exclude: ^(tests/|migrations/|scripts/)
-      - id: ruff-format
-        name: Ruff formatter
-        exclude: ^(tests/|migrations/|scripts/)
+      # ruff-format отключен, так как CI использует Black для форматирования
+      # - id: ruff-format
+      #   name: Ruff formatter
+      #   exclude: ^(tests/|migrations/|scripts/)
 
   # MyPy - проверка типов (опционально, можно отключить если медленно)
   - repo: https://github.com/pre-commit/mirrors-mypy
