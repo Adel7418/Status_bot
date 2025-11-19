@@ -443,8 +443,23 @@ class MasterReportsService:
 
         ws.row_dimensions[1].height = 25
         # Определяем заголовки в зависимости от типа отчета
-        if report_type in ["weekly", "monthly"]:
-            # Для еженедельных и ежемесячных отчетов добавляем дату выполнения
+        if report_type == "monthly":
+            # Для ежемесячных отчетов добавляем дату выполнения и материалы
+            headers = [
+                "№ Заказа",
+                "Сумма",
+                "Материалы",
+                "Тип техники",
+                "Сумма к сдаче",
+                "Дата выполнения",
+                "Выезд",
+                "Отзыв",
+            ]
+            # Растягиваем заголовок на остальные столбцы
+            for col in range(3, 9):  # C1:H1
+                ws.cell(row=1, column=col).fill = header_fill
+        elif report_type == "weekly":
+            # Для еженедельных отчетов добавляем дату выполнения
             headers = [
                 "№ Заказа",
                 "Сумма",
@@ -473,8 +488,24 @@ class MasterReportsService:
         # Данные по заказам
         row = 4
         for order in orders:
-            if report_type in ["weekly", "monthly"]:
-                # Для еженедельных и ежемесячных отчетов добавляем дату выполнения
+            if report_type == "monthly":
+                # Для ежемесячных отчетов добавляем дату выполнения и материалы
+                completion_date = ""
+                if order.updated_at:
+                    completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
+
+                data = [
+                    order.id,
+                    order.total_amount or 0,
+                    order.materials_cost or 0,
+                    order.equipment_type or "",
+                    order.company_profit or 0,
+                    completion_date,
+                    "✅" if order.out_of_city else "❌",
+                    "✅" if order.has_review else "❌",
+                ]
+            elif report_type == "weekly":
+                # Для еженедельных отчетов добавляем дату выполнения
                 completion_date = ""
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
@@ -503,17 +534,27 @@ class MasterReportsService:
                 cell = ws.cell(row=row, column=col_idx, value=value)
                 cell.font = data_font
                 cell.border = thin_border
-                cell.alignment = left_alignment if col_idx in [1, 3] else center_alignment
+                # Для ежемесячных: колонка 1 (№ Заказа) и 4 (Тип техники) - выравнивание по левому краю
+                # Для остальных: колонка 1 (№ Заказа) и 3 (Тип техники) - выравнивание по левому краю
+                if report_type == "monthly":
+                    cell.alignment = left_alignment if col_idx in [1, 4] else center_alignment
+                else:
+                    cell.alignment = left_alignment if col_idx in [1, 3] else center_alignment
 
                 # Форматируем числа
-                if col_idx in [2, 4]:  # Суммы
+                if report_type == "monthly":
+                    if col_idx in [2, 3, 5]:  # Сумма, Материалы, Сумма к сдаче
+                        cell.number_format = "#,##0.00"
+                elif col_idx in [2, 4]:  # Суммы
                     cell.number_format = "#,##0.00"
 
             row += 1
 
         # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
         column_widths: dict[str, int]
-        if report_type in ["weekly", "monthly"]:
+        if report_type == "monthly":
+            column_widths = {"A": 16, "B": 18, "C": 18, "D": 25, "E": 18, "F": 20, "G": 12, "H": 12}
+        elif report_type == "weekly":
             column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 20, "F": 12, "G": 12}
         else:
             column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 12, "F": 12}
