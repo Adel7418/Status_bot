@@ -36,7 +36,7 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         # Skip asyncpg on Python 3.13 as it doesn't build yet (not used in code)
         if [ "${{ matrix.python-version }}" == "3.13" ]; then
-          grep -v "^asyncpg" requirements.txt > requirements_ci.txt || cp requirements.txt requirements_ci.txt
+          python -c "import sys; lines = open('requirements.txt').readlines(); filtered = [l for l in lines if not l.strip().startswith('asyncpg')]; open('requirements_ci.txt', 'w').writelines(filtered)"
           pip install -r requirements_ci.txt
         else
           pip install -r requirements.txt
