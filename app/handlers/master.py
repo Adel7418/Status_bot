@@ -435,11 +435,29 @@ async def process_refuse_reason(message: Message, state: FSMContext):
 
     try:
         order = await db.get_order_by_id(order_id)
-        master = await db.get_master_by_telegram_id(message.from_user.id)
 
-        if not order or not master:
-            await message.reply("❌ Ошибка: заявка или мастер не найдены.")
+        if not order:
+            await message.reply("❌ Ошибка: заявка не найдена.")
             return
+
+        # Получаем роли пользователя из state (если есть) или из БД
+        user_roles = data.get("user_roles", [])
+        if not user_roles:
+            user = await db.get_user_by_telegram_id(message.from_user.id)
+            if user:
+                user_roles = user.get_roles()
+
+        # Для мастеров проверяем наличие мастера, для диспетчеров/админов - не требуется
+        master = None
+        if UserRole.MASTER in user_roles:
+            master = await db.get_master_by_telegram_id(message.from_user.id)
+            if not master:
+                await message.reply("❌ Ошибка: мастер не найден.")
+                return
+        elif UserRole.ADMIN in user_roles or UserRole.DISPATCHER in user_roles:
+            # Для админа/диспетчера получаем мастера из заявки (если назначен)
+            if order.assigned_master_id:
+                master = await db.get_master_by_id(order.assigned_master_id)
 
         # Удаляем карточки заявки в рабочей группе (если были сохранены)
         try:
@@ -513,7 +531,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             )
 
             # Уведомляем мастера если был назначен
-            if order.assigned_master_id and order.assigned_master_id != master.id:
+            if order.assigned_master_id and (not master or order.assigned_master_id != master.id):
                 assigned_master = await db.get_master_by_id(order.assigned_master_id)
                 if assigned_master:
                     from app.utils import safe_send_message
@@ -547,12 +565,13 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 from app.utils import get_now
                 from app.utils.helpers import format_datetime
 
+                master_name = master.get_display_name() if master else "Не назначен"
                 await message.bot.edit_message_text(
                     chat_id=group_chat_id,
                     message_id=group_message_id,
                     text=(
                         f"❌ <b>Заявка #{order_id} {action_type}</b>\n\n"
-                        f"👨‍🔧 Мастер: {master.get_display_name()}\n"
+                        f"👨‍🔧 Мастер: {master_name}\n"
                         f"📝 Причина: {refuse_reason}\n"
                         f"📋 Статус: Требует нового назначения\n"
                         f"⏰ Время: {format_datetime(get_now())}\n\n"
@@ -590,7 +609,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             result = await safe_send_message(
                 message.bot,
                 order.dispatcher_id,
-                f"❌ Мастер {master.get_display_name()} {action_type} заявку #{order_id}\n"
+                f"❌ Мастер {master.get_display_name() if master else 'Администратор'} {action_type} заявку #{order_id}\n"
                 f"📝 Причина: {refuse_reason}\n\n"
                 f"Необходимо назначить другого мастера.",
                 parse_mode="HTML",

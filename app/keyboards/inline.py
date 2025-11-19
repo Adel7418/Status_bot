@@ -212,10 +212,10 @@ def get_order_actions_keyboard(order: Order, user_role: str) -> InlineKeyboardMa
             # Кнопку "Закрыть заявку" убрали - теперь админ завершает через "Завершить (за мастера)"
             # которая запускает правильный процесс с запросом суммы и материалов
 
-            # Динамический текст кнопки: "Отмена" для NEW/ACCEPTED, "Отказ" для остальных
+            # Динамический текст кнопки: "Отмена" для NEW/ASSIGNED/ACCEPTED, "Отказ" для остальных
             refuse_button_text = (
                 "❌ Отмена"
-                if order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED]
+                if order.status in [OrderStatus.NEW, OrderStatus.ASSIGNED, OrderStatus.ACCEPTED]
                 else "❌ Отказ"
             )
             builder.row(
