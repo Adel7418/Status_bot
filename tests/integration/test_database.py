@@ -208,17 +208,11 @@ class TestDatabase:
         )
         await db.assign_master_to_order(order.id, master.id)
         # ASSIGNED → ACCEPTED: требуется роль MASTER или ADMIN
-        await db.update_order_status(
-            order.id, OrderStatus.ACCEPTED, user_roles=[UserRole.MASTER]
-        )
+        await db.update_order_status(order.id, OrderStatus.ACCEPTED, user_roles=[UserRole.MASTER])
         # ACCEPTED → ONSITE: требуется роль MASTER или ADMIN
-        await db.update_order_status(
-            order.id, OrderStatus.ONSITE, user_roles=[UserRole.MASTER]
-        )
+        await db.update_order_status(order.id, OrderStatus.ONSITE, user_roles=[UserRole.MASTER])
         # ONSITE → CLOSED: требуется роль MASTER или ADMIN
-        await db.update_order_status(
-            order.id, OrderStatus.CLOSED, user_roles=[UserRole.MASTER]
-        )
+        await db.update_order_status(order.id, OrderStatus.CLOSED, user_roles=[UserRole.MASTER])
 
         # Проверяем
         order2 = await db.get_order_by_id(order.id)
