@@ -135,7 +135,8 @@ class FinancialReportsService:
 
             # Подсчитываем общие показатели
             total_orders = len(orders)
-            total_amount = sum(order.total_amount or 0 for order in orders)
+            # Общая сумма включает расходный материал
+            total_amount = sum((order.total_amount or 0) + (order.materials_cost or 0) for order in orders)
             total_materials_cost = sum(order.materials_cost or 0 for order in orders)
             total_net_profit = total_amount - total_materials_cost
             total_company_profit = sum(order.company_profit or 0 for order in orders)
@@ -194,7 +195,8 @@ class FinancialReportsService:
 
             # Подсчитываем показатели мастера
             orders_count = len(master_orders)
-            total_amount = sum(order.total_amount or 0 for order in master_orders)
+            # Общая сумма включает расходный материал
+            total_amount = sum((order.total_amount or 0) + (order.materials_cost or 0) for order in master_orders)
             total_materials_cost = sum(order.materials_cost or 0 for order in master_orders)
             total_net_profit = total_amount - total_materials_cost
             total_company_profit = sum(order.company_profit or 0 for order in master_orders)
