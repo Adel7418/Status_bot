@@ -8,6 +8,8 @@ FROM python:3.11-slim AS builder
 # Установка зависимостей для сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    python3-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Создание виртуального окружения
