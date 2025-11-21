@@ -111,7 +111,7 @@ class OrderExportService:
                 if order.company_profit:
                     data.append(("Прибыль компании", f"{order.company_profit:.2f} ₽"))
                 if order.has_review:
-                    data.append(("Отзыв", "✅ Взят (+10%)"))
+                    data.append(("Отзыв", "✅ Взят"))
                 if order.out_of_city:
                     data.append(("Выезд за город", "✅ Да"))
 

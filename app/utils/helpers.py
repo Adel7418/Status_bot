@@ -352,13 +352,12 @@ def calculate_profit_split(
     3. Если ничего не найдено:
        - Чистая прибыль >= 7000: 50% мастеру, 50% компании
        - Чистая прибыль < 7000: 40% мастеру, 60% компании
-    - Если взят отзыв: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
     - Если выезд за город: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
 
     Args:
         total_amount: Общая сумма заказа
         materials_cost: Сумма расходного материала
-        has_review: Взял ли мастер отзыв у клиента
+        has_review: Взял ли мастер отзыв у клиента (не влияет на расчет прибыли)
         out_of_city: Был ли выезд за город
         equipment_type: Тип техники в заявке (опционально, например "Электрика", "Сантехника")
         specialization_rate: Готовая процентная ставка (master_percentage, company_percentage) (опционально)
@@ -400,12 +399,6 @@ def calculate_profit_split(
     else:
         master_profit = net_profit * 0.4
         company_profit = net_profit * 0.6
-
-    # Если взят отзыв - добавляем 10% к прибыли мастера
-    if has_review:
-        review_bonus = net_profit * 0.1
-        master_profit += review_bonus
-        company_profit -= review_bonus
 
     # Если выезд за город - добавляем 10% к прибыли мастера
     if out_of_city:

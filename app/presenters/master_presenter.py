@@ -143,3 +143,5 @@ class MasterPresenter:
             text += f"\n{additional_info}"
 
         return text
+
+

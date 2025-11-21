@@ -205,7 +205,7 @@ async def callback_view_order_master(callback: CallbackQuery, user_roles: list, 
         # Надбавки и бонусы (показываем только если явно True)
         bonuses = []
         if order.has_review is True:
-            bonuses.append("✅ Отзыв (+10% вам)")
+            bonuses.append("✅ Отзыв")
         if order.out_of_city is True:
             bonuses.append("✅ Выезд за город")
 
@@ -1745,8 +1745,7 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
             # Отправляем новое сообщение вместо редактирования
             review_message = await callback_query.message.answer(
                 "✅ Сумма расходного материала подтверждена\n\n"
-                "❓ <b>Взяли ли вы отзыв у клиента?</b>\n"
-                "(За отзыв вы получите дополнительно +10% к прибыли)",
+                "❓ <b>Взяли ли вы отзыв у клиента?</b>",
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
@@ -1958,8 +1957,6 @@ async def process_out_of_city_confirmation_callback(
             profit_rate = "50/50" if net_profit >= 7000 else "40/60"
 
         bonus_text = ""
-        if has_review:
-            bonus_text += " + бонус за отзыв"
         if out_of_city:
             bonus_text += " + бонус за выезд"
 

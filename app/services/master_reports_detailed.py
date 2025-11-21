@@ -243,8 +243,8 @@ class MasterReportsService:
                 }
 
             master_stats[master_id]["orders"].append(order)
-            # Сумма заказов включает расходный материал
-            order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
+            # total_amount уже включает расходный материал (как хранится в БД)
+            order_amount = order.total_amount or 0
             master_stats[master_id]["total_amount"] += order_amount
             master_stats[master_id]["materials_cost"] += order.materials_cost or 0
             master_stats[master_id]["handover_amount"] += order.company_profit or 0
@@ -494,8 +494,8 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
-                # Сумма заказов включает расходный материал (как в сводке)
-                total_order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
+                # total_amount уже включает расходный материал (как хранится в БД)
+                total_order_amount = order.total_amount or 0
 
                 data = [
                     order.id,
@@ -513,8 +513,8 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
-                # Сумма заказов включает расходный материал (как в сводке)
-                total_order_amount = (order.total_amount or 0) + (order.materials_cost or 0)
+                # total_amount уже включает расходный материал (как хранится в БД)
+                total_order_amount = order.total_amount or 0
 
                 data = [
                     order.id,
