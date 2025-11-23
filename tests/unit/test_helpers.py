@@ -2,11 +2,12 @@
 Тесты для вспомогательных функций
 """
 import pytest
+
 from app.utils.helpers import calculate_profit_split
 
 
 @pytest.mark.parametrize(
-    "total_amount, materials_cost, expected_master_profit, expected_company_profit",
+    ("total_amount", "materials_cost", "expected_master_profit", "expected_company_profit"),
     [
         (6000, 1000, 2000, 3000),  # Net profit < 7000, 40/60 split
         (10000, 2000, 4000, 4000),  # Net profit >= 7000, 50/50 split
