@@ -1921,6 +1921,12 @@ async def process_out_of_city_confirmation_callback(
                 await message_obj.edit_text("❌ Ошибка: заявка не найдена или не принадлежит вам.")
             return
 
+        master_roles = []
+        if master:
+            user = await db.get_user_by_telegram_id(master.telegram_id)
+            if user:
+                master_roles = user.get_roles()
+
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
         from app.utils.helpers import calculate_profit_split
 
@@ -1941,6 +1947,7 @@ async def process_out_of_city_confirmation_callback(
             out_of_city,
             equipment_type=order.equipment_type,
             specialization_rate=specialization_rate,
+            master_roles=master_roles,
         )
         net_profit = total_amount - materials_cost
 
@@ -3129,6 +3136,12 @@ async def complete_order_as_refusal(
                     equipment_type=order.equipment_type,
                 )
 
+        master_roles = []
+        if master:
+            user = await db.get_user_by_telegram_id(master.telegram_id)
+            if user:
+                master_roles = user.get_roles()
+
         master_profit, company_profit = calculate_profit_split(
             total_amount,
             materials_cost,
@@ -3136,6 +3149,7 @@ async def complete_order_as_refusal(
             out_of_city,
             equipment_type=order.equipment_type,
             specialization_rate=specialization_rate,
+            master_roles=master_roles,
         )
 
         # Обновляем суммы в базе данных

@@ -180,6 +180,12 @@ async def send_edit_closed_menu(message: Message, state: FSMContext):
                     equipment_type=order.equipment_type,
                 )
 
+        master_roles = []
+        if order.assigned_master:
+            master_user = order.assigned_master.user
+            if master_user:
+                master_roles = master_user.get_roles()
+
         master_profit, company_profit = calculate_profit_split(
             total or 0.0,
             materials or 0.0,
@@ -187,6 +193,7 @@ async def send_edit_closed_menu(message: Message, state: FSMContext):
             out_of_city or False,
             equipment_type=order.equipment_type,
             specialization_rate=specialization_rate,
+            master_roles=master_roles,
         )
 
         text = (
@@ -397,6 +404,12 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
                     equipment_type=current.equipment_type,
                 )
 
+            master_roles = []
+            if current.assigned_master:
+                master_user = current.assigned_master.user
+                if master_user:
+                    master_roles = master_user.get_roles()
+
             master_profit, company_profit = calculate_profit_split(
                 new_total_for_calc,
                 new_materials_for_calc,
@@ -404,6 +417,7 @@ async def admin_edit_closed_save(callback: CallbackQuery, state: FSMContext, use
                 new_out_of_city_for_calc,
                 equipment_type=current.equipment_type,
                 specialization_rate=specialization_rate,
+                master_roles=master_roles,
             )
             # Округляем до 2 знаков после запятой
             master_profit = round(master_profit, 2)
@@ -626,6 +640,24 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
                 equipment_type=order.equipment_type,
             )
 
+        master_roles = []
+        if order is not None and order.assigned_master:
+            master_user = order.assigned_master.user
+            if master_user:
+                master_roles = master_user.get_roles()
+
+        master_roles = []
+        if order is not None and order.assigned_master:
+            master_user = order.assigned_master.user
+            if master_user:
+                master_roles = master_user.get_roles()
+
+        master_roles = []
+        if order and order.assigned_master:
+            master_user = order.assigned_master.user
+            if master_user:
+                master_roles = master_user.get_roles()
+
         # Используем функцию calculate_profit_split для правильного расчета с учетом has_review и out_of_city
         master_profit, company_profit = calculate_profit_split(
             total,
@@ -634,6 +666,7 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
             out_of_city,
             equipment_type=order.equipment_type if order is not None else None,
             specialization_rate=specialization_rate,
+            master_roles=master_roles,
         )
         # Округляем до 2 знаков после запятой
         master_profit = round(master_profit, 2)

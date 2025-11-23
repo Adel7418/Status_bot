@@ -87,7 +87,7 @@ repos:
 # Используем python3.11 для совместимости с GitHub Actions runner
 # Если локально нет Python 3.11, можно установить его или использовать SKIP=1 для pre-commit
 default_language_version:
-  python: python3.11
+  python: python3.13
 
 # Какие файлы исключить
 exclude: |

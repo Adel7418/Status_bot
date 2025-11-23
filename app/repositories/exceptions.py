@@ -41,5 +41,3 @@ class IntegrityError(RepositoryError):
     """
     Исключение при нарушении целостности данных
     """
-
-

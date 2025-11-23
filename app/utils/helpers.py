@@ -342,6 +342,7 @@ def calculate_profit_split(
     out_of_city: bool = False,
     equipment_type: str | None = None,
     specialization_rate: tuple[float, float] | None = None,
+    master_roles: list[str] | None = None,
 ) -> tuple[float, float]:
     """
     Расчет распределения прибыли между мастером и компанией
@@ -361,6 +362,7 @@ def calculate_profit_split(
         out_of_city: Был ли выезд за город
         equipment_type: Тип техники в заявке (опционально, например "Электрика", "Сантехника")
         specialization_rate: Готовая процентная ставка (master_percentage, company_percentage) (опционально)
+        master_roles: Список ролей мастера (опционально)
 
     Returns:
         Кортеж (прибыль мастера, прибыль компании)
@@ -385,6 +387,10 @@ def calculate_profit_split(
             # Используем ставку 50/50 для сантехники
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
+        elif "водонагревател" in equipment_lower: # Проверяем на "водонагревател" для учета словоформ
+            # Используем ставку 50/50 для водонагревателей
+            master_profit = net_profit * 0.5
+            company_profit = net_profit * 0.5
         # Стандартная логика для других типов техники
         elif net_profit >= 7000:
             master_profit = net_profit * 0.5
@@ -399,6 +405,13 @@ def calculate_profit_split(
     else:
         master_profit = net_profit * 0.4
         company_profit = net_profit * 0.6
+
+    # Если мастер - старший, его процент не может быть меньше 50%
+    if master_roles and "SENIOR_MASTER" in master_roles:
+        min_master_profit = net_profit * 0.5
+        if master_profit < min_master_profit:
+            master_profit = min_master_profit
+            company_profit = net_profit - master_profit
 
     # Если выезд за город - добавляем 10% к прибыли мастера
     if out_of_city:

@@ -9,12 +9,13 @@ class UserRole:
     ADMIN = "ADMIN"
     DISPATCHER = "DISPATCHER"
     MASTER = "MASTER"
+    SENIOR_MASTER = "SENIOR_MASTER"
     UNKNOWN = "UNKNOWN"
 
     @classmethod
     def all_roles(cls) -> list[str]:
         """Список всех ролей"""
-        return [cls.ADMIN, cls.DISPATCHER, cls.MASTER, cls.UNKNOWN]
+        return [cls.ADMIN, cls.DISPATCHER, cls.MASTER, cls.SENIOR_MASTER, cls.UNKNOWN]
 
 
 class OrderStatus:
