@@ -43,9 +43,7 @@ def set_permissions_posix(paths: Iterable[Path]) -> None:
             os.chown(p, APP_UID, APP_GID)  # type: ignore[attr-defined]  # nosec S103 - chown используется только с фиксированными UID/GID для Docker setup
         # Allow rwx for all to avoid permission surprises
         with contextlib.suppress(Exception):
-            os.chmod(
-                p, 0o777
-            )  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
+            os.chmod(p, 0o777)  # nosec S103 - chmod используется только для Docker volumes setup с фиксированными правами
 
 
 def grant_windows_acl(path: Path) -> None:

@@ -387,7 +387,9 @@ def calculate_profit_split(
             # Используем ставку 50/50 для сантехники
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
-        elif "водонагревател" in equipment_lower: # Проверяем на "водонагревател" для учета словоформ
+        elif (
+            "водонагревател" in equipment_lower
+        ):  # Проверяем на "водонагревател" для учета словоформ
             # Используем ставку 50/50 для водонагревателей
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5

@@ -1,6 +1,7 @@
 """
 Тесты для вспомогательных функций
 """
+
 import pytest
 
 from app.utils.helpers import calculate_profit_split
@@ -76,6 +77,7 @@ def test_calculate_profit_split_senior_master_out_of_city():
     assert master_profit == expected_master_profit
     assert company_profit == expected_company_profit
 
+
 def test_calculate_profit_split_admin_out_of_city():
     """Тест расчета прибыли для админа с выездом за город."""
     # Net profit < 7000 (50/50 for admin) + 10% bonus
@@ -89,30 +91,28 @@ def test_calculate_profit_split_admin_out_of_city():
     base_master_profit = net_profit * 0.5  # 2500
     bonus = net_profit * 0.1  # 500
     expected_master_profit = base_master_profit + bonus  # 3000
-    expected_company_profit = net_profit - expected_master_profit # 2000
+    expected_company_profit = net_profit - expected_master_profit  # 2000
     assert master_profit == expected_master_profit
     assert company_profit == expected_company_profit
+
 
 def test_calculate_profit_split_specialization_rate():
     """Тест расчета с фиксированной ставкой для специальности."""
     # Ставка 60/40 для специальности
     master_profit, company_profit = calculate_profit_split(
-        total_amount=10000,
-        materials_cost=2000,
-        specialization_rate=(60.0, 40.0)
+        total_amount=10000, materials_cost=2000, specialization_rate=(60.0, 40.0)
     )
     net_profit = 8000
     assert master_profit == net_profit * 0.6  # 4800
     assert company_profit == net_profit * 0.4  # 3200
 
+
 def test_calculate_profit_split_equipment_type():
     """Тест расчета для типа техники 'электрика'."""
     # Для электрики всегда 50/50, даже если чистая прибыль < 7000
     master_profit, company_profit = calculate_profit_split(
-        total_amount=6000,
-        materials_cost=1000,
-        equipment_type="Электрика"
+        total_amount=6000, materials_cost=1000, equipment_type="Электрика"
     )
     net_profit = 5000
-    assert master_profit == net_profit * 0.5 # 2500
-    assert company_profit == net_profit * 0.5 # 2500
+    assert master_profit == net_profit * 0.5  # 2500
+    assert company_profit == net_profit * 0.5  # 2500
