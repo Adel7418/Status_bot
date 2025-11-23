@@ -406,8 +406,8 @@ def calculate_profit_split(
         master_profit = net_profit * 0.4
         company_profit = net_profit * 0.6
 
-    # Если мастер - старший, его процент не может быть меньше 50%
-    if master_roles and "SENIOR_MASTER" in master_roles:
+    # Если мастер - старший или админ, его процент не может быть меньше 50%
+    if master_roles and ("SENIOR_MASTER" in master_roles or "ADMIN" in master_roles):
         min_master_profit = net_profit * 0.5
         if master_profit < min_master_profit:
             master_profit = min_master_profit
