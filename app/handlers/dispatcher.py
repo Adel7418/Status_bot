@@ -1768,7 +1768,10 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             logger.info(f"[VALIDATION_DEBUG] All data: {data}")
 
             if not message.from_user:
-                raise ValidationError([{"loc": ["dispatcher_id"], "msg": "User not found", "type": "value_error"}], OrderCreateSchema)
+                raise ValidationError(
+                    [{"loc": ["dispatcher_id"], "msg": "User not found", "type": "value_error"}],
+                    OrderCreateSchema,
+                )
 
             order_data = OrderCreateSchema(
                 equipment_type=data["equipment_type"],
@@ -2394,7 +2397,9 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
             return
 
         keyboard = get_masters_list_keyboard(
-            cast(Sequence[Any], available_masters), order_id=order_id, action="select_new_master_for_order"
+            cast(Sequence[Any], available_masters),
+            order_id=order_id,
+            action="select_new_master_for_order",
         )
 
         current_master_name = order.master_name if order.master_name else "Неизвестен"
@@ -3679,7 +3684,9 @@ async def admin_process_materials_confirmation_callback(
             "✅ Сумма расходного материала подтверждена\n\n"
             "❓ <b>Взял ли мастер отзыв у клиента?</b>",
             parse_mode="HTML",
-            reply_markup=get_yes_no_keyboard("admin_confirm_review", int(order_id) if order_id else 0),
+            reply_markup=get_yes_no_keyboard(
+                "admin_confirm_review", int(order_id) if order_id else 0
+            ),
         )
     elif answer == "no":
         # Возвращаемся к вводу суммы материалов
@@ -3711,7 +3718,9 @@ async def admin_process_review_confirmation_callback(
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
 
-    callback_data = parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
+    callback_data = (
+        parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
+    )
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ
@@ -3777,7 +3786,9 @@ async def admin_process_out_of_city_confirmation_callback(
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
 
-    callback_data = parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
+    callback_data = (
+        parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
+    )
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ

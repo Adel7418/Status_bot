@@ -81,7 +81,7 @@ async def btn_my_orders(
         await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
         return
 
-    assert master.id is not None # Added assertion for mypy # nosec
+    assert master.id is not None  # Added assertion for mypy # nosec
 
     # Получаем заявки мастера
     orders = await db.get_orders_by_master(master.id, exclude_closed=True)
@@ -262,7 +262,7 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list, db: D
             await callback.answer("Вы не зарегистрированы как мастер", show_alert=True)
             return
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -287,11 +287,11 @@ async def callback_accept_order(callback: CallbackQuery, user_roles: list, db: D
         )
 
         # Уведомляем диспетчера с retry механизмом
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if order.dispatcher_id:
             from app.utils import safe_send_message
 
-            assert order.dispatcher_id is not None # Added assertion for mypy # nosec
+            assert order.dispatcher_id is not None  # Added assertion for mypy # nosec
             result = await safe_send_message(
                 callback.bot,
                 order.dispatcher_id,
@@ -398,7 +398,7 @@ async def callback_refuse_order_master(
         if user:
             is_admin = "ADMIN" in user.get_roles()
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if not is_admin and order.assigned_master_id != master.id:
             logger.warning(
                 f"[REFUSE] Access denied - Master ID: {master.id}, Assigned: {order.assigned_master_id}"
@@ -469,7 +469,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена.")
             return
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
 
         # Получаем роли пользователя из state (если есть) или из БД
         user_roles = data.get("user_roles", [])
@@ -550,7 +550,9 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             logger.warning("Audit log skipped: message.from_user.id is None")
 
         action_type = (
-            "отменена" if order and order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED] else "отклонена"
+            "отменена"
+            if order and order.status in [OrderStatus.NEW, OrderStatus.ACCEPTED]
+            else "отклонена"
         )
 
         # Проверяем, откуда был отказ (группа или админ)
@@ -566,12 +568,16 @@ async def process_refuse_reason(message: Message, state: FSMContext):
             await db.update_order_status(
                 order_id=order_id,
                 status=OrderStatus.REFUSED,
-                changed_by=user_telegram_id, # Use the null-checked variable
+                changed_by=user_telegram_id,  # Use the null-checked variable
                 user_roles=user_roles,
             )
 
             # Уведомляем мастера если был назначен
-            if order and order.assigned_master_id and (not master or order.assigned_master_id != master.id):
+            if (
+                order
+                and order.assigned_master_id
+                and (not master or order.assigned_master_id != master.id)
+            ):
                 assigned_master = await db.get_master_by_id(order.assigned_master_id)
                 if assigned_master:
                     from app.utils import safe_send_message
@@ -607,8 +613,8 @@ async def process_refuse_reason(message: Message, state: FSMContext):
                 from app.utils.helpers import format_datetime
 
                 master_name = master.get_display_name() if master else "Не назначен"
-                if message.bot is not None: # Added check for message.bot
-                    assert order is not None # Added assertion for mypy # nosec
+                if message.bot is not None:  # Added check for message.bot
+                    assert order is not None  # Added assertion for mypy # nosec
                     await message.bot.edit_message_text(
                         chat_id=group_chat_id,
                         message_id=group_message_id,
@@ -648,7 +654,7 @@ async def process_refuse_reason(message: Message, state: FSMContext):
         # Уведомляем диспетчера с retry механизмом
         assert order is not None  # Added assertion for mypy # nosec
         if order.dispatcher_id is not None:
-            assert order.dispatcher_id is not None # Added assertion for mypy # nosec
+            assert order.dispatcher_id is not None  # Added assertion for mypy # nosec
             from app.utils import safe_send_message
 
             # Формируем текст уведомления в зависимости от того, кто отказал
@@ -725,7 +731,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list, db: D
         if user:
             is_admin = "ADMIN" in user.get_roles()
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if not is_admin and order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -752,7 +758,7 @@ async def callback_onsite_order(callback: CallbackQuery, user_roles: list, db: D
         # Уведомляем диспетчера с retry механизмом
         assert order is not None  # Added assertion for mypy # nosec
         if order.dispatcher_id is not None:
-            assert order.dispatcher_id is not None # Added assertion for mypy # nosec
+            assert order.dispatcher_id is not None  # Added assertion for mypy # nosec
             from app.utils import safe_send_message
 
             result = await safe_send_message(
@@ -842,9 +848,9 @@ async def callback_low_amount_refusal_confirmation(callback: CallbackQuery, stat
 
         # Удаляем промпт-сообщение
         prompt_message_id = data.get("prompt_message_id")
-        if not isinstance(callback.message, Message): # Added check
-            await callback.answer("❌ Сообщение недоступно", show_alert=True) # Added error message
-            return # Added return
+        if not isinstance(callback.message, Message):  # Added check
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)  # Added error message
+            return  # Added return
         allowed_chat_id = data.get("allowed_chat_id") or callback.message.chat.id
 
         if prompt_message_id:
@@ -881,7 +887,9 @@ async def process_refuse_reason_on_complete(message: Message, state: FSMContext)
         state: FSM контекст
     """
     if not message.text:
-        await message.reply("❌ Причина слишком короткая. Пожалуйста, укажите более подробную причину (минимум 3 символа):")
+        await message.reply(
+            "❌ Причина слишком короткая. Пожалуйста, укажите более подробную причину (минимум 3 символа):"
+        )
         return
     refuse_reason = message.text.strip()
 
@@ -948,7 +956,7 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
         if user:
             is_admin = "ADMIN" in user.get_roles()
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if not is_admin and order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
@@ -967,7 +975,7 @@ async def callback_refuse_order_complete(callback: CallbackQuery, state: FSMCont
             await callback.answer("❌ Сообщение недоступно", show_alert=True)
             return
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         await message_obj.edit_text(
             f"⚠️ <b>Подтверждение отказа</b>\n\n"
             f"📋 Заявка #{order_id}\n"
@@ -1014,15 +1022,15 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext, db
         if user:
             is_admin = "ADMIN" in user.get_roles()
 
-        assert order is not None # Added assertion for mypy # nosec
+        assert order is not None  # Added assertion for mypy # nosec
         if not is_admin and order.assigned_master_id != master.id:
             await callback.answer("Это не ваша заявка", show_alert=True)
             return
 
         # Сохраняем контекст завершения в FSM
-        if not isinstance(callback.message, Message): # Added check
-            await callback.answer("❌ Сообщение недоступно", show_alert=True) # Added error message
-            return # Added return
+        if not isinstance(callback.message, Message):  # Added check
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)  # Added error message
+            return  # Added return
         await state.update_data(
             order_id=order_id,
             initiator_user_id=callback.from_user.id,
@@ -1083,12 +1091,14 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
 
         # Проверяем права
         # Если админ, то пропускаем проверку на совпадение мастера
-        if not is_admin and (not master or (order is not None and order.assigned_master_id != master.id)):
-                logger.warning(
-                    f"[DR] Access denied - Master ID: {master.id if master else None}, Assigned: {order.assigned_master_id if order else None}"
-                )
-                await callback.answer("Это не ваша заявка", show_alert=True)
-                return
+        if not is_admin and (
+            not master or (order is not None and order.assigned_master_id != master.id)
+        ):
+            logger.warning(
+                f"[DR] Access denied - Master ID: {master.id if master else None}, Assigned: {order.assigned_master_id if order else None}"
+            )
+            await callback.answer("Это не ваша заявка", show_alert=True)
+            return
 
         # ВАЛИДАЦИЯ: Проверяем, что заявка ещё НЕ в статусе DR
         if order is not None and order.status == OrderStatus.DR:
@@ -1351,12 +1361,16 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
         if user:
             is_admin = "ADMIN" in user.get_roles()
 
-        logger.debug(f"[DR] Order found: {order is not None}, Master found: {master is not None}, Is Admin: {is_admin}")
+        logger.debug(
+            f"[DR] Order found: {order is not None}, Master found: {master is not None}, Is Admin: {is_admin}"
+        )
 
         # Если это не администратор, проверяем что мастер назначен
         # Если пользователь админ, он может переводить в ДР любые заявки
         if not is_admin and master is not None and order.assigned_master_id != master.id:
-            logger.error(f"[DR] Master {master.id if master else 'None'} not assigned to order {order_id}")
+            logger.error(
+                f"[DR] Master {master.id if master else 'None'} not assigned to order {order_id}"
+            )
             await message.reply("❌ Ошибка: эта заявка назначена другому мастеру")
             await state.clear()
             return
@@ -1442,7 +1456,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
             )
             return
 
-        assert master.id is not None # Added assertion for mypy # nosec
+        assert master.id is not None  # Added assertion for mypy # nosec
         # Получаем все заявки мастера
         orders = await db.get_orders_by_master(master.id, exclude_closed=False)
 
@@ -1479,7 +1493,7 @@ async def btn_my_stats(message: Message, user_role: str, user_roles: list, db: D
         # Добавляем кнопки для просмотра заявок
         from app.keyboards.inline import get_master_stats_keyboard
 
-        assert master.id is not None # Added assertion for mypy # nosec
+        assert master.id is not None  # Added assertion for mypy # nosec
         keyboard = get_master_stats_keyboard(master.id)
 
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
@@ -1569,7 +1583,9 @@ async def process_total_amount(message: Message, state: FSMContext):
             _db = get_database()
             await _db.connect()
             try:
-                user_telegram_id_admin_override = message.from_user.id if message.from_user else None
+                user_telegram_id_admin_override = (
+                    message.from_user.id if message.from_user else None
+                )
                 if user_telegram_id_admin_override is not None:
                     _user = await _db.get_user_by_telegram_id(user_telegram_id_admin_override)
                     if _user and _user.has_role(_UserRole.ADMIN):
@@ -1965,7 +1981,9 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
 
         if callback_query.message is not None:
             await safe_delete_message(
-                callback_query.bot, callback_query.message.chat.id, callback_query.message.message_id
+                callback_query.bot,
+                callback_query.message.chat.id,
+                callback_query.message.message_id,
             )
         logger.info("Deleted review confirmation message")
     except Exception as e:
@@ -1991,7 +2009,9 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
         f"🚗 <b>Был ли выезд за город?</b>\n"
         f"(За выезд за город вы получите дополнительно +10% к прибыли)",
         parse_mode="HTML",
-        reply_markup=get_yes_no_keyboard("confirm_out_of_city", int(order_id_from_state) if order_id_from_state else 0),
+        reply_markup=get_yes_no_keyboard(
+            "confirm_out_of_city", int(order_id_from_state) if order_id_from_state else 0
+        ),
     )
     # Сохраняем ID текущего сообщения
     await state.update_data(
@@ -2073,17 +2093,17 @@ async def process_out_of_city_confirmation_callback(
             is_admin = "ADMIN" in user.get_roles()
 
         if not order:
-             message_obj = callback_query.message
-             if isinstance(message_obj, Message):
-                 await message_obj.edit_text("❌ Ошибка: заявка не найдена.")
-             return
+            message_obj = callback_query.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text("❌ Ошибка: заявка не найдена.")
+            return
 
         # Если не админ, проверяем мастера
         if not is_admin and (not master or order.assigned_master_id != master.id):
-                message_obj = callback_query.message
-                if isinstance(message_obj, Message):
-                    await message_obj.edit_text("❌ Ошибка: заявка не принадлежит вам.")
-                return
+            message_obj = callback_query.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text("❌ Ошибка: заявка не принадлежит вам.")
+            return
 
         master_roles = []
         if master:
@@ -2113,7 +2133,9 @@ async def process_out_of_city_confirmation_callback(
             specialization_rate=specialization_rate,
             master_roles=master_roles,
         )
-        net_profit = (float(total_amount) if total_amount is not None else 0.0) - (float(materials_cost) if materials_cost is not None else 0.0)
+        net_profit = (float(total_amount) if total_amount is not None else 0.0) - (
+            float(materials_cost) if materials_cost is not None else 0.0
+        )
 
         # Определяем процентную ставку для отображения
         # Если есть специальная ставка (например, для электрика/сантехника) - показываем 50/50
@@ -2153,7 +2175,9 @@ async def process_out_of_city_confirmation_callback(
         )
 
         # Перезагружаем заказ и мастера для получения актуальных данных
-        updated_order = await db.get_order_by_id(int(order_id_from_state) if order_id_from_state else 0)
+        updated_order = await db.get_order_by_id(
+            int(order_id_from_state) if order_id_from_state else 0
+        )
         if acting_as_master_id:
             master = await db.get_master_by_telegram_id(acting_as_master_id)
         else:
@@ -2315,12 +2339,10 @@ async def btn_settings_master(message: Message, user_role: str, db: Database):
             await message.answer("❌ Вы не зарегистрированы как мастер в системе.")
             return
 
-
         if message.from_user is None:
             await message.answer("❌ Ошибка: не удалось определить пользователя")
             return
         user = await db.get_user_by_telegram_id(message.from_user.id)
-
 
         # Получаем список ролей
         role_names = {
@@ -2696,7 +2718,7 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
         # Определяем роль пользователя (может быть ADMIN или MASTER)
         if message.from_user is None:
             logger.warning("message.from_user is None, cannot determine user role for main menu.")
-            user_role = "MASTER" # Default to MASTER if user is unknown
+            user_role = "MASTER"  # Default to MASTER if user is unknown
         else:
             user = await db.get_user_by_telegram_id(message.from_user.id)
             user_role = user.role if user else "MASTER"
@@ -2727,7 +2749,9 @@ async def confirm_reschedule_order(message: Message, state: FSMContext):
                 if message.bot is None:
                     logger.error("Bot instance is None")
                 else:
-                    await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
+                    await message.bot.send_message(
+                        order.dispatcher_id, notification, parse_mode="HTML"
+                    )
                     logger.info(f"Reschedule notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
@@ -2941,7 +2965,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
         # Форматируем дату с расчетом дней для отображения
         from app.utils.date_parser import format_estimated_completion_with_days
 
-        completion_date_formatted = format_estimated_completion_with_days(str(completion_date) if completion_date else "")
+        completion_date_formatted = format_estimated_completion_with_days(
+            str(completion_date) if completion_date else ""
+        )
 
         # Формируем сообщение с результатом
         result_text = (
@@ -2983,7 +3009,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             # Форматируем дату с расчетом дней для отображения
             from app.utils.date_parser import format_estimated_completion_with_days
 
-            completion_date_formatted = format_estimated_completion_with_days(str(completion_date) if completion_date else "")
+            completion_date_formatted = format_estimated_completion_with_days(
+                str(completion_date) if completion_date else ""
+            )
 
             notification = (
                 f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
@@ -3002,7 +3030,9 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 if message.bot is None:
                     logger.error("Bot instance is None")
                 else:
-                    await message.bot.send_message(order.dispatcher_id, notification, parse_mode="HTML")
+                    await message.bot.send_message(
+                        order.dispatcher_id, notification, parse_mode="HTML"
+                    )
                 logger.info(f"DR notification sent to dispatcher {order.dispatcher_id}")
             except Exception as e:
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id}: {e}")
@@ -3011,12 +3041,15 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
         if acting_as_master_id and order.assigned_master_id:
             master = await db.get_master_by_id(order.assigned_master_id)
             current_user_id = message.from_user.id if message.from_user else None
-            if master and current_user_id and master.telegram_id != current_user_id and master.work_chat_id:
+            if (
+                master
+                and current_user_id
+                and master.telegram_id != current_user_id
+                and master.work_chat_id
+            ):
                 # Форматируем дату с расчетом дней для отображения
                 from app.utils import safe_send_message
                 from app.utils.date_parser import format_estimated_completion_with_days
-
-
 
                 master_notification = (
                     f"🔧 <b>Заявка #{order_id} переведена в длительный ремонт</b>\n\n"
@@ -3517,7 +3550,9 @@ async def complete_order_as_refusal(
                 logger.error(f"Не удалось уведомить диспетчера {order.dispatcher_id} об отказе")
 
         # Уведомляем мастера в рабочую группу, если админ действует от его имени
-        if user_telegram_id and user_telegram_id != (message.from_user.id if message.from_user else 0):
+        if user_telegram_id and user_telegram_id != (
+            message.from_user.id if message.from_user else 0
+        ):
             if master.work_chat_id:
                 from app.utils import safe_send_message
 
