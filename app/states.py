@@ -125,10 +125,7 @@ class RefuseOrderStates(StatesGroup):
 class SearchOrderStates(StatesGroup):
     """Состояния для поиска заказов"""
 
-    select_search_type = State()  # Выбор типа поиска
-    enter_phone = State()  # Ввод номера телефона
-    enter_address = State()  # Ввод адреса
-    enter_phone_and_address = State()  # Ввод телефона и адреса
+    enter_query = State()  # Единый ввод запроса для умного поиска (адрес/телефон/ID)
 
 
 class EditMasterSpecializationStates(StatesGroup):

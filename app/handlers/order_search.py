@@ -3,7 +3,7 @@
 """
 
 import logging
-import re
+import math
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -12,16 +12,20 @@ from aiogram.types import CallbackQuery, Message
 from app.config import UserRole
 from app.database import get_database
 from app.decorators import handle_errors, require_role
-from app.keyboards.inline import get_search_type_keyboard
-from app.keyboards.reply import get_cancel_keyboard
+from app.keyboards.inline import (
+    get_order_details_keyboard,
+    get_order_search_results_list_keyboard,
+    get_search_cancel_keyboard,
+)
 from app.services.order_search import OrderSearchService
 from app.states import SearchOrderStates
-from app.utils import escape_html, format_phone, validate_phone
-
+from app.utils import escape_html, format_datetime, format_phone
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="order_search")
+
+ORDERS_PER_PAGE = 5
 
 
 @router.message(F.text == "🔍 Поиск заказов")
@@ -29,7 +33,7 @@ router = Router(name="order_search")
 @require_role([UserRole.ADMIN, UserRole.DISPATCHER])
 async def btn_search_orders(message: Message, state: FSMContext, user_role: str):
     """
-    Начало процесса поиска заказов
+    Начало процесса поиска заказов (Smart Search)
 
     Args:
         message: Сообщение
@@ -37,112 +41,46 @@ async def btn_search_orders(message: Message, state: FSMContext, user_role: str)
         user_role: Роль пользователя
     """
     await state.clear()
-    await state.set_state(SearchOrderStates.select_search_type)
+    await state.set_state(SearchOrderStates.enter_query)
 
     await message.answer(
-        "🔍 <b>Поиск заказов</b>\n\n" "Выберите тип поиска:",
+        "🔍 <b>Поиск заказов</b>\n\n"
+        "Введите запрос — система автоматически определит тип:\n\n"
+        "🔢 <b>Номер заявки:</b> 123, 4567\n"
+        "📞 <b>Телефон:</b> +79991234567, 89991234567\n"
+        "🏠 <b>Адрес:</b> Ленина 15, Москва Тверская\n\n"
+        "<i>Для адресов-цифр (дом 15) добавьте название улицы</i>",
         parse_mode="HTML",
-        reply_markup=get_search_type_keyboard(),
+        reply_markup=get_search_cancel_keyboard(),
     )
 
 
-@router.callback_query(F.data == "search_by_phone")
+@router.callback_query(F.data == "search_new")
 @handle_errors
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def callback_search_by_phone(callback: CallbackQuery, state: FSMContext, user_role: str):
+async def callback_search_new(callback: CallbackQuery, state: FSMContext):
     """
-    Выбор поиска по телефону
+    Новый поиск (возврат к вводу)
 
     Args:
         callback: Callback query
         state: FSM контекст
-        user_role: Роль пользователя
     """
     await callback.answer()
-    await state.set_state(SearchOrderStates.enter_phone)
+    await state.clear()
+    await state.set_state(SearchOrderStates.enter_query)
 
     message = callback.message
-    if not isinstance(message, Message):
-        await callback.answer("Сообщение недоступно", show_alert=True)
-        return
-
-    await message.edit_text(
-        "📞 <b>Поиск по номеру телефона</b>\n\n"
-        "Введите номер телефона клиента:\n"
-        "<i>(в формате +7XXXXXXXXXX, 8XXXXXXXXXX или XXXXXXXXXX)</i>",
-        parse_mode="HTML",
-    )
-
-    await message.answer(
-        "Введите номер телефона:",
-        reply_markup=get_cancel_keyboard(),
-    )
-
-
-@router.callback_query(F.data == "search_by_address")
-@handle_errors
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def callback_search_by_address(callback: CallbackQuery, state: FSMContext, user_role: str):
-    """
-    Выбор поиска по адресу
-
-    Args:
-        callback: Callback query
-        state: FSM контекст
-        user_role: Роль пользователя
-    """
-    await callback.answer()
-    await state.set_state(SearchOrderStates.enter_address)
-
-    message = callback.message
-    if not isinstance(message, Message):
-        await callback.answer("Сообщение недоступно", show_alert=True)
-        return
-
-    await message.edit_text(
-        "🏠 <b>Поиск по адресу</b>\n\n"
-        "Введите адрес клиента:\n"
-        "<i>(можно ввести часть адреса)</i>",
-        parse_mode="HTML",
-    )
-
-    await message.answer(
-        "Введите адрес:",
-        reply_markup=get_cancel_keyboard(),
-    )
-
-
-@router.callback_query(F.data == "search_by_phone_and_address")
-@handle_errors
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def callback_search_by_phone_and_address(
-    callback: CallbackQuery, state: FSMContext, user_role: str
-):
-    """
-    Выбор поиска по телефону и адресу
-
-    Args:
-        callback: Callback query
-        state: FSM контекст
-        user_role: Роль пользователя
-    """
-    await callback.answer()
-    await state.set_state(SearchOrderStates.enter_phone_and_address)
-
-    message = callback.message
-    if not isinstance(message, Message):
-        await callback.answer("Сообщение недоступно", show_alert=True)
-        return
-
-    await message.edit_text(
-        "📞🏠 <b>Поиск по телефону и адресу</b>\n\n" "Введите номер телефона и адрес клиента:",
-        parse_mode="HTML",
-    )
-
-    await message.answer(
-        "Введите номер телефона:",
-        reply_markup=get_cancel_keyboard(),
-    )
+    if isinstance(message, Message):
+        await message.edit_text(
+            "🔍 <b>Поиск заказов</b>\n\n"
+            "Введите запрос — система автоматически определит тип:\n\n"
+            "🔢 <b>Номер заявки:</b> 123, 4567\n"
+            "📞 <b>Телефон:</b> +79991234567, 89991234567\n"
+            "🏠 <b>Адрес:</b> Ленина 15, Москва Тверская\n\n"
+            "<i>Для адресов-цифр (дом 15) добавьте название улицы</i>",
+            parse_mode="HTML",
+            reply_markup=get_search_cancel_keyboard(),
+        )
 
 
 @router.callback_query(F.data == "search_cancel")
@@ -159,46 +97,40 @@ async def callback_search_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     message = callback.message
-    if not isinstance(message, Message):
-        return
-
-    await message.edit_text(
-        "❌ Поиск отменен.",
-    )
+    if isinstance(message, Message):
+        await message.edit_text(
+            "❌ Поиск отменен.",
+        )
 
 
-@router.message(SearchOrderStates.enter_phone, F.text != "❌ Отмена")
+@router.message(SearchOrderStates.enter_query, F.text)
 @handle_errors
 @require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def process_search_phone(message: Message, state: FSMContext, user_role: str):
+async def process_search_query(message: Message, state: FSMContext, user_role: str):
     """
-    Обработка ввода номера телефона для поиска
+    Обработка поискового запроса
 
     Args:
         message: Сообщение
         state: FSM контекст
         user_role: Роль пользователя
     """
-    phone = (message.text or "").strip()
+    query = (message.text or "").strip()
 
-    # Валидация телефона
-    if not validate_phone(phone):
+    if query == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Поиск отменен.", reply_markup=None)
+        return
+
+    if len(query) < 2:
         await message.answer(
-            "❌ Неверный формат номера телефона.\n\n"
-            "Пожалуйста, введите номер в одном из форматов:\n"
-            "• +7XXXXXXXXXX\n"
-            "• 8XXXXXXXXXX\n"
-            "• XXXXXXXXXX",
-            reply_markup=get_cancel_keyboard(),
+            "⚠️ Слишком короткий запрос. Введите минимум 2 символа.",
+            reply_markup=get_search_cancel_keyboard(),
         )
         return
 
-    # Нормализуем номер телефона
-    normalized_phone = re.sub(r"\D", "", phone)
-    if normalized_phone.startswith("8") and len(normalized_phone) == 11:
-        normalized_phone = "7" + normalized_phone[1:]
-    elif len(normalized_phone) == 10:
-        normalized_phone = "7" + normalized_phone
+    # Отправляем сообщение "Ищу..."
+    loading_msg = await message.answer("⏳ Ищу заказы...")
 
     # Выполняем поиск
     db = get_database()
@@ -206,185 +138,196 @@ async def process_search_phone(message: Message, state: FSMContext, user_role: s
 
     try:
         search_service = OrderSearchService(db)
-        orders = await search_service.search_orders_by_phone(normalized_phone)
+        orders, search_type = await search_service.unified_search(query)
 
-        if orders:
-            result_text = search_service.format_search_results(orders, "поиска по телефону")
+        # Удаляем сообщение "Ищу..."
+        await loading_msg.delete()
+
+        if not orders:
+            # Генерируем умные подсказки в зависимости от типа запроса
+            suggestions = []
+            if query.isdigit():
+                digit_count = len(query)
+                if digit_count <= 6:
+                    suggestions.append("💡 <i>Возможно, это номер дома? Попробуйте добавить название улицы</i>")
+                else:
+                    suggestions.append("💡 <i>Возможно, это номер телефона? Попробуйте добавить +7 или 8 в начале</i>")
+
+            suggestion_text = "\n".join(suggestions) if suggestions else ""
+
             await message.answer(
-                result_text,
+                f"❌ <b>Заказы не найдены</b>\n\n"
+                f"Тип поиска: {search_type}\n"
+                f"Запрос: <b>{escape_html(query)}</b>\n\n"
+                f"{suggestion_text}\n\n" if suggestion_text else "\n"
+                f"Попробуйте ввести другие данные:\n"
+                f"🏠 <b>Адрес</b> (например: Москва, ул. Ленина)\n"
+                f"📞 <b>Номер телефона</b> (например: +79123456789)\n"
+                f"🔢 <b>ID заказа</b> (например: 12345)",
                 parse_mode="HTML",
-            )
-        else:
-            await message.answer(
-                f"🔍 <b>Результаты поиска по телефону</b>\n\n"
-                f"📞 <b>Поиск по номеру:</b> {format_phone(normalized_phone)}\n\n"
-                f"❌ Заказы не найдены.",
-                parse_mode="HTML",
-            )
-
-    finally:
-        # ORMDatabase не имеет метода close, только engine
-        if hasattr(db, "engine") and db.engine:
-            await db.engine.dispose()
-
-    await state.clear()
-
-
-@router.message(SearchOrderStates.enter_address, F.text != "❌ Отмена")
-@handle_errors
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def process_search_address(message: Message, state: FSMContext, user_role: str):
-    """
-    Обработка ввода адреса для поиска
-
-    Args:
-        message: Сообщение
-        state: FSM контекст
-        user_role: Роль пользователя
-    """
-    address = (message.text or "").strip()
-
-    if len(address) < 3:
-        await message.answer(
-            "❌ Адрес слишком короткий. Введите минимум 3 символа.",
-            reply_markup=get_cancel_keyboard(),
-        )
-        return
-
-    # Выполняем поиск
-    db = get_database()
-    await db.connect()
-
-    try:
-        search_service = OrderSearchService(db)
-        orders = await search_service.search_orders_by_address(address)
-
-        if orders:
-            result_text = search_service.format_search_results(orders, "поиска по адресу")
-            await message.answer(
-                result_text,
-                parse_mode="HTML",
-            )
-        else:
-            await message.answer(
-                f"🔍 <b>Результаты поиска по адресу</b>\n\n"
-                f"🏠 <b>Поиск по адресу:</b> {escape_html(address)}\n\n"
-                f"❌ Заказы не найдены.",
-                parse_mode="HTML",
-            )
-
-    finally:
-        # ORMDatabase не имеет метода close, только engine
-        if hasattr(db, "engine") and db.engine:
-            await db.engine.dispose()
-
-    await state.clear()
-
-
-@router.message(SearchOrderStates.enter_phone_and_address, F.text != "❌ Отмена")
-@handle_errors
-@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
-async def process_search_phone_and_address(message: Message, state: FSMContext, user_role: str):
-    """
-    Обработка ввода телефона и адреса для поиска
-
-    Args:
-        message: Сообщение
-        state: FSM контекст
-        user_role: Роль пользователя
-    """
-    data = await state.get_data()
-
-    if "phone" not in data:
-        # Первый ввод - телефон
-        phone = (message.text or "").strip()
-
-        # Валидация телефона
-        if not validate_phone(phone):
-            await message.answer(
-                "❌ Неверный формат номера телефона.\n\n"
-                "Пожалуйста, введите номер в одном из форматов:\n"
-                "• +7XXXXXXXXXX\n"
-                "• 8XXXXXXXXXX\n"
-                "• XXXXXXXXXX",
-                reply_markup=get_cancel_keyboard(),
+                reply_markup=get_search_cancel_keyboard(),
             )
             return
 
-        # Нормализуем номер телефона
-        normalized_phone = re.sub(r"\D", "", phone)
-        if normalized_phone.startswith("8") and len(normalized_phone) == 11:
-            normalized_phone = "7" + normalized_phone[1:]
-        elif len(normalized_phone) == 10:
-            normalized_phone = "7" + normalized_phone
+        # Сохраняем результаты в FSM для пагинации
+        orders_ids = [order.id for order in orders]
+        await state.update_data(found_orders=orders_ids, query=query, search_type=search_type)
 
-        await state.update_data(phone=normalized_phone)
+        # Показываем первую страницу
+        total_pages = math.ceil(len(orders) / ORDERS_PER_PAGE)
+        current_page = 1
+        page_orders = orders[:ORDERS_PER_PAGE]
+
+        text = (
+            f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n"
+            f"Всего заказов: <b>{len(orders)}</b>\n\n"
+            f"Выберите заказ для просмотра:"
+        )
+
         await message.answer(
-            f"📞 <b>Телефон:</b> {format_phone(normalized_phone)}\n\n" "Теперь введите адрес:",
+            text,
             parse_mode="HTML",
-            reply_markup=get_cancel_keyboard(),
+            reply_markup=get_order_search_results_list_keyboard(
+                page_orders, current_page, total_pages
+            ),
         )
+
+    finally:
+        if hasattr(db, "engine") and db.engine:
+            await db.engine.dispose()
+
+
+@router.callback_query(F.data.startswith("search_page_"))
+@handle_errors
+async def callback_search_pagination(callback: CallbackQuery, state: FSMContext):
+    """
+    Пагинация результатов поиска
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+    """
+    page = int(callback.data.split("_")[-1])
+    data = await state.get_data()
+    found_orders_ids = data.get("found_orders", [])
+    query = data.get("query", "")
+    search_type = data.get("search_type", "по запросу")
+
+    if not found_orders_ids:
+        await callback.answer("⚠️ Данные поиска устарели. Повторите поиск.", show_alert=True)
         return
 
-    # Второй ввод - адрес
-    address = (message.text or "").strip()
-
-    if len(address) < 3:
-        await message.answer(
-            "❌ Адрес слишком короткий. Введите минимум 3 символа.",
-            reply_markup=get_cancel_keyboard(),
-        )
-        return
-
-    phone = data["phone"]
-
-    # Выполняем поиск
+    # Загружаем заказы для текущей страницы
     db = get_database()
     await db.connect()
 
     try:
-        search_service = OrderSearchService(db)
-        orders = await search_service.search_orders_by_phone_and_address(phone, address)
+        start_idx = (page - 1) * ORDERS_PER_PAGE
+        end_idx = start_idx + ORDERS_PER_PAGE
+        page_ids = found_orders_ids[start_idx:end_idx]
 
-        if orders:
-            result_text = search_service.format_search_results(
-                orders, "поиска по телефону и адресу"
-            )
-            await message.answer(
-                result_text,
+        page_orders = []
+        for order_id in page_ids:
+            order = await db.get_order_by_id(order_id)
+            if order:
+                page_orders.append(order)
+
+        total_pages = math.ceil(len(found_orders_ids) / ORDERS_PER_PAGE)
+
+        text = (
+            f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n"
+            f"Всего заказов: <b>{len(found_orders_ids)}</b>\n\n"
+            f"Выберите заказ для просмотра:"
+        )
+
+        message = callback.message
+        if isinstance(message, Message):
+            await message.edit_text(
+                text,
                 parse_mode="HTML",
-            )
-        else:
-            await message.answer(
-                f"🔍 <b>Результаты поиска по телефону и адресу</b>\n\n"
-                f"📞 <b>Телефон:</b> {format_phone(phone)}\n"
-                f"🏠 <b>Адрес:</b> {escape_html(address)}\n\n"
-                f"❌ Заказы не найдены.",
-                parse_mode="HTML",
+                reply_markup=get_order_search_results_list_keyboard(
+                    page_orders, page, total_pages
+                ),
             )
 
     finally:
-        # ORMDatabase не имеет метода close, только engine
         if hasattr(db, "engine") and db.engine:
             await db.engine.dispose()
 
-    await state.clear()
+    await callback.answer()
 
 
-@router.message(SearchOrderStates.enter_phone, F.text == "❌ Отмена")
-@router.message(SearchOrderStates.enter_address, F.text == "❌ Отмена")
-@router.message(SearchOrderStates.enter_phone_and_address, F.text == "❌ Отмена")
+@router.callback_query(F.data.startswith("search_view_order_"))
 @handle_errors
-async def cancel_search(message: Message, state: FSMContext):
+async def callback_search_view_order(callback: CallbackQuery, state: FSMContext):
     """
-    Отмена поиска
+    Просмотр детальной информации о заказе из поиска
 
     Args:
-        message: Сообщение
+        callback: Callback query
         state: FSM контекст
     """
-    await state.clear()
-    await message.answer(
-        "❌ Поиск отменен.",
-        reply_markup=None,  # Убираем клавиатуру
-    )
+    order_id = int(callback.data.split("_")[-1])
+
+    db = get_database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer("❌ Заказ не найден", show_alert=True)
+            return
+
+        # Формируем текст карточки
+        from app.config import OrderStatus
+
+        status_emoji = OrderStatus.get_status_emoji(order.status)
+        status_name = OrderStatus.get_status_name(order.status)
+
+        text = f"📄 <b>Заказ #{order.id}</b>\n\n"
+        text += f"👤 <b>Клиент:</b> {order.client_name}\n"
+        text += f"📱 <b>Телефон:</b> {format_phone(order.client_phone)}\n"
+        text += f"🏠 <b>Адрес:</b> {order.client_address}\n"
+        text += f"🔧 <b>Техника:</b> {order.equipment_type}\n"
+        text += f"📝 <b>Проблема:</b> {order.description}\n\n"
+
+        if order.total_amount:
+            text += f"💰 <b>Сумма:</b> {order.total_amount} руб.\n"
+
+        if order.master_name:
+            text += f"👨‍🔧 <b>Мастер:</b> {order.master_name}\n"
+
+        text += f"{status_emoji} <b>Статус:</b> {status_name}\n"
+
+        if order.created_at:
+            text += f"📅 <b>Создан:</b> {format_datetime(order.created_at)}\n"
+
+        message = callback.message
+        if isinstance(message, Message):
+            await message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=get_order_details_keyboard(order.id),
+            )
+
+    finally:
+        if hasattr(db, "engine") and db.engine:
+            await db.engine.dispose()
+
+    await callback.answer()
+
+
+@router.callback_query(F.data == "search_back_to_list")
+@handle_errors
+async def callback_search_back_to_list(callback: CallbackQuery, state: FSMContext):
+    """
+    Возврат к списку результатов
+
+    Args:
+        callback: Callback query
+        state: FSM контекст
+    """
+    # Возвращаемся на 1 страницу
+    # TODO: В будущем можно сохранять текущую страницу в state
+    callback.data = "search_page_1"
+    await callback_search_pagination(callback, state)

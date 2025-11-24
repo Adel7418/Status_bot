@@ -12,7 +12,7 @@ from app.database.models import Order
 
 if TYPE_CHECKING:
     from app.database.orm_models import Order as ORMOrder
-from app.utils import format_datetime, format_phone
+from app.utils import format_datetime, format_phone, validate_phone
 
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,107 @@ class OrderSearchService:
 
         logger.info("Найдено заказов по телефону: %s", len(orders))
         return orders
+
+    async def unified_search(self, query: str) -> tuple[list[Order], str]:
+        """
+        Умный поиск по строке запроса с улучшенной логикой определения:
+
+        Приоритет определения типа поиска:
+        1. Адрес - если в запросе есть буквы
+        2. Телефон - если запрос соответствует формату телефона (11 цифр 7/8...)
+        3. Адрес - если есть пробелы/знаки препинания (например "15 а", "42-1")
+        4. Для чистых цифр:
+           - 1-4 символа: попробовать ID → fallback адрес (номер дома/квартиры)
+           - 5-6 символов: попробовать ID → fallback адрес
+           - 7-9 символов: попробовать ID (если <1млн) → fallback адрес
+           - 10+ символов: сразу адрес (не может быть ID)
+
+        Args:
+            query: Поисковый запрос
+
+        Returns:
+            Кортеж (список заказов, тип поиска)
+        """
+        query = query.strip()
+        if not query:
+            return [], "пустой запрос"
+
+        # Правило 1: Есть буквы → Адрес
+        if any(c.isalpha() for c in query):
+            orders = await self.search_orders_by_address(query)
+            return orders, "поиск по адресу"
+
+        # Правило 2: Валидный телефон → Телефон
+        if validate_phone(query):
+            orders = await self.search_orders_by_phone(query)
+            if orders:
+                return orders, "поиск по телефону"
+            # Если валидный формат телефона, но не найден - не делаем fallback
+            # (чтобы не искать "79991234567" как адрес)
+            return [], "поиск по телефону"
+
+        # Правило 3: Есть пробелы/знаки препинания + короткий → вероятно компонент адреса
+        if len(query) <= 6 and re.search(r'[\s\-/,.]', query):
+            orders = await self.search_orders_by_address(query)
+            return orders, "поиск по адресу"
+
+        # Правило 4: Только цифры - умное определение с fallback
+        if query.isdigit():
+            digit_count = len(query)
+
+            # Очень короткие (1-4 цифры) → Вероятно номер дома/квартиры, но попробуем ID
+            if digit_count <= 4:
+                orders = await self.search_order_by_id(int(query))
+                if orders:
+                    return orders, "поиск по ID заказа"
+                # Fallback к адресу
+                orders = await self.search_orders_by_address(query)
+                return orders, "поиск по адресу"
+
+            # Средние (5-6 цифр) → Более вероятно ID заказа
+            elif digit_count <= 6:
+                orders = await self.search_order_by_id(int(query))
+                if orders:
+                    return orders, "поиск по ID заказа"
+                # Fallback к адресу
+                orders = await self.search_orders_by_address(query)
+                return orders, "поиск по адресу"
+
+            # Длинные (7-9 цифр) → Может быть ID, если в разумном диапазоне
+            elif digit_count <= 9:
+                order_id = int(query)
+                # Проверка разумности ID (меньше миллиона)
+                if order_id < 1000000:
+                    orders = await self.search_order_by_id(order_id)
+                    if orders:
+                        return orders, "поиск по ID заказа"
+                # Fallback к адресу
+                orders = await self.search_orders_by_address(query)
+                return orders, "поиск по адресу"
+
+            # Очень длинные (10+ цифр) → Точно не ID заказа
+            else:
+                orders = await self.search_orders_by_address(query)
+                return orders, "поиск по адресу"
+
+        # Fallback: все остальные случаи → адрес
+        orders = await self.search_orders_by_address(query)
+        return orders, "поиск по адресу"
+
+    async def search_order_by_id(self, order_id: int) -> list[Order]:
+        """
+        Поиск заказа по ID
+
+        Args:
+            order_id: ID заказа
+
+        Returns:
+            Список из одного заказа или пустой список
+        """
+        order = await self.db.get_order_by_id(order_id)
+        if order:
+            return [order]
+        return []
 
     async def search_orders_by_address(self, address: str) -> list[Order]:
         """
