@@ -122,9 +122,9 @@ async def process_search_query(message: Message, state: FSMContext, user_role: s
         await message.answer("❌ Поиск отменен.", reply_markup=None)
         return
 
-    if len(query) < 2:
+    if len(query) < 1:
         await message.answer(
-            "⚠️ Слишком короткий запрос. Введите минимум 2 символа.",
+            "⚠️ Введите запрос для поиска.",
             reply_markup=get_search_cancel_keyboard(),
         )
         return
@@ -178,11 +178,20 @@ async def process_search_query(message: Message, state: FSMContext, user_role: s
         current_page = 1
         page_orders = orders[:ORDERS_PER_PAGE]
 
-        text = (
-            f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n"
-            f"Всего заказов: <b>{len(orders)}</b>\n\n"
-            f"Выберите заказ для просмотра:"
-        )
+        # Формируем заголовок в зависимости от типа поиска и количества результатов
+        if search_type == "поиск по ID заказа" and len(orders) == 1:
+            # Для поиска по ID - краткое сообщение
+            text = f"✅ Найден заказ <b>#{orders[0].id}</b>\n\nВыберите заказ для просмотра:"
+        elif len(orders) == 1:
+            # Один заказ найден - без указания количества
+            text = f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n\nВыберите заказ для просмотра:"
+        else:
+            # Несколько заказов - показываем количество
+            text = (
+                f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n"
+                f"Всего заказов: <b>{len(orders)}</b>\n\n"
+                f"Выберите заказ для просмотра:"
+            )
 
         await message.answer(
             text,
@@ -257,7 +266,7 @@ async def callback_search_pagination(callback: CallbackQuery, state: FSMContext)
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("search_view_order_"))
+@router.callback_query(F.data.startswith("search_view_order:"))
 @handle_errors
 async def callback_search_view_order(callback: CallbackQuery, state: FSMContext):
     """
@@ -267,7 +276,7 @@ async def callback_search_view_order(callback: CallbackQuery, state: FSMContext)
         callback: Callback query
         state: FSM контекст
     """
-    order_id = int(callback.data.split("_")[-1])
+    order_id = int(callback.data.split(":")[-1])
 
     db = get_database()
     await db.connect()
@@ -291,16 +300,40 @@ async def callback_search_view_order(callback: CallbackQuery, state: FSMContext)
         text += f"🔧 <b>Техника:</b> {order.equipment_type}\n"
         text += f"📝 <b>Проблема:</b> {order.description}\n\n"
 
+        # Финансовая информация
         if order.total_amount:
-            text += f"💰 <b>Сумма:</b> {order.total_amount} руб.\n"
+            materials = order.materials_cost or 0
+            net_total = order.total_amount - materials  # Чистая общая сумма (без материалов)
+
+            # Если нет расходных материалов, показываем только чистую прибыль компании
+            if materials == 0:
+                if order.company_profit:
+                    text += f"🟢 <b>Чистая прибыль:</b> {int(order.company_profit):,} ₽\n".replace(",", " ")
+            else:
+                # Есть расходные материалы - показываем чистую общую сумму и чистую прибыль компании
+                text += f"💰 <b>Общая сумма:</b> {int(net_total):,} ₽\n".replace(",", " ")
+                if order.company_profit:
+                    text += f"🟢 <b>Чистая прибыль:</b> {int(order.company_profit):,} ₽\n".replace(",", " ")
 
         if order.master_name:
             text += f"👨‍🔧 <b>Мастер:</b> {order.master_name}\n"
 
-        text += f"{status_emoji} <b>Статус:</b> {status_name}\n"
+        text += f"\n{status_emoji} <b>Статус:</b> {status_name}\n"
 
         if order.created_at:
             text += f"📅 <b>Создан:</b> {format_datetime(order.created_at)}\n"
+
+        # Если заявка завершена, показываем дату завершения
+        if order.status == "CLOSED":
+            # Ищем дату последнего изменения статуса на CLOSED в истории
+            if hasattr(order, 'status_history') and order.status_history:
+                closed_history = [h for h in order.status_history if h.new_status == "CLOSED"]
+                if closed_history:
+                    completion_date = max(closed_history, key=lambda h: h.changed_at).changed_at
+                    text += f"✅ <b>Завершён:</b> {format_datetime(completion_date)}\n"
+            elif order.updated_at:
+                # Fallback на updated_at, если нет истории
+                text += f"✅ <b>Завершён:</b> {format_datetime(order.updated_at)}\n"
 
         message = callback.message
         if isinstance(message, Message):
@@ -328,6 +361,57 @@ async def callback_search_back_to_list(callback: CallbackQuery, state: FSMContex
         state: FSM контекст
     """
     # Возвращаемся на 1 страницу
-    # TODO: В будущем можно сохранять текущую страницу в state
-    callback.data = "search_page_1"
-    await callback_search_pagination(callback, state)
+    page = 1
+    data = await state.get_data()
+    found_orders_ids = data.get("found_orders", [])
+    query = data.get("query", "")
+    search_type = data.get("search_type", "по запросу")
+
+    if not found_orders_ids:
+        await callback.answer("⚠️ Данные поиска устарели. Повторите поиск.", show_alert=True)
+        return
+
+    # Загружаем заказы для текущей страницы
+    db = get_database()
+    await db.connect()
+
+    try:
+        start_idx = (page - 1) * ORDERS_PER_PAGE
+        end_idx = start_idx + ORDERS_PER_PAGE
+        page_ids = found_orders_ids[start_idx:end_idx]
+
+        page_orders = []
+        for order_id in page_ids:
+            order = await db.get_order_by_id(order_id)
+            if order:
+                page_orders.append(order)
+
+        total_pages = math.ceil(len(found_orders_ids) / ORDERS_PER_PAGE)
+
+        # Формируем заголовок в зависимости от типа поиска и количества результатов
+        if search_type == "поиск по ID заказа" and len(found_orders_ids) == 1:
+            text = f"✅ Найден заказ <b>#{found_orders_ids[0]}</b>\n\nВыберите заказ для просмотра:"
+        elif len(found_orders_ids) == 1:
+            text = f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n\nВыберите заказ для просмотра:"
+        else:
+            text = (
+                f"✅ Найдено {search_type}: <b>{escape_html(query)}</b>\n"
+                f"Всего заказов: <b>{len(found_orders_ids)}</b>\n\n"
+                f"Выберите заказ для просмотра:"
+            )
+
+        message = callback.message
+        if isinstance(message, Message):
+            await message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=get_order_search_results_list_keyboard(
+                    page_orders, page, total_pages
+                ),
+            )
+
+    finally:
+        if hasattr(db, "engine") and db.engine:
+            await db.engine.dispose()
+
+    await callback.answer()

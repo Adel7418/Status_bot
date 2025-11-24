@@ -243,10 +243,13 @@ class MasterReportsService:
                 }
 
             master_stats[master_id]["orders"].append(order)
-            # total_amount уже включает расходный материал (как хранится в БД)
+            # total_amount - общая сумма, materials_cost - расходные материалы
             order_amount = order.total_amount or 0
-            master_stats[master_id]["total_amount"] += order_amount
-            master_stats[master_id]["materials_cost"] += order.materials_cost or 0
+            materials = order.materials_cost or 0
+            net_total = order_amount - materials  # Чистая общая сумма (без материалов)
+
+            master_stats[master_id]["total_amount"] += net_total  # Сохраняем чистую сумму
+            master_stats[master_id]["materials_cost"] += materials
             master_stats[master_id]["handover_amount"] += order.company_profit or 0
 
         # Сортируем мастеров по сумме заказов (по убыванию)
@@ -494,7 +497,7 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
-                # total_amount уже включает расходный материал (как хранится в БД)
+                # Для monthly оставляем как было - total_amount как есть
                 total_order_amount = order.total_amount or 0
 
                 data = [
@@ -513,25 +516,31 @@ class MasterReportsService:
                 if order.updated_at:
                     completion_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
 
-                # total_amount уже включает расходный материал (как хранится в БД)
+                # Общая сумма - это total_amount минус материалы
                 total_order_amount = order.total_amount or 0
+                materials = order.materials_cost or 0
+                net_total = total_order_amount - materials  # Чистая общая сумма
 
                 data = [
                     order.id,
-                    total_order_amount,
+                    net_total,
                     order.equipment_type or "",
-                    order.company_profit or 0,
+                    order.company_profit or 0,  # Чистая прибыль компании
                     completion_date,
                     "✅" if order.out_of_city else "❌",
                     "✅" if order.has_review else "❌",
                 ]
             else:
                 # Для ежедневных отчетов без даты выполнения
+                total_order_amount = order.total_amount or 0
+                materials = order.materials_cost or 0
+                net_total = total_order_amount - materials  # Чистая общая сумма
+
                 data = [
                     order.id,
-                    order.total_amount or 0,
+                    net_total,
                     order.equipment_type or "",
-                    order.company_profit or 0,
+                    order.company_profit or 0,  # Чистая прибыль компании
                     "✅" if order.out_of_city else "❌",
                     "✅" if order.has_review else "❌",
                 ]
