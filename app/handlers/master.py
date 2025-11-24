@@ -1643,22 +1643,8 @@ async def process_total_amount(message: Message, state: FSMContext):
     # Сохраняем общую сумму
     await state.update_data(total_amount=total_amount)
 
-    # Если сумма 0 рублей, автоматически завершаем как отказ
-    if total_amount == 0:
-        # Устанавливаем значения по умолчанию для отказа
-        await state.update_data(materials_cost=0.0, has_review=False, out_of_city=False)
-
-        # Получаем данные из состояния
-        data = await state.get_data()
-        order_id = data.get("order_id")
-        acting_as_master_id = data.get("acting_as_master_id")
-
-        # Завершаем заказ как отказ
-        await complete_order_as_refusal(message, state, int(order_id) if order_id else 0, acting_as_master_id)
-        return
-
-    # Если сумма до 1000 рублей, спрашиваем - это отказ?
-    if total_amount < 1000:
+    # Если сумма 0 или до 1000 рублей, спрашиваем - это отказ?
+    if total_amount <= 1000:
         await state.set_state(CompleteOrderStates.confirm_low_amount_refusal)
 
         # Создаем инлайн-клавиатуру
@@ -1677,9 +1663,13 @@ async def process_total_amount(message: Message, state: FSMContext):
             ]
         )
 
+        warning_text = (
+            f"⚠️ Указана сумма {total_amount:.2f} ₽"
+            + (" (нулевая сумма)" if total_amount == 0 else " (меньше 1000 рублей)")
+            + ".\n\n<b>Это отказ от заявки?</b>"
+        )
         await message.reply(
-            f"⚠️ Указана сумма {total_amount:.2f} ₽ (меньше 1000 рублей).\n\n"
-            f"<b>Это отказ от заявки?</b>",
+            warning_text,
             parse_mode="HTML",
             reply_markup=keyboard,
         )
