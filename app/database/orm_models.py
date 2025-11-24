@@ -58,7 +58,10 @@ class User(Base):
         Index("idx_users_deleted_at", "deleted_at"),
         CheckConstraint("telegram_id > 0", name="chk_users_telegram_id"),
         CheckConstraint(
-            "role IN ('ADMIN', 'DISPATCHER', 'MASTER', 'UNKNOWN') OR role LIKE '%,%'",
+            (
+                "role IN ('ADMIN', 'DISPATCHER', 'MASTER', 'SENIOR_MASTER', 'UNKNOWN') "
+                "OR role LIKE '%,%'"
+            ),
             name="chk_users_role",
         ),
     )
