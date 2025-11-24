@@ -1,6 +1,6 @@
 [project]
 name = "telegram-repair-bot"
-version = "2.4.0"
+version = "2.6.4"
 description = "Telegram бот для управления заявками на ремонт техники"
 readme = "README.md"
 requires-python = ">=3.11"
