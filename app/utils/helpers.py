@@ -349,7 +349,9 @@ def calculate_profit_split(
 
     Правила определения процентной ставки:
     1. Если передана готовая ставка (specialization_rate) - используется она
-    2. Если указан тип техники (equipment_type) и он содержит "электрик" или "сантехник" - используется ставка 50/50
+    2. Если указан тип техники (equipment_type):
+       - "электрик" или "сантехник" - ставка 50/50
+       - "холодильник" - 50/50 до 20000, 60/40 после 20000 (в пользу мастера)
     3. Если ничего не найдено:
        - Чистая прибыль >= 7000: 50% мастеру, 50% компании
        - Чистая прибыль < 7000: 40% мастеру, 60% компании
@@ -393,6 +395,14 @@ def calculate_profit_split(
             # Используем ставку 50/50 для водонагревателей
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
+        elif "холодильник" in equipment_lower:
+            # Для холодильников: 50/50 до 20000, 60/40 после 20000 в пользу мастера
+            if net_profit < 20000:
+                master_profit = net_profit * 0.5
+                company_profit = net_profit * 0.5
+            else:
+                master_profit = net_profit * 0.6
+                company_profit = net_profit * 0.4
         # Стандартная логика для других типов техники
         elif net_profit >= 7000:
             master_profit = net_profit * 0.5

@@ -75,6 +75,7 @@ class EquipmentType:
     ELECTRICAL = "Электрика"
     WATER_HEATER = "Водонагреватели"
     TV = "Телевизоры"
+    REFRIGERATOR = "Холодильники"
 
     @classmethod
     def all_types(cls) -> list[str]:
@@ -89,4 +90,5 @@ class EquipmentType:
             cls.ELECTRICAL,
             cls.WATER_HEATER,
             cls.TV,
+            cls.REFRIGERATOR,
         ]
