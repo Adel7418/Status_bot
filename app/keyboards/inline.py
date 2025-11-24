@@ -538,13 +538,16 @@ def get_period_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineKeyboardMarkup:
+def get_master_management_keyboard(
+    telegram_id: int, is_active: bool, has_senior_role: bool = False
+) -> InlineKeyboardMarkup:
     """
     Клавиатура управления мастером
 
     Args:
         telegram_id: Telegram ID мастера
         is_active: Активен ли мастер
+        has_senior_role: Имеет ли мастер роль SENIOR_MASTER
 
     Returns:
         InlineKeyboardMarkup
@@ -566,6 +569,22 @@ def get_master_management_keyboard(telegram_id: int, is_active: bool) -> InlineK
             callback_data=create_callback_data("edit_master_specialization", telegram_id),
         )
     )
+
+    # Кнопка управления ролью SENIOR_MASTER
+    if has_senior_role:
+        builder.row(
+            InlineKeyboardButton(
+                text="⭐ Убрать роль Старший мастер",
+                callback_data=create_callback_data("remove_senior_role", telegram_id),
+            )
+        )
+    else:
+        builder.row(
+            InlineKeyboardButton(
+                text="⭐ Назначить Старшим мастером",
+                callback_data=create_callback_data("add_senior_role", telegram_id),
+            )
+        )
 
     if is_active:
         builder.row(

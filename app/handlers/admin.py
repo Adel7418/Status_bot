@@ -640,6 +640,10 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
             await callback.answer("Мастер не найден", show_alert=True)
             return
 
+        # Получаем информацию о пользователе для проверки роли SENIOR_MASTER
+        user = await db.get_user_by_telegram_id(telegram_id)
+        has_senior_role = user.has_role(UserRole.SENIOR_MASTER) if user else False
+
         # Используем MasterPresenter для базового форматирования
         text = MasterPresenter.format_master_details(master, include_stats=False)
 
@@ -649,6 +653,14 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
             f"👨‍🔧 <b>Мастер: {master.get_display_name()}</b>\n\n"
             f"🆔 Telegram ID: <code>{telegram_id}</code>\n",
         )
+
+        # Добавляем информацию о роли SENIOR_MASTER
+        if has_senior_role:
+            text = text.replace(
+                f"🆔 Telegram ID: <code>{telegram_id}</code>\n",
+                f"🆔 Telegram ID: <code>{telegram_id}</code>\n"
+                f"⭐ <b>Роль:</b> Старший мастер (50% прибыли гарантированно)\n",
+            )
 
         # Получаем и добавляем статистику мастера
         orders = await db.get_orders_by_master(master.id, exclude_closed=False)
@@ -661,7 +673,7 @@ async def callback_manage_master(callback: CallbackQuery, user_role: str):
             f"• Завершено: {completed_orders}\n"
         )
 
-        keyboard = get_master_management_keyboard(telegram_id, master.is_active)
+        keyboard = get_master_management_keyboard(telegram_id, master.is_active, has_senior_role)
 
         message_obj = callback.message
         if isinstance(message_obj, Message):
@@ -789,6 +801,140 @@ async def callback_activate_master(callback: CallbackQuery, user_role: str):
         await db.disconnect()
 
     await callback.answer("Мастер активирован")
+
+
+@router.callback_query(F.data.startswith("add_senior_role:"))
+async def callback_add_senior_role(callback: CallbackQuery, user_role: str):
+    """
+    Добавление роли SENIOR_MASTER мастеру
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
+
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    db = ORMDatabase()
+    await db.connect()
+
+    try:
+        # Проверяем, что мастер существует
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Добавляем роль SENIOR_MASTER
+        success = await db.add_user_role(telegram_id, UserRole.SENIOR_MASTER)
+
+        if not success:
+            await callback.answer("❌ Не удалось добавить роль", show_alert=True)
+            return
+
+        await db.add_audit_log(
+            user_id=user.id,
+            action="ADD_SENIOR_MASTER_ROLE",
+            details=(
+                f"Added SENIOR_MASTER role to master {telegram_id} "
+                f"({master.get_display_name()})"
+            ),
+        )
+
+        # Обновляем сообщение
+        await callback_manage_master(callback, user_role)
+
+        log_action(
+            user.id,
+            "ADD_SENIOR_MASTER_ROLE",
+            f"Master ID: {telegram_id}, Name: {master.get_display_name()}",
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer(
+        "⭐ Роль 'Старший мастер' назначена! Теперь мастер получает минимум 50% прибыли."
+    )
+
+
+@router.callback_query(F.data.startswith("remove_senior_role:"))
+async def callback_remove_senior_role(callback: CallbackQuery, user_role: str):
+    """
+    Удаление роли SENIOR_MASTER у мастера
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        return
+
+    data = callback.data or ""
+    try:
+        telegram_id = int(data.split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("❌ Некорректные данные мастера", show_alert=True)
+        return
+
+    user = callback.from_user
+    if user is None:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return
+
+    db = ORMDatabase()
+    await db.connect()
+
+    try:
+        # Проверяем, что мастер существует
+        master = await db.get_master_by_telegram_id(telegram_id)
+        if not master:
+            await callback.answer("Мастер не найден", show_alert=True)
+            return
+
+        # Удаляем роль SENIOR_MASTER
+        success = await db.remove_user_role(telegram_id, UserRole.SENIOR_MASTER)
+
+        if not success:
+            await callback.answer("❌ Не удалось удалить роль", show_alert=True)
+            return
+
+        await db.add_audit_log(
+            user_id=user.id,
+            action="REMOVE_SENIOR_MASTER_ROLE",
+            details=(
+                f"Removed SENIOR_MASTER role from master {telegram_id} "
+                f"({master.get_display_name()})"
+            ),
+        )
+
+        # Обновляем сообщение
+        await callback_manage_master(callback, user_role)
+
+        log_action(
+            user.id,
+            "REMOVE_SENIOR_MASTER_ROLE",
+            f"Master ID: {telegram_id}, Name: {master.get_display_name()}",
+        )
+
+    finally:
+        await db.disconnect()
+
+    await callback.answer(
+        "Роль 'Старший мастер' снята. Действуют стандартные правила расчета прибыли."
+    )
 
 
 @router.callback_query(F.data.startswith("edit_master_specialization:"))
