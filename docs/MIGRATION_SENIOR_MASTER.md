@@ -16,43 +16,30 @@
 
 ## Применение на сервере
 
-### Вариант 1: Через Docker (Production)
-
-```bash
-# 1. Зайдите на сервер и перейдите в директорию проекта
-cd /path/to/telegram_repair_bot
-
-# 2. Получите последние изменения из GitHub
-git pull origin main
-
-# 3. Остановите бота
-cd docker
-docker-compose -f docker-compose.prod.yml down
-
-# 4. Примените миграцию
-docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
-
-# 5. Запустите бота
-docker-compose -f docker-compose.prod.yml up -d
-
-# 6. Проверьте логи
-docker-compose -f docker-compose.prod.yml logs -f bot
-```
-
-### Вариант 2: Через Make (Production)
+### Вариант 1: Через Make (Multibot - для city1/city2) - РЕКОМЕНДУЕТСЯ
 
 ```bash
 # 1. Зайдите на сервер
-cd /path/to/telegram_repair_bot
+cd ~/telegram_repair_bot
 
 # 2. Получите изменения
 git pull origin main
 
-# 3. Примените миграцию и перезапустите бота
-make prod-deploy
+# 3. Примените миграцию для city1
+make mb-migrate-city1
+
+# 4. Примените миграцию для city2
+make mb-migrate-city2
+
+# 5. Запустите ботов
+make mb-start
+
+# 6. Проверьте логи
+make mb-logs-city1
+make mb-logs-city2
 ```
 
-### Вариант 3: Локальная установка
+### Вариант 2: Локальная разработка
 
 ```bash
 # 1. Получите изменения
@@ -64,6 +51,8 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate  # Windows
 
 # 3. Примените миграцию
+make migrate
+# или напрямую
 alembic upgrade head
 
 # 4. Перезапустите бота
@@ -72,6 +61,19 @@ python bot.py
 
 ## Проверка применения миграции
 
+### Multibot (city1/city2)
+```bash
+# Проверить версию для city1
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city1 alembic current
+
+# Проверить версию для city2
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city2 alembic current
+
+# Должно вывести для каждого:
+# f9ec1face4e2 (head)
+```
+
+### Локальная разработка
 ```bash
 # Проверить текущую версию миграции
 alembic current
@@ -82,6 +84,16 @@ alembic current
 
 ## Откат миграции (если потребуется)
 
+### Multibot (city1/city2)
+```bash
+# Откатить миграцию для city1
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city1 alembic downgrade -1
+
+# Откатить миграцию для city2
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city2 alembic downgrade -1
+```
+
+### Локальная разработка
 ```bash
 # Откатить на одну миграцию назад
 alembic downgrade -1
@@ -116,17 +128,16 @@ alembic downgrade 62892e258c24
 3. Если ошибок нет - миграция применена успешно
 
 ### Бот не запускается после миграции
-
 ```bash
-# Проверьте логи
-docker-compose -f docker-compose.prod.yml logs bot
+# Проверьте логи city1
+make mb-logs-city1
 
-# Проверьте состояние миграций
-docker-compose -f docker-compose.prod.yml run --rm bot alembic current
+# Проверьте состояние миграций city1
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city1 alembic current
 
-# Откатите миграцию и попробуйте снова
-docker-compose -f docker-compose.prod.yml run --rm bot alembic downgrade -1
-docker-compose -f docker-compose.prod.yml run --rm bot alembic upgrade head
+# Откатите и повторите миграцию city1
+docker compose -f docker/docker-compose.multibot.yml run --rm bot_city1 alembic downgrade -1
+make mb-migrate-city1
 ```
 
 ## Поддержка

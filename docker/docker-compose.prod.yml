@@ -10,19 +10,22 @@ services:
       dockerfile: docker/Dockerfile
     container_name: telegram_repair_bot_prod
     restart: always
-    # Порядок загрузки env_file (от низкого к высокому приоритету):
-    # 1. .env (низкий приоритет - для секретных данных)
-    # 2. env.production (высокий приоритет - перезаписывает .env)
-    env_file:
-      - ../.env
-      - ../env.production
+    # Переменные окружения задаются через environment секцию ниже
+    # или через .env файл (если существует)
+    # env_file:
+    #   - ../.env
     environment:
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
       - PYTHONIOENCODING=utf-8
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
-      # Остальные переменные берутся из env.production
+      # ВАЖНО: Добавьте свои переменные окружения:
+      # - BOT_TOKEN=your_bot_token_here
+      # - ADMIN_IDS=123456789,987654321
+      # - LOG_LEVEL=INFO
+      # - DEV_MODE=false
+      # - USE_ORM=true
     volumes:
       - ../data:/app/data
       - ../logs:/app/logs
