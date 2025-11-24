@@ -307,9 +307,6 @@ python -m pytest tests/unit/ -v
 
 # Проверка DI
 python scripts/test_handlers_realtime.py
-
-# Запуск бота
-RESTART_city1.bat
 ```
 
 ---

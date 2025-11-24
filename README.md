@@ -295,7 +295,17 @@ make git-save MSG="..."  # ⭐ Быстро: add + commit + push
 
 ## 🔐 Настройка окружения
 
-Создайте `.env` файл на основе `env.example`:
+Создайте `.env` файл на основе `env.example` (для локальной разработки):
+
+```bash
+cp env.example .env
+```
+
+Для production (Docker) рекомендуется использовать `env.production`:
+
+```bash
+cp env.example env.production
+```
 
 ```env
 # Telegram Bot

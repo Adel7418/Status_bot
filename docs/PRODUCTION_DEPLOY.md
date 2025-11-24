@@ -59,8 +59,12 @@ git pull origin main
 # Копирование example
 cp env.example .env
 
+# Для production настроек (переопределяет .env)
+cp env.example env.production
+
 # Редактирование
 nano .env
+nano env.production
 ```
 
 **Обязательно заполните:**

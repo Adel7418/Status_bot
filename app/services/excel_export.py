@@ -511,7 +511,7 @@ class ExcelExportService:
 
                 # Получаем текст статуса
                 status_text = _get_status_display_text(
-                    order["status"], order.get("assigned_master_id")
+                    order["status"], order.get("assigned_master_id", None)
                 )
 
                 notes = []
@@ -785,7 +785,7 @@ class ExcelExportService:
 
                     # Получаем текст статуса
                     status_text = _get_status_display_text(
-                        order["status"], order.get("assigned_master_id")
+                        order["status"], order.get("assigned_master_id", None)
                     )
 
                     notes = []
@@ -1369,12 +1369,12 @@ class ExcelExportService:
                     dict(totals_row)
                     if totals_row is not None
                     else {
-                        "total_sum": 0,
-                        "materials_sum": 0,
                         "total_orders": 0,
                         "closed": 0,
                         "in_work": 0,
                         "refused": 0,
+                        "total_sum": 0,
+                        "materials_sum": 0,
                         "company_profit_sum": 0,
                         "avg_check": 0,
                         "out_of_city": 0,
@@ -1545,7 +1545,8 @@ class ExcelExportService:
                     """,
                     (master_id,),
                 )
-                master = await cursor.fetchone()
+                master_row = await cursor.fetchone()
+                master = dict(master_row) if master_row else {}
 
                 if not master:
                     logger.error(f"Master {master_id} not found")
@@ -1566,7 +1567,8 @@ class ExcelExportService:
                     """,
                     (master_id,),
                 )
-                all_orders = await all_orders_cursor.fetchall()
+                all_orders_rows = await all_orders_cursor.fetchall()
+                all_orders = [dict(row) for row in all_orders_rows]
 
             # Имя файла
             reports_dir = Path("reports")

@@ -10,6 +10,12 @@
 cp env.example .env
 ```
 
+Для production режима создайте `env.production`:
+
+```bash
+cp env.example env.production
+```
+
 Отредактируйте `.env` и добавьте ваши данные:
 - `BOT_TOKEN` - токен от @BotFather
 - `ADMIN_IDS` - ваш Telegram ID

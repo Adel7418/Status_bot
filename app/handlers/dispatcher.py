@@ -4,6 +4,8 @@
 
 import logging
 import re
+from collections.abc import Sequence
+from typing import Any, cast
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -662,7 +664,7 @@ async def admin_edit_closed_out_of_city(message: Message, state: FSMContext, use
         master_profit, company_profit = calculate_profit_split(
             total,
             materials,
-            has_review,
+            bool(has_review),
             out_of_city,
             equipment_type=order.equipment_type if order is not None else None,
             specialization_rate=specialization_rate,
@@ -1477,8 +1479,9 @@ async def process_scheduled_time(message: Message, state: FSMContext, user_role:
                 data = await state.get_data()
                 if last_msg_id := data.get("last_bot_message_id"):
                     try:
-                        await message.bot.delete_message(message.chat.id, last_msg_id)
-                        logger.debug(f"Deleted bot message {last_msg_id}")
+                        if message.bot:
+                            await message.bot.delete_message(message.chat.id, last_msg_id)
+                            logger.debug(f"Deleted bot message {last_msg_id}")
                     except Exception as e:
                         logger.warning(f"Failed to delete bot message {last_msg_id}: {e}")
                 try:
@@ -1628,6 +1631,9 @@ async def cancel_create_order(message: Message, state: FSMContext, user_role: st
     menu_keyboard = await get_menu_with_counter([user_role])
     await message.answer("❌ Создание заявки отменено.", reply_markup=menu_keyboard)
 
+    if not message.from_user:
+        return
+
     log_action(message.from_user.id, "CANCEL_CREATE_ORDER", "Order creation cancelled")
 
 
@@ -1739,9 +1745,11 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
     data = await state.get_data()
 
     # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: проверяем флаг создания заявки
+    # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: проверяем флаг создания заявки
     if data.get("creating_order"):
         # Заявка уже создается, игнорируем повторный клик
-        logger.warning(f"Duplicate order creation attempt by user {message.from_user.id}")
+        if message.from_user:
+            logger.warning(f"Duplicate order creation attempt by user {message.from_user.id}")
         return
 
     # Устанавливаем флаг, что заявка создается
@@ -1758,6 +1766,9 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
                 f"[VALIDATION_DEBUG] client_name: '{data.get('client_name')}', length: {len(data.get('client_name', ''))}"
             )
             logger.info(f"[VALIDATION_DEBUG] All data: {data}")
+
+            if not message.from_user:
+                raise ValidationError([{"loc": ["dispatcher_id"], "msg": "User not found", "type": "value_error"}], OrderCreateSchema)
 
             order_data = OrderCreateSchema(
                 equipment_type=data["equipment_type"],
@@ -1810,22 +1821,23 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
             details=f"Created order #{order.id}",
         )
 
-        log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
+        if message.from_user:
+            log_action(message.from_user.id, "CREATE_ORDER", f"Order #{order.id}")
 
-        # Отправляем уведомления всем админам и диспетчерам (кроме создателя)
-        admins_and_dispatchers = await db.get_admins_and_dispatchers(
-            exclude_user_id=message.from_user.id
-        )
+            # Отправляем уведомления всем админам и диспетчерам (кроме создателя)
+            admins_and_dispatchers = await db.get_admins_and_dispatchers(
+                exclude_user_id=message.from_user.id
+            )
 
-        notification_text = (
-            f"🆕 <b>Новая заявка #{order.id}</b>\n\n"
-            f"👤 Создал: {escape_html(message.from_user.full_name)}\n"
-            f"🔧 Тип: {escape_html(order.equipment_type)}\n"
-            f"📝 {escape_html(order.description)}\n\n"
-            f"👤 Клиент: {escape_html(order.client_name)}\n"
-            f"📍 {escape_html(order.client_address)}\n"
-            f"📞 {order.client_phone}\n"
-        )
+            notification_text = (
+                f"🆕 <b>Новая заявка #{order.id}</b>\n\n"
+                f"👤 Создал: {escape_html(message.from_user.full_name)}\n"
+                f"🔧 Тип: {escape_html(order.equipment_type)}\n"
+                f"📝 {escape_html(order.description)}\n\n"
+                f"👤 Клиент: {escape_html(order.client_name)}\n"
+                f"📍 {escape_html(order.client_address)}\n"
+                f"📞 {order.client_phone}\n"
+            )
 
         if order.scheduled_time:
             notification_text += f"\n⏰ Прибытие: {escape_html(order.scheduled_time)}"
@@ -1838,7 +1850,7 @@ async def confirm_create_order(message: Message, state: FSMContext, user_role: s
         # Отправляем уведомления (используем бот из контекста сообщения)
         for user in admins_and_dispatchers:
             # Пропускаем создателя заявки
-            if user.telegram_id == message.from_user.id:
+            if message.from_user and user.telegram_id == message.from_user.id:
                 continue
             try:
                 await safe_send_message(
@@ -1952,6 +1964,9 @@ async def callback_filter_orders(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     filter_status = callback.data.split(":")[1]
 
     db = get_database()
@@ -2024,6 +2039,9 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
         callback: Callback query
         user_role: Роль пользователя
     """
+    if not callback.data:
+        return
+
     order_id = int(callback.data.split(":")[1])
 
     db = get_database()
@@ -2065,9 +2083,9 @@ async def callback_view_order(callback: CallbackQuery, user_role: str):
                 else:
                     specialization_rate = None
                 if specialization_rate:
-                    base_master_pct, base_company_pct = specialization_rate
+                    base_master_pct, company_pct = specialization_rate
                     master_pct_display = int(round(base_master_pct))
-                    company_pct_display = int(round(base_company_pct))
+                    company_pct_display = int(round(company_pct))
                     base_rate = f"{master_pct_display}/{company_pct_display}"
 
             text += "\n💰 <b>Финансовая информация:</b>\n"
@@ -2131,6 +2149,9 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     order_id = int(callback.data.split(":")[1])
 
     await state.update_data(order_id=order_id)
@@ -2147,7 +2168,7 @@ async def callback_assign_master(callback: CallbackQuery, state: FSMContext, use
             return
 
         keyboard = get_masters_list_keyboard(
-            masters, order_id=order_id, action="select_master_for_order"
+            cast(Sequence[Any], masters), order_id=order_id, action="select_master_for_order"
         )
 
         message_obj = callback.message
@@ -2183,6 +2204,9 @@ async def callback_select_master_for_order(
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     parts = callback.data.split(":")
     order_id = int(parts[1])
     master_id = int(parts[2])
@@ -2193,6 +2217,9 @@ async def callback_select_master_for_order(
     try:
         # Получаем информацию о мастере ДО назначения
         master = await db.get_master_by_id(master_id)
+        if not master:
+            await callback.answer("❌ Мастер не найден", show_alert=True)
+            return
 
         # ПРОВЕРЯЕМ НАЛИЧИЕ РАБОЧЕЙ ГРУППЫ ДО НАЗНАЧЕНИЯ
         if not master.work_chat_id:
@@ -2224,6 +2251,9 @@ async def callback_select_master_for_order(
 
         # Уведомляем мастера с retry
         order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
 
         # Отправляем уведомление в рабочую группу
         # (проверку work_chat_id уже сделали выше)
@@ -2247,7 +2277,8 @@ async def callback_select_master_for_order(
         else:
             notification_text += f"👨‍🔧 <b>Мастер:</b> {master.get_display_name()}\n\n"
 
-        notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+        if order.created_at:
+            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
         notification_text += f"🔄 <b>Назначена:</b> {format_datetime(get_now())}"
 
         keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
@@ -2330,6 +2361,9 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     order_id = int(callback.data.split(":")[1])
 
     db = get_database()
@@ -2360,7 +2394,7 @@ async def callback_reassign_master(callback: CallbackQuery, state: FSMContext, u
             return
 
         keyboard = get_masters_list_keyboard(
-            available_masters, order_id=order_id, action="select_new_master_for_order"
+            cast(Sequence[Any], available_masters), order_id=order_id, action="select_new_master_for_order"
         )
 
         current_master_name = order.master_name if order.master_name else "Неизвестен"
@@ -2400,6 +2434,9 @@ async def callback_select_new_master_for_order(
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     parts = callback.data.split(":")
     order_id = int(parts[1])
     new_master_id = int(parts[2])
@@ -2410,11 +2447,17 @@ async def callback_select_new_master_for_order(
     try:
         # Получаем информацию о заявке и старом мастере
         order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
         old_master_id = order.assigned_master_id
         old_master = await db.get_master_by_id(old_master_id) if old_master_id else None
 
         # Получаем информацию о новом мастере ДО переназначения
         new_master = await db.get_master_by_id(new_master_id)
+        if not new_master:
+            await callback.answer("❌ Новый мастер не найден", show_alert=True)
+            return
 
         # ПРОВЕРЯЕМ НАЛИЧИЕ РАБОЧЕЙ ГРУППЫ ДО ПЕРЕНАЗНАЧЕНИЯ
         if not new_master.work_chat_id:
@@ -2480,7 +2523,8 @@ async def callback_select_new_master_for_order(
         else:
             notification_text += f"👨‍🔧 <b>Мастер:</b> {new_master.get_display_name()}\n\n"
 
-        notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
+        if order.created_at:
+            notification_text += f"📅 <b>Создана:</b> {format_datetime(order.created_at)}\n"
         notification_text += f"🔄 <b>Переназначена:</b> {format_datetime(get_now())}"
 
         keyboard = get_group_order_keyboard(order, OrderStatus.ASSIGNED)
@@ -2552,6 +2596,9 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     order_id = int(callback.data.split(":")[1])
 
     db = get_database()
@@ -2571,7 +2618,7 @@ async def callback_unassign_master(callback: CallbackQuery, user_role: str):
         if hasattr(db, "unassign_master_from_order"):
             # ORM: используем специальный метод
             await db.unassign_master_from_order(order_id)
-        else:
+        elif db.connection:
             # Legacy: прямой SQL
             await db.connection.execute(
                 "UPDATE orders SET status = ?, assigned_master_id = NULL WHERE id = ?",
@@ -2667,6 +2714,9 @@ async def callback_close_order(callback: CallbackQuery, user_role: str, state: F
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     order_id = int(callback.data.split(":")[1])
 
     # Сохраняем order_id в state для последующих шагов
@@ -2704,6 +2754,9 @@ async def callback_refuse_order(
         state: FSM контекст
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    if not callback.data:
         return
 
     order_id = int(callback.data.split(":")[1])
@@ -2772,6 +2825,9 @@ async def callback_client_waiting(callback: CallbackQuery, user_role: str):
         user_role: Роль пользователя
     """
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
+        return
+
+    if not callback.data:
         return
 
     order_id = int(callback.data.split(":")[1])
@@ -2911,6 +2967,9 @@ async def callback_back_to_orders(callback: CallbackQuery, user_role: str):
                 return
 
             # Получаем заявки мастера
+            if master.id is None:
+                await callback.answer("❌ Ошибка ID мастера", show_alert=True)
+                return
             orders = await db.get_orders_by_master(master.id, exclude_closed=True)
 
             if not orders:
@@ -3176,6 +3235,9 @@ async def callback_period_selected(callback: CallbackQuery, user_role: str):
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     period = callback.data.split("_")[1]
 
     db = get_database()
@@ -3323,6 +3385,9 @@ async def callback_download_period_excel(callback: CallbackQuery, user_role: str
     if user_role not in [UserRole.ADMIN, UserRole.DISPATCHER]:
         return
 
+    if not callback.data:
+        return
+
     period = callback.data.split(":")[1]
 
     await callback.answer("Генерация отчета...")
@@ -3340,6 +3405,9 @@ async def callback_download_period_excel(callback: CallbackQuery, user_role: str
             report_type="all", start_date=start_date, end_date=end_date
         )
 
+        if not callback.message:
+            await callback.answer("❌ Сообщение недоступно", show_alert=True)
+            return
         await callback.message.answer_document(
             document=excel_file, caption=f"📊 Отчет за период ({period})"
         )
@@ -3431,6 +3499,8 @@ async def btn_settings_dispatcher(message: Message, user_role: str):
     await db.connect()
 
     try:
+        if not message.from_user:
+            return
         user = await db.get_user_by_telegram_id(message.from_user.id)
         if not user:
             await message.answer("❌ Пользователь не найден в системе.")
@@ -3500,7 +3570,7 @@ async def admin_process_total_amount(message: Message, state: FSMContext):
 
         # Получаем данные из состояния
         data = await state.get_data()
-        order_id = data.get("order_id")
+        order_id = int(data.get("order_id", 0))
 
         # Завершаем заказ как отказ
         from app.handlers.master import complete_order_as_refusal
@@ -3564,23 +3634,18 @@ async def admin_process_materials_cost(message: Message, state: FSMContext):
     # Получаем ID заказа для inline кнопок
     data = await state.get_data()
     order_id = data.get("order_id")
+    order_id = int(order_id) if order_id else 0
     logger.info(f"Order ID from state: {order_id}")
 
-    # Переходим к подтверждению материалов
-    await state.set_state(AdminCloseOrderStates.confirm_materials)
+    # Переходим к запросу отзыва
+    await state.set_state(AdminCloseOrderStates.confirm_review)
 
     from app.keyboards.inline import get_yes_no_keyboard
 
-    logger.info(f"Creating yes/no keyboard for order {order_id}")
-    keyboard = get_yes_no_keyboard("admin_confirm_materials", order_id)
-    logger.info(f"Keyboard created: {keyboard}")
-
     await message.reply(
-        f"💰 <b>Подтвердите сумму расходных материалов:</b>\n\n"
-        f"Сумма: <b>{materials_cost:.2f} ₽</b>\n\n"
-        f"Верно ли указана сумма?",
+        "⭐ <b>Есть ли отзыв от клиента?</b>",
         parse_mode="HTML",
-        reply_markup=keyboard,
+        reply_markup=get_yes_no_keyboard("admin_confirm_review", order_id),
     )
     logger.info("Message with keyboard sent successfully")
 
@@ -3594,7 +3659,7 @@ async def admin_process_materials_confirmation_callback(
     """
     from app.utils import parse_callback_data
 
-    parsed_data = parse_callback_data(callback_query.data)
+    parsed_data = parse_callback_data(callback_query.data) if callback_query.data else {}
     params = parsed_data.get("params", [])
     answer = params[0] if len(params) > 0 else None  # yes/no
     order_id = params[1] if len(params) > 1 else None  # order_id
@@ -3614,7 +3679,7 @@ async def admin_process_materials_confirmation_callback(
             "✅ Сумма расходного материала подтверждена\n\n"
             "❓ <b>Взял ли мастер отзыв у клиента?</b>",
             parse_mode="HTML",
-            reply_markup=get_yes_no_keyboard("admin_confirm_review", order_id),
+            reply_markup=get_yes_no_keyboard("admin_confirm_review", int(order_id) if order_id else 0),
         )
     elif answer == "no":
         # Возвращаемся к вводу суммы материалов
@@ -3646,7 +3711,7 @@ async def admin_process_review_confirmation_callback(
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
 
-    callback_data = parse_callback_data(callback_query.data)
+    callback_data = parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ
@@ -3664,7 +3729,7 @@ async def admin_process_review_confirmation_callback(
 
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
-    order_id_from_state = data.get("order_id")
+    order_id_from_state = int(data.get("order_id", 0))
 
     message_obj = callback_query.message
     if not isinstance(message_obj, Message):
@@ -3712,7 +3777,7 @@ async def admin_process_out_of_city_confirmation_callback(
     # Извлекаем данные из callback
     from app.utils import parse_callback_data
 
-    callback_data = parse_callback_data(callback_query.data)
+    callback_data = parse_callback_data(callback_query.data) if callback_query.data else {"params": []}
     answer = callback_data["params"][1] if len(callback_data["params"]) > 1 else None
 
     # Определяем ответ
@@ -3720,8 +3785,8 @@ async def admin_process_out_of_city_confirmation_callback(
 
     # Получаем данные из состояния
     data = await state.get_data()
-    total_amount = data.get("total_amount")
-    materials_cost = data.get("materials_cost")
+    total_amount = float(data.get("total_amount", 0.0))
+    materials_cost = float(data.get("materials_cost", 0.0))
     has_review = data.get("has_review")
 
     db = get_database()
@@ -3729,7 +3794,7 @@ async def admin_process_out_of_city_confirmation_callback(
 
     # Получаем order_id из состояния, так как в callback data он может быть перепутан
     data = await state.get_data()
-    order_id_from_state = data.get("order_id")
+    order_id_from_state = int(data.get("order_id", 0))
 
     try:
         order = await db.get_order_by_id(order_id_from_state)
@@ -3761,7 +3826,7 @@ async def admin_process_out_of_city_confirmation_callback(
         master_profit, company_profit = calculate_profit_split(
             total_amount,
             materials_cost,
-            has_review,
+            bool(has_review),
             out_of_city,
             equipment_type=order.equipment_type,
             specialization_rate=specialization_rate,
