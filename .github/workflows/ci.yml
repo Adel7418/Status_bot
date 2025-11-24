@@ -137,7 +137,7 @@ jobs:
     - name: Run MyPy (type checking) - fallback
       if: failure()
       run: |
-        mypy app/ --ignore-missing-imports --no-strict-optional --python-version=3.13
+        mypy app/ --ignore-missing-imports --no-strict-optional --python-version=3.11
       continue-on-error: true
 
   security:
