@@ -61,7 +61,8 @@ class TestEquipmentType:
         assert EquipmentType.ELECTRICAL in types
         assert EquipmentType.WATER_HEATER in types
         assert EquipmentType.TV in types
-        assert len(types) == 9
+        assert EquipmentType.REFRIGERATOR in types
+        assert len(types) == 10
 
 
 class TestConfig:
