@@ -7,9 +7,11 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import OrderStatus, UserRole
+from app.database import get_database
 from app.database.orm_database import ORMDatabase
 from app.decorators import handle_errors, require_role
 from app.keyboards.inline import (
@@ -26,7 +28,12 @@ from app.states import (
     EditMasterSpecializationStates,
     SetWorkChatStates,
 )
-from app.utils import format_phone, log_action, validate_phone
+from app.utils import (
+    create_callback_data,
+    format_phone,
+    log_action,
+    validate_phone,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -2737,3 +2744,224 @@ async def callback_confirm_delete_order(callback: CallbackQuery, user_role: str)
         await db.disconnect()
 
     await callback.answer()
+
+
+
+@router.callback_query(F.data.startswith("restore_order:"))
+@handle_errors
+@require_role([UserRole.ADMIN])
+async def callback_restore_order(callback: CallbackQuery, user_role: str):
+    """
+    Запрос подтверждения восстановления отклонённой заявки
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("❌ Недостаточно прав. Только администраторы могут восстанавливать заявки.", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[-1])
+
+    db = get_database()
+    await db.connect()
+
+    try:
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
+        if order.status != OrderStatus.REFUSED:
+            await callback.answer(
+                f"❌ Заявка имеет статус {order.status}, восстановление возможно только для отклонённых заявок",
+                show_alert=True
+            )
+            return
+
+        # Формируем текст подтверждения
+        text = f"♻️ <b>Восстановление заявки #{order.id}</b>\n\n"
+        text += f"👤 <b>Клиент:</b> {order.client_name}\n"
+        text += f"📱 <b>Телефон:</b> {format_phone(order.client_phone)}\n"
+        text += f"🔧 <b>Техника:</b> {order.equipment_type}\n"
+        text += f"📝 <b>Проблема:</b> {order.description}\n\n"
+
+        if order.refuse_reason:
+            text += f"❌ <b>Причина отказа:</b> {order.refuse_reason}\n\n"
+
+        text += "⚠️ <b>Внимание!</b> При восстановлении:\n"
+        text += "• Статус изменится на NEW (Новая)\n"
+        text += "• Назначенный мастер будет снят\n"
+        text += "• Причина отказа будет удалена\n"
+        text += "• Заявка появится в общем пуле\n\n"
+        text += "Вы уверены, что хотите восстановить эту заявку?"
+
+        # Клавиатура с подтверждением
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text="✅ Да, восстановить",
+                callback_data=create_callback_data("confirm_restore_order", order_id)
+            ),
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data=create_callback_data("search_view_order", order_id)
+            )
+        )
+
+        message = callback.message
+        if isinstance(message, Message):
+            await message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+
+    finally:
+        if hasattr(db, "engine") and db.engine:
+            await db.engine.dispose()
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("confirm_restore_order:"))
+@handle_errors
+@require_role([UserRole.ADMIN])
+async def callback_confirm_restore_order(callback: CallbackQuery, user_role: str):
+    """
+    Выполнение восстановления отклонённой заявки
+
+    Args:
+        callback: Callback query
+        user_role: Роль пользователя
+    """
+    if user_role != UserRole.ADMIN:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
+
+    if not callback.from_user:
+        await callback.answer("❌ Ошибка: пользователь недоступен", show_alert=True)
+        return
+
+    order_id = int(callback.data.split(":")[-1])
+    user_id = callback.from_user.id
+
+    db = get_database()
+    await db.connect()
+
+    try:
+        # Проверяем, что используется ORM реализация
+        if not isinstance(db, ORMDatabase):
+            await callback.answer("❌ Функция недоступна для legacy базы данных", show_alert=True)
+            return
+
+        # Восстанавливаем заявку
+        success, error_message = await db.restore_refused_order(order_id, user_id)
+
+        if not success:
+            await callback.answer(f"❌ Ошибка: {error_message}", show_alert=True)
+            return
+
+        # Получаем обновлённую заявку
+        order = await db.get_order_by_id(order_id)
+        if not order:
+            await callback.answer("❌ Заявка не найдена после восстановления", show_alert=True)
+            return
+
+        # Формируем сообщение об успехе
+        text = f"✅ <b>Заявка #{order.id} восстановлена!</b>\n\n"
+        text += "Статус изменён: REFUSED → NEW\n"
+        text += "Заявка возвращена в общий пул новых заявок.\n\n"
+        text += f"👤 <b>Клиент:</b> {order.client_name}\n"
+        text += f"📱 <b>Телефон:</b> {format_phone(order.client_phone)}\n"
+        text += f"🏠 <b>Адрес:</b> {order.client_address}\n"
+        text += f"🔧 <b>Техника:</b> {order.equipment_type}\n"
+        text += f"📝 <b>Проблема:</b> {order.description}\n\n"
+        text += f"🆕 <b>Статус:</b> {OrderStatus.get_status_name(order.status)}\n"
+
+        # Клавиатура для дальнейших действий
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text="👨‍🔧 Назначить мастера",
+                callback_data=create_callback_data("assign_master", order_id)
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text="✏️ Редактировать",
+                callback_data=create_callback_data("edit_order", order_id)
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text="🔙 К списку",
+                callback_data="search_back_to_list"
+            ),
+            InlineKeyboardButton(
+                text="🔍 Новый поиск",
+                callback_data="search_new"
+            )
+        )
+
+        message = callback.message
+        if isinstance(message, Message):
+            await message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())
+
+        await callback.answer("✅ Заявка успешно восстановлена!", show_alert=True)
+
+        logger.info(f"Заявка #{order_id} восстановлена пользователем {user_id}")
+
+        # Отправляем уведомления диспетчерам
+        try:
+            from app.core.config import Config
+
+            # Отправляем уведомление в группу, если настроено
+            if Config.DISPATCHER_GROUP_ID:
+                notification_text = (
+                    f"♻️ <b>Заявка восстановлена</b>\n\n"
+                    f"📋 Заявка #{order.id}\n"
+                    f"👤 Клиент: {order.client_name}\n"
+                    f"📱 Телефон: {format_phone(order.client_phone)}\n"
+                    f"🔧 Техника: {order.equipment_type}\n"
+                    f"📝 Проблема: {order.description}\n\n"
+                    f"Статус: REFUSED → NEW\n"
+                    f"Восстановлена администратором"
+                )
+                await callback.bot.send_message(
+                    chat_id=Config.DISPATCHER_GROUP_ID,
+                    text=notification_text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Уведомление о восстановлении заявки #{order_id} отправлено в группу диспетчеров")
+
+            # Отправляем личные уведомления каждому диспетчеру
+            if Config.DISPATCHER_IDS:
+                notification_text = (
+                    f"♻️ <b>Заявка восстановлена</b>\n\n"
+                    f"📋 Заявка #{order.id}\n"
+                    f"👤 Клиент: {order.client_name}\n"
+                    f"📱 Телефон: {format_phone(order.client_phone)}\n"
+                    f"🔧 Техника: {order.equipment_type}\n"
+                    f"📝 Проблема: {order.description}\n\n"
+                    f"Статус: REFUSED → NEW\n"
+                    f"Восстановлена администратором"
+                )
+
+                sent_count = 0
+                for dispatcher_id in Config.DISPATCHER_IDS:
+                    try:
+                        await callback.bot.send_message(
+                            chat_id=dispatcher_id,
+                            text=notification_text,
+                            parse_mode="HTML"
+                        )
+                        sent_count += 1
+                    except Exception as e:
+                        logger.error(f"Ошибка при отправке уведомления диспетчеру {dispatcher_id}: {e}")
+
+                if sent_count > 0:
+                    logger.info(f"Уведомление о восстановлении заявки #{order_id} отправлено {sent_count} диспетчерам")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке уведомлений: {e}")
+
+    finally:
+        if hasattr(db, "engine") and db.engine:
+            await db.engine.dispose()

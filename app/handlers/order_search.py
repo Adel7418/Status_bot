@@ -269,13 +269,15 @@ async def callback_search_pagination(callback: CallbackQuery, state: FSMContext)
 
 @router.callback_query(F.data.startswith("search_view_order:"))
 @handle_errors
-async def callback_search_view_order(callback: CallbackQuery, state: FSMContext):
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+async def callback_search_view_order(callback: CallbackQuery, state: FSMContext, user_role: str):
     """
     Просмотр детальной информации о заказе из поиска
 
     Args:
         callback: Callback query
         state: FSM контекст
+        user_role: Роль пользователя
     """
     order_id = int(callback.data.split(":")[-1])
 
@@ -341,7 +343,7 @@ async def callback_search_view_order(callback: CallbackQuery, state: FSMContext)
             await message.edit_text(
                 text,
                 parse_mode="HTML",
-                reply_markup=get_order_details_keyboard(order.id),
+                reply_markup=get_order_details_keyboard(order.id, order.status, user_role),
             )
 
     finally:

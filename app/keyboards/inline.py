@@ -773,17 +773,32 @@ def get_order_search_results_list_keyboard(
     return builder.as_markup()
 
 
-def get_order_details_keyboard(order_id: int) -> InlineKeyboardMarkup:
+def get_order_details_keyboard(
+    order_id: int, order_status: str | None = None, user_role: str | None = None
+) -> InlineKeyboardMarkup:
     """
     Клавиатура действий с найденным заказом
 
     Args:
         order_id: ID заказа
+        order_status: Статус заказа (для отображения кнопки восстановления)
+        user_role: Роль пользователя (для проверки прав доступа)
 
     Returns:
         InlineKeyboardMarkup
     """
+    from app.config import UserRole
+
     builder = InlineKeyboardBuilder()
+
+    # Кнопка восстановления для отклонённых заявок (только для администраторов)
+    if order_status == OrderStatus.REFUSED and user_role == UserRole.ADMIN:
+        builder.row(
+            InlineKeyboardButton(
+                text="♻️ Восстановить заявку",
+                callback_data=create_callback_data("restore_order", order_id),
+            )
+        )
 
     builder.row(
         InlineKeyboardButton(
