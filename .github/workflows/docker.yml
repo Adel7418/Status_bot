@@ -47,6 +47,7 @@ jobs:
             type=sha
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -56,17 +57,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          load: ${{ github.event_name == 'pull_request' }}
 
       - name: Run Trivy security scan
         uses: aquasecurity/trivy-action@0.24.0
+        if: github.event_name != 'pull_request'
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.meta.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: 'sarif'
           output: 'trivy-results.sarif'
         continue-on-error: true
 
+      - name: Run Trivy security scan (PR)
+        uses: aquasecurity/trivy-action@0.24.0
+        if: github.event_name == 'pull_request'
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'table'
+        continue-on-error: true
+
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
+        if: github.event_name != 'pull_request'
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true

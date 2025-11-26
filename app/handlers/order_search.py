@@ -21,6 +21,7 @@ from app.services.order_search import OrderSearchService
 from app.states import SearchOrderStates
 from app.utils import escape_html, format_datetime, format_phone
 
+
 logger = logging.getLogger(__name__)
 
 router = Router(name="order_search")
@@ -160,10 +161,10 @@ async def process_search_query(message: Message, state: FSMContext, user_role: s
                 f"Тип поиска: {search_type}\n"
                 f"Запрос: <b>{escape_html(query)}</b>\n\n"
                 f"{suggestion_text}\n\n" if suggestion_text else "\n"
-                f"Попробуйте ввести другие данные:\n"
-                f"🏠 <b>Адрес</b> (например: Москва, ул. Ленина)\n"
-                f"📞 <b>Номер телефона</b> (например: +79123456789)\n"
-                f"🔢 <b>ID заказа</b> (например: 12345)",
+                "Попробуйте ввести другие данные:\n"
+                "🏠 <b>Адрес</b> (например: Москва, ул. Ленина)\n"
+                "📞 <b>Номер телефона</b> (например: +79123456789)\n"
+                "🔢 <b>ID заказа</b> (например: 12345)",
                 parse_mode="HTML",
                 reply_markup=get_search_cancel_keyboard(),
             )
@@ -326,7 +327,7 @@ async def callback_search_view_order(callback: CallbackQuery, state: FSMContext)
         # Если заявка завершена, показываем дату завершения
         if order.status == "CLOSED":
             # Ищем дату последнего изменения статуса на CLOSED в истории
-            if hasattr(order, 'status_history') and order.status_history:
+            if hasattr(order, "status_history") and order.status_history:
                 closed_history = [h for h in order.status_history if h.new_status == "CLOSED"]
                 if closed_history:
                     completion_date = max(closed_history, key=lambda h: h.changed_at).changed_at

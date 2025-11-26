@@ -161,7 +161,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest tests/ --cov=app --cov-report=term --cov-report=json
+        pytest tests --cov=app --cov-report=term --cov-report=json
 
     - name: Comment coverage on PR
       uses: py-cov-action/python-coverage-comment-action@v3

@@ -1,90 +1,86 @@
-# Автоматическая маркировка Pull Requests на основе измененных файлов
+# Автоматическая маркировка PR на основе измененных файлов
+# Используется в .github/workflows/pr-checks.yml
 
-# Handlers
-'handlers':
+# Обработчики бота
+handlers:
   - changed-files:
-    - any-glob-to-any-file: 'app/handlers/**/*'
+    - any-glob-to-any-file: 'app/handlers/**'
 
-# Middleware
-'middleware':
+# Сервисы
+services:
   - changed-files:
-    - any-glob-to-any-file: 'app/middlewares/**/*'
+    - any-glob-to-any-file: 'app/services/**'
 
-# Services
-'services':
-  - changed-files:
-    - any-glob-to-any-file: 'app/services/**/*'
-
-# Database
-'database':
+# База данных и репозитории
+database:
   - changed-files:
     - any-glob-to-any-file:
-      - 'app/database/**/*'
-      - 'migrations/**/*'
+      - 'app/database/**'
+      - 'app/repositories/**'
+      - 'migrations/**'
 
-# UI/Keyboards
-'ui':
+# Тесты
+tests:
   - changed-files:
-    - any-glob-to-any-file: 'app/keyboards/**/*'
+    - any-glob-to-any-file: 'tests/**'
 
-# Tests
-'tests':
-  - changed-files:
-    - any-glob-to-any-file: 'tests/**/*'
-
-# Documentation
-'documentation':
+# Документация
+documentation:
   - changed-files:
     - any-glob-to-any-file:
-      - 'docs/**/*'
+      - 'docs/**'
       - '*.md'
-      - 'README*'
-
-# Dependencies
-'dependencies':
-  - changed-files:
-    - any-glob-to-any-file:
-      - 'requirements*.txt'
-      - 'pyproject.toml'
-      - 'setup.py'
-
-# Docker
-'docker':
-  - changed-files:
-    - any-glob-to-any-file:
-      - 'docker/**/*'
-      - 'Dockerfile'
-      - 'docker-compose*.yml'
+      - 'CHANGELOG.md'
+      - 'README.md'
 
 # CI/CD
-'ci/cd':
+ci-cd:
   - changed-files:
     - any-glob-to-any-file:
-      - '.github/workflows/**/*'
-      - '.pre-commit-config.yaml'
-      - 'Makefile'
+      - '.github/workflows/**'
+      - '.github/**'
+      - 'docker/**'
+      - 'Dockerfile'
 
-# Security
-'security':
+# Зависимости
+dependencies:
   - changed-files:
     - any-glob-to-any-file:
-      - 'app/utils/pii_masking.py'
-      - 'app/middlewares/rate_limit.py'
+      - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - 'pyproject.toml'
 
-# Migrations
-'migration':
-  - changed-files:
-    - any-glob-to-any-file: 'migrations/versions/**/*'
-
-# Configuration
-'configuration':
+# Конфигурация
+configuration:
   - changed-files:
     - any-glob-to-any-file:
       - 'app/config.py'
-      - 'app/core/config.py'
-      - 'alembic.ini'
       - '.env*'
+      - 'env.example'
+      - 'alembic.ini'
 
-# Breaking change (по ключевым словам в заголовке)
-'breaking-change':
-  - head-branch: ['^breaking/', '^major/']
+# Скрипты
+scripts:
+  - changed-files:
+    - any-glob-to-any-file: 'scripts/**'
+
+# Клавиатуры и UI
+ui:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'app/keyboards/**'
+      - 'app/presenters/**'
+
+# Middleware и фильтры
+middleware:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'app/middlewares/**'
+      - 'app/filters/**'
+
+# Безопасность
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/unit/test_pii_masking.py'
+      - 'app/utils/pii_masking.py'

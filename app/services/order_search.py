@@ -73,7 +73,9 @@ class OrderSearchService:
         logger.info("Найдено заказов по телефону: %s", len(orders))
         return orders
 
-    async def unified_search(self, query: str) -> tuple[list[Order], str]:
+    async def unified_search(  # noqa: PLR0911
+        self, query: str
+    ) -> tuple[list[Order], str]:
         """
         Умный поиск по строке запроса с улучшенной логикой определения:
 
@@ -112,7 +114,7 @@ class OrderSearchService:
             return [], "поиск по телефону"
 
         # Правило 3: Есть пробелы/знаки препинания + короткий → вероятно компонент адреса
-        if len(query) <= 6 and re.search(r'[\s\-/,.]', query):
+        if len(query) <= 6 and re.search(r"[\s\-/,.]", query):
             orders = await self.search_orders_by_address(query)
             return orders, "поиск по адресу"
 
@@ -121,16 +123,7 @@ class OrderSearchService:
             digit_count = len(query)
 
             # Очень короткие (1-4 цифры) → Вероятно номер дома/квартиры, но попробуем ID
-            if digit_count <= 4:
-                orders = await self.search_order_by_id(int(query))
-                if orders:
-                    return orders, "поиск по ID заказа"
-                # Fallback к адресу
-                orders = await self.search_orders_by_address(query)
-                return orders, "поиск по адресу"
-
-            # Средние (5-6 цифр) → Более вероятно ID заказа
-            elif digit_count <= 6:
+            if digit_count <= 4 or digit_count <= 6:
                 orders = await self.search_order_by_id(int(query))
                 if orders:
                     return orders, "поиск по ID заказа"
@@ -139,7 +132,7 @@ class OrderSearchService:
                 return orders, "поиск по адресу"
 
             # Длинные (7-9 цифр) → Может быть ID, если в разумном диапазоне
-            elif digit_count <= 9:
+            if digit_count <= 9:
                 order_id = int(query)
                 # Проверка разумности ID (меньше миллиона)
                 if order_id < 1000000:
@@ -151,9 +144,8 @@ class OrderSearchService:
                 return orders, "поиск по адресу"
 
             # Очень длинные (10+ цифр) → Точно не ID заказа
-            else:
-                orders = await self.search_orders_by_address(query)
-                return orders, "поиск по адресу"
+            orders = await self.search_orders_by_address(query)
+            return orders, "поиск по адресу"
 
         # Fallback: все остальные случаи → адрес
         orders = await self.search_orders_by_address(query)

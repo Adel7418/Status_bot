@@ -26,6 +26,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Verify required secrets
+      run: |
+        # Проверяем наличие необходимых секретов для SSH деплоя
+        # Раскомментируйте эти проверки при настройке реального деплоя
+        # if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+        #   echo "ERROR: SERVER_HOST secret is not set"
+        #   exit 1
+        # fi
+        # if [ -z "${{ secrets.SERVER_USER }}" ]; then
+        #   echo "ERROR: SERVER_USER secret is not set"
+        #   exit 1
+        # fi
+        # if [ -z "${{ secrets.SERVER_SSH_KEY }}" ]; then
+        #   echo "ERROR: SERVER_SSH_KEY secret is not set"
+        #   exit 1
+        # fi
+        echo "Note: SSH deployment secrets check is commented out. Uncomment when configuring real deployment."
+
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
@@ -44,7 +62,7 @@ jobs:
     - name: Run tests before deploy
       run: |
         pip install -r requirements-dev.txt
-        pytest tests/ -v --tb=short
+        pytest tests -v --tb=short
 
     - name: Create deployment package
       run: |

@@ -18,6 +18,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check CHANGELOG.md exists and is updated
+        run: |
+          if [ ! -f "docs/CHANGELOG.md" ]; then
+            echo "ERROR: docs/CHANGELOG.md not found!"
+            echo "Please create and update CHANGELOG.md before releasing"
+            exit 1
+          fi
+
+          # Проверяем что версия из тега есть в CHANGELOG
+          VERSION="${GITHUB_REF#refs/tags/}"
+          if ! grep -q "$VERSION" docs/CHANGELOG.md; then
+            echo "WARNING: Version $VERSION not found in CHANGELOG.md"
+            echo "Please update CHANGELOG.md with release notes for this version"
+            exit 1
+          fi
+
+          echo "✅ CHANGELOG.md exists and contains $VERSION"
+
       - name: Generate changelog
         id: changelog
         run: |
