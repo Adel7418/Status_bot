@@ -742,6 +742,7 @@ class ORMDatabase:
                 .options(
                     joinedload(Order.assigned_master).joinedload(Master.user),
                     joinedload(Order.dispatcher),
+                    joinedload(Order.status_history),
                 )
                 .where(and_(Order.id == order_id))
             )
