@@ -316,6 +316,19 @@ class TaskScheduler:
         # Если до визита больше 2:30 часов - ждем
         return time_until_visit > timedelta(hours=2, minutes=30)  # Не проверяем по стандартному SLA
 
+    def _is_night_mode(self, now: datetime) -> bool:
+        """
+        Проверяет, является ли текущее время ночным (SLA отключен)
+        """
+        hour = now.hour
+        start = Config.SLA_NIGHT_START
+        end = Config.SLA_NIGHT_END
+
+        if start < end:
+            return start <= hour < end
+        # Переход через полночь (например, 22:00 - 06:00)
+        return hour >= start or hour < end
+
     async def check_order_sla(self):
         """
         Проверка SLA заявок
@@ -327,6 +340,11 @@ class TaskScheduler:
             orders = await self.db.get_all_orders()
 
             now = get_now()
+
+            if self._is_night_mode(now):
+                logger.info("SLA check skipped due to night mode")
+                return
+
             alerts: list[OrderAlert] = []
 
             for order in orders:
@@ -533,6 +551,11 @@ class TaskScheduler:
             orders = await self.db.get_all_orders(status=OrderStatus.ASSIGNED)
 
             now = get_now()
+
+            if self._is_night_mode(now):
+                logger.info("Assigned orders reminder skipped due to night mode")
+                return
+
             # Для перенесенных заявок увеличиваем порог напоминания до 30 минут
             base_remind_threshold = timedelta(minutes=15)
 
@@ -690,6 +713,11 @@ class TaskScheduler:
 
             # Используем get_now() для правильного часового пояса
             now = get_now()
+
+            if self._is_night_mode(now):
+                logger.info("Unassigned orders reminder skipped due to night mode")
+                return
+
             remind_threshold = timedelta(minutes=15)
             unassigned_alerts: list[OrderAlert] = []
 

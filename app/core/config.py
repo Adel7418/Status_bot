@@ -91,6 +91,11 @@ class Config:
     # Интервал напоминаний о непринятых заявках (в минутах)
     REMINDER_INTERVAL: int = int(os.getenv("REMINDER_INTERVAL", "5"))
 
+    # Ночной режим для SLA (время, когда уведомления не отправляются)
+    # Часы в 24-часовом формате (например, 22 = 22:00, 6 = 06:00)
+    SLA_NIGHT_START: int = int(os.getenv("SLA_NIGHT_START", "22"))
+    SLA_NIGHT_END: int = int(os.getenv("SLA_NIGHT_END", "6"))
+
     # Автоматические бэкапы
     BACKUP_ENABLED: bool = os.getenv("BACKUP_ENABLED", "true").lower() in ("true", "1", "yes")
     BACKUP_SCHEDULE: str = os.getenv("BACKUP_SCHEDULE", "0 3 * * *")  # Cron формат

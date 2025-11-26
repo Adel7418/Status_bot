@@ -708,33 +708,74 @@ def get_dev_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_search_type_keyboard() -> InlineKeyboardMarkup:
+def get_search_cancel_keyboard() -> InlineKeyboardMarkup:
     """
-    Клавиатура для выбора типа поиска заказов
+    Клавиатура отмены поиска
+
+    Returns:
+        InlineKeyboardMarkup
+    """
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="search_cancel"))
+    return builder.as_markup()
+
+
+def get_order_search_results_list_keyboard(
+    orders: list[Order], current_page: int, total_pages: int
+) -> InlineKeyboardMarkup:
+    """
+    Клавиатура со списком найденных заказов и пагинацией
+
+    Args:
+        orders: Список заказов
+        current_page: Текущая страница
+        total_pages: Всего страниц
 
     Returns:
         InlineKeyboardMarkup
     """
     builder = InlineKeyboardBuilder()
 
-    builder.row(InlineKeyboardButton(text="📞 По телефону", callback_data="search_by_phone"))
-
-    builder.row(InlineKeyboardButton(text="🏠 По адресу", callback_data="search_by_address"))
-
-    builder.row(
-        InlineKeyboardButton(
-            text="📞🏠 По телефону и адресу", callback_data="search_by_phone_and_address"
+    for order in orders:
+        status_emoji = OrderStatus.get_status_emoji(order.status)
+        # Формат: #1234 Стиральная машина ⏳
+        text = f"#{order.id} {order.equipment_type} {status_emoji}"
+        builder.row(
+            InlineKeyboardButton(
+                text=text, callback_data=create_callback_data("search_view_order", order.id)
+            )
         )
+
+    # Пагинация
+    pagination_buttons = []
+    if current_page > 1:
+        pagination_buttons.append(
+            InlineKeyboardButton(
+                text="⬅️", callback_data=create_callback_data("search_page", current_page - 1)
+            )
+        )
+
+    pagination_buttons.append(
+        InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="noop")
     )
 
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="search_cancel"))
+    if current_page < total_pages:
+        pagination_buttons.append(
+            InlineKeyboardButton(
+                text="➡️", callback_data=create_callback_data("search_page", current_page + 1)
+            )
+        )
+
+    builder.row(*pagination_buttons)
+
+    builder.row(InlineKeyboardButton(text="🔙 Новый поиск", callback_data="search_new"))
 
     return builder.as_markup()
 
 
-def get_search_results_keyboard(order_id: int) -> InlineKeyboardMarkup:
+def get_order_details_keyboard(order_id: int) -> InlineKeyboardMarkup:
     """
-    Клавиатура для результатов поиска заказа
+    Клавиатура действий с найденным заказом
 
     Args:
         order_id: ID заказа
@@ -746,14 +787,13 @@ def get_search_results_keyboard(order_id: int) -> InlineKeyboardMarkup:
 
     builder.row(
         InlineKeyboardButton(
-            text="👁️ Просмотреть заказ", callback_data=create_callback_data("view_order", order_id)
+            text="✏️ Редактировать", callback_data=create_callback_data("edit_order", order_id)
         )
     )
 
     builder.row(
-        InlineKeyboardButton(
-            text="✏️ Редактировать", callback_data=create_callback_data("edit_order", order_id)
-        )
+        InlineKeyboardButton(text="🔙 К списку", callback_data="search_back_to_list"),
+        InlineKeyboardButton(text="🔍 Новый поиск", callback_data="search_new"),
     )
 
     return builder.as_markup()
