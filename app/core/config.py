@@ -67,6 +67,11 @@ class Config:
         int(id_) for id_ in os.getenv("DISPATCHER_IDS", "").split(",") if id_.strip()
     ]
 
+    # ID группы диспетчеров для уведомлений
+    DISPATCHER_GROUP_ID: int | None = (
+        int(os.getenv("DISPATCHER_GROUP_ID")) if os.getenv("DISPATCHER_GROUP_ID") else None
+    )
+
     # Developer Mode (режим разработчика)
     DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in (
         "true",

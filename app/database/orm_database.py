@@ -1586,3 +1586,95 @@ class ORMDatabase:
             rate.deleted_at = get_now()
             await session.commit()
             return True
+
+    async def restore_refused_order(
+        self, order_id: int, restored_by_user_id: int
+    ) -> tuple[bool, str | None]:
+        """
+        Восстановление отклонённой заявки (REFUSED → NEW)
+
+        Args:
+            order_id: ID заявки
+            restored_by_user_id: ID пользователя, который восстанавливает заявку
+
+        Returns:
+            tuple[bool, str | None]: (успех, сообщение об ошибке)
+        """
+        async with self.get_session() as session:
+            try:
+                # Получаем заявку
+                stmt = select(Order).where(and_(Order.id == order_id))
+                result = await session.execute(stmt)
+                order = result.scalar_one_or_none()
+
+                if not order:
+                    logger.error(f"Заявка #{order_id} не найдена")
+                    return False, "Заявка не найдена"
+
+                # Проверяем, что заявка действительно отклонена
+                if order.status != OrderStatus.REFUSED:
+                    logger.error(
+                        f"Попытка восстановить заявку #{order_id} со статусом {order.status}"
+                    )
+                    return False, f"Заявка имеет статус {order.status}, а не REFUSED"
+
+                # Валидация перехода REFUSED → NEW
+                try:
+                    OrderStateMachine.validate_transition(
+                        from_state=OrderStatus.REFUSED,
+                        to_state=OrderStatus.NEW,
+                        user_roles=[UserRole.ADMIN, UserRole.DISPATCHER],
+                        raise_exception=True,
+                    )
+                except InvalidStateTransitionError as e:
+                    logger.error(f"Ошибка валидации перехода: {e}")
+                    return False, str(e)
+
+                # Сохраняем старую причину отказа для логирования
+                old_refuse_reason = order.refuse_reason
+
+                # Обновляем заявку
+                order.status = OrderStatus.NEW
+                order.refuse_reason = None  # Очищаем причину отказа
+                order.assigned_master_id = None  # Снимаем мастера
+                order.updated_at = get_now()
+                order.version += 1
+
+                # Логируем изменение статуса в историю
+                notes = "Заявка восстановлена из REFUSED в NEW"
+                if old_refuse_reason:
+                    notes += f". Причина отказа была: {old_refuse_reason}"
+
+                status_history = OrderStatusHistory(
+                    order_id=order_id,
+                    old_status=OrderStatus.REFUSED,
+                    new_status=OrderStatus.NEW,
+                    changed_by=restored_by_user_id,
+                    notes=notes,
+                    changed_at=get_now(),
+                )
+
+                session.add(status_history)
+
+                # Добавляем запись в audit log
+                await session.flush()  # Сохраняем изменения перед audit log
+
+                audit_log = AuditLog(
+                    action="order_restored",
+                    user_id=restored_by_user_id,
+                    details=f"Заявка #{order_id} восстановлена из REFUSED в NEW",
+                    timestamp=get_now(),
+                )
+                session.add(audit_log)
+
+                await session.commit()
+
+                logger.info(
+                    f"Заявка #{order_id} восстановлена из REFUSED в NEW пользователем {restored_by_user_id}"
+                )
+                return True, None
+
+            except Exception as e:
+                logger.error(f"Ошибка при восстановлении заявки #{order_id}: {e}")
+                await session.rollback()
+                return False, f"Ошибка при восстановлении заявки: {e!s}"
