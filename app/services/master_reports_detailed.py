@@ -18,6 +18,33 @@ from app.utils.helpers import MOSCOW_TZ, get_now
 logger = logging.getLogger(__name__)
 
 
+def sanitize_sheet_name(name: str, max_length: int = 31) -> str:
+    """
+    Очищает имя для использования в качестве названия листа Excel.
+
+    Excel не допускает символы: : / \ ? * [ ]
+    Максимальная длина: 31 символ
+
+    Args:
+        name: Исходное имя
+        max_length: Максимальная длина (по умолчанию 31)
+
+    Returns:
+        Очищенное имя
+    """
+    # Заменяем запрещенные символы на безопасные
+    forbidden_chars = [':', '/', '\\', '?', '*', '[', ']']
+    clean_name = name
+    for char in forbidden_chars:
+        clean_name = clean_name.replace(char, '_')
+
+    # Ограничиваем длину
+    if len(clean_name) > max_length:
+        clean_name = clean_name[:max_length]
+
+    return clean_name
+
+
 class MasterReportsService:
     """Сервис для генерации детализированных отчетов по мастерам"""
 
@@ -114,7 +141,8 @@ class MasterReportsService:
             for master in masters:
                 master_orders = [o for o in orders if o.assigned_master_id == master.id]
                 if master_orders:  # Создаем лист только если есть заказы
-                    master_sheet = wb.create_sheet(master.get_display_name())
+                    sheet_name = sanitize_sheet_name(master.get_display_name())
+                    master_sheet = wb.create_sheet(sheet_name)
                     await self._create_master_sheet(
                         master_sheet, master, master_orders, report_type
                     )

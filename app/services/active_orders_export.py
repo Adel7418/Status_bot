@@ -17,6 +17,33 @@ from app.utils.helpers import get_now
 logger = logging.getLogger(__name__)
 
 
+def sanitize_sheet_name(name: str, max_length: int = 31) -> str:
+    """
+    Очищает имя для использования в качестве названия листа Excel.
+
+    Excel не допускает символы: : / \ ? * [ ]
+    Максимальная длина: 31 символ
+
+    Args:
+        name: Исходное имя
+        max_length: Максимальная длина (по умолчанию 31)
+
+    Returns:
+        Очищенное имя
+    """
+    # Заменяем запрещенные символы на безопасные
+    forbidden_chars = [':', '/', '\\', '?', '*', '[', ']']
+    clean_name = name
+    for char in forbidden_chars:
+        clean_name = clean_name.replace(char, '_')
+
+    # Ограничиваем длину
+    if len(clean_name) > max_length:
+        clean_name = clean_name[:max_length]
+
+    return clean_name
+
+
 class ActiveOrdersExportService:
     """Сервис для экспорта активных заявок в Excel"""
 
@@ -62,7 +89,8 @@ class ActiveOrdersExportService:
             for master in masters:
                 master_orders = [o for o in active_orders if o.assigned_master_id == master.id]
                 if master_orders:  # Создаем лист только если есть активные заказы
-                    master_sheet = wb.create_sheet(master.get_display_name())
+                    sheet_name = sanitize_sheet_name(master.get_display_name())
+                    master_sheet = wb.create_sheet(sheet_name)
                     await self._create_master_sheet(master_sheet, master, master_orders)
 
             # Создаем директорию для отчетов
