@@ -5,7 +5,7 @@ Pydantic схемы для валидации данных парсера
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -106,7 +106,7 @@ class OrderParsed(BaseModel):
     class Config:
         """Конфигурация Pydantic модели"""
 
-        json_schema_extra = {
+        json_schema_extra: ClassVar[dict] = {
             "example": {
                 "equipment_type": "Стиральная машина",
                 "problem_description": "Не крутит барабан, шумит при отжиме",
@@ -173,7 +173,7 @@ class ParseResult(BaseModel):
     class Config:
         """Конфигурация Pydantic модели"""
 
-        json_schema_extra = {
+        json_schema_extra: ClassVar[dict] = {
             "examples": [
                 {
                     "success": True,
@@ -232,7 +232,7 @@ class ConfirmationData(BaseModel):
     class Config:
         """Конфигурация Pydantic модели"""
 
-        json_schema_extra = {
+        json_schema_extra: ClassVar[dict] = {
             "example": {
                 "message_id": 12345,
                 "parsed_order": {

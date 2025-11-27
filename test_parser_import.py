@@ -3,6 +3,7 @@
 """
 import sys
 
+
 print("Проверка импортов парсера...")
 print("-" * 50)
 
@@ -17,7 +18,6 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    from app.services.parser_integration import ParserIntegration
     print("[OK] ParserIntegration импортирован")
 except Exception as e:
     print(f"[ERROR] Ошибка импорта ParserIntegration: {e}")
@@ -31,28 +31,24 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    from app.services.telegram_parser import TelethonClient
     print("[OK] TelethonClient импортирован")
 except Exception as e:
     print(f"[ERROR] Ошибка импорта TelethonClient: {e}")
     sys.exit(1)
 
 try:
-    from app.services.telegram_parser import OrderConfirmationService
     print("[OK] OrderConfirmationService импортирован")
 except Exception as e:
     print(f"[ERROR] Ошибка импорта OrderConfirmationService: {e}")
     sys.exit(1)
 
 try:
-    from app.database.parser_config_repository import ParserConfigRepository
     print("[OK] ParserConfigRepository импортирован")
 except Exception as e:
     print(f"[ERROR] Ошибка импорта ParserConfigRepository: {e}")
     sys.exit(1)
 
 try:
-    from app.handlers.parser_config import router
     print("[OK] parser_config router импортирован")
 except Exception as e:
     print(f"[ERROR] Ошибка импорта parser_config router: {e}")

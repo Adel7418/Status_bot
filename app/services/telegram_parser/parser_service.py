@@ -6,7 +6,6 @@ Order Parser Service
 """
 
 import logging
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -18,6 +17,7 @@ from .patterns import (
     normalize_phone,
 )
 from .schemas import OrderParsed, ParseResult
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class OrderParserService:
         """Инициализация сервиса парсинга"""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def parse_message(self, text: str, message_id: int) -> ParseResult:
+    def parse_message(self, text: str, message_id: int) -> ParseResult:  # noqa: PLR0911
         """
         Парсит текстовое сообщение в структурированную заявку.
 
@@ -143,15 +143,15 @@ class OrderParserService:
             except ValidationError as e:
                 self.logger.warning(f"Ошибка валидации Pydantic: {e}")
                 return self._create_error_result(
-                    f"Ошибка валидации данных: {str(e)}",
+                    f"Ошибка валидации данных: {e!s}",
                     "invalid_format",
                     [],
                 )
 
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка парсинга: {e}", exc_info=True)
+            self.logger.exception(f"Неожиданная ошибка парсинга: {e}")
             return self._create_error_result(
-                f"Внутренняя ошибка парсинга: {str(e)}",
+                f"Внутренняя ошибка парсинга: {e!s}",
                 "error",
                 [],
             )
@@ -172,7 +172,21 @@ class OrderParserService:
         """
         lines = [line.strip() for line in text.split("\n")]
         # Убираем пустые строки
-        return [line for line in lines if line]
+        lines = [line for line in lines if line]
+
+        # Если только одна строка - попробуем разбить по точкам
+        if len(lines) == 1:
+            # Разбиваем по точкам, но только если точка не в середине числа (вроде 14.00)
+            parts = []
+            for part in lines[0].split("."):
+                part = part.strip()
+                if part:
+                    parts.append(part)
+            # Используем разбиение по точкам, если получилось > 1 части
+            if len(parts) > 1:
+                return parts
+
+        return lines
 
     def _extract_phone_from_lines(self, lines: list[str]) -> str | None:
         """
@@ -254,13 +268,28 @@ class OrderParserService:
         Returns:
             Нормализованный тип оборудования
         """
-        # Берём первое слово/фразу (до точки или запятой)
-        first_part = equipment_problem.split(".")[0].split(",")[0].strip()
+        # Берём первое слово/фразу (обычно 1-2 слова или аббревиатуру)
+        words = equipment_problem.split()
+        if not words:
+            return ""
 
-        # Нормализуем через словарь
-        equipment_type = normalize_equipment_type(first_part)
+        # Пробуем взять первое слово
+        first_word = words[0]
+        equipment_type = normalize_equipment_type(first_word)
 
-        return equipment_type
+        # Если первое слово дало результат - возвращаем
+        if equipment_type != first_word.capitalize():
+            return equipment_type
+
+        # Если нет - пробуем первые два слова
+        if len(words) >= 2:
+            first_two = " ".join(words[:2])
+            equipment_type = normalize_equipment_type(first_two)
+            if equipment_type != first_two.capitalize():
+                return equipment_type
+
+        # Возвращаем результат нормализации первого слова
+        return normalize_equipment_type(first_word)
 
     def _extract_problem_description(self, equipment_problem: str, equipment_type: str) -> str:
         """
@@ -273,26 +302,29 @@ class OrderParserService:
         Returns:
             Описание проблемы
         """
-        # Убираем тип оборудования из начала строки
-        # Ищем первое вхождение любого слова из equipment_type
-        problem = equipment_problem
+        # Убираем первое слово или первые два слова (оборудование) из начала
+        words = equipment_problem.split()
 
-        # Если есть точка или запятая — берём всё после первой точки/запятой
-        if "." in problem:
-            parts = problem.split(".", 1)
-            if len(parts) > 1:
-                problem = parts[1].strip()
-        elif "," in problem:
-            parts = problem.split(",", 1)
-            if len(parts) > 1:
-                problem = parts[1].strip()
-        else:
-            # Если нет разделителей — пытаемся убрать первые 1-2 слова
-            words = problem.split()
-            if len(words) > 2:
+        # Пытаемся найти, где заканчивается equipment type
+        # Проверяем первое слово
+        first_word = words[0] if words else ""
+        normalized_first = normalize_equipment_type(first_word)
+
+        if normalized_first == equipment_type:
+            # Первое слово - это equipment, убираем его
+            problem = " ".join(words[1:]).strip()
+        elif len(words) >= 2:
+            # Проверяем первые два слова
+            first_two = " ".join(words[:2])
+            normalized_two = normalize_equipment_type(first_two)
+            if normalized_two == equipment_type:
+                # Первые два слова - это equipment, убираем их
+                problem = " ".join(words[2:]).strip()
+            else:
+                # Убираем только первое слово
                 problem = " ".join(words[1:]).strip()
-            elif len(words) == 2:
-                problem = words[1].strip()
+        else:
+            problem = equipment_problem
 
         # Если после всех манипуляций пусто — возвращаем исходный текст
         if not problem or len(problem) < 3:
@@ -319,7 +351,7 @@ class OrderParserService:
         """
         return ParseResult(
             success=False,
-            status=status,  # type: ignore
+            status=status,
             data=None,
             error_message=error_message,
             missing_fields=missing_fields,

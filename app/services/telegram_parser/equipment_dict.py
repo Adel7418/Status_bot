@@ -120,7 +120,7 @@ def normalize_equipment_type(equipment_text: str) -> str:
 
     # Поиск сокращения в начале строки (например, "С/м LG" → "Стиральная машина")
     for abbr, full_name in EQUIPMENT_ABBREVIATIONS.items():
-        if equipment_lower.startswith(abbr + " ") or equipment_lower.startswith(abbr + ","):
+        if equipment_lower.startswith((abbr + " ", abbr + ",")):
             return full_name
 
     # Поиск по вхождению слова (например, "стиралка самсунг" → "Стиральная машина")
