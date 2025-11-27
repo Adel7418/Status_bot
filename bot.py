@@ -156,6 +156,7 @@ async def main():
     db = None
     scheduler = None
     dp = None
+    parser_integration = None
 
     try:
         # Инициализация Sentry (опционально)
@@ -215,6 +216,24 @@ async def main():
 
         # Инициализация планировщика (передаем shared DB instance)
         scheduler = TaskScheduler(bot, db)
+
+        # Инициализация парсера заявок (если включен в конфигурации)
+        if Config.PARSER_ENABLED:
+            try:
+                from app.database.orm_database import ORMDatabase
+                from app.services.parser_integration import ParserIntegration
+
+                # Парсер работает только с ORM
+                if not isinstance(db, ORMDatabase):
+                    raise TypeError("Парсер требует ORM базу данных (установите USE_ORM=true)")
+
+                parser_integration = ParserIntegration(bot, db)
+                await parser_integration.start()
+                logger.info("✅ Парсер заявок из Telegram-группы запущен")
+            except Exception as e:
+                logger.exception(f"❌ Ошибка запуска парсера заявок: {e}")
+                logger.warning("⚠️ Бот продолжит работу без парсера")
+                parser_integration = None
 
         # Инициализация сервиса ежедневных таблиц в реальном времени
         from app.services.realtime_daily_table import realtime_table_service
@@ -310,6 +329,14 @@ async def main():
                 await scheduler.stop()
             except Exception as e:
                 logger.error("Ошибка при остановке scheduler: %s", e)
+
+        # Остановка парсера заявок
+        if parser_integration:
+            try:
+                await parser_integration.stop()
+                logger.info("Парсер заявок остановлен")
+            except Exception as e:
+                logger.error("Ошибка при остановке парсера: %s", e)
 
         # Закрытие соединения с БД
         if db:

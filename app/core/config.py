@@ -105,6 +105,15 @@ class Config:
     BACKUP_ENABLED: bool = os.getenv("BACKUP_ENABLED", "true").lower() in ("true", "1", "yes")
     BACKUP_SCHEDULE: str = os.getenv("BACKUP_SCHEDULE", "0 3 * * *")  # Cron формат
 
+    # Telethon Parser Configuration
+    TELETHON_API_ID: int | None = int(os.getenv("TELETHON_API_ID")) if os.getenv("TELETHON_API_ID") else None
+    TELETHON_API_HASH: str = os.getenv("TELETHON_API_HASH", "")
+    TELETHON_PHONE: str = os.getenv("TELETHON_PHONE", "")
+    TELETHON_SESSION_NAME: str = os.getenv("TELETHON_SESSION_NAME", "parser_session")
+
+    # Включение парсера (можно отключить если не нужен)
+    PARSER_ENABLED: bool = os.getenv("PARSER_ENABLED", "false").lower() in ("true", "1", "yes")
+
     @classmethod
     def validate(cls) -> bool:
         """Валидация конфигурации"""
@@ -112,6 +121,16 @@ class Config:
             raise ValueError("BOT_TOKEN не установлен в .env файле")
         if not cls.ADMIN_IDS:
             raise ValueError("ADMIN_IDS не установлены в .env файле")
+
+        # Валидация Telethon если парсер включен
+        if cls.PARSER_ENABLED:
+            if not cls.TELETHON_API_ID:
+                raise ValueError("TELETHON_API_ID не установлен, но PARSER_ENABLED=true")
+            if not cls.TELETHON_API_HASH:
+                raise ValueError("TELETHON_API_HASH не установлен, но PARSER_ENABLED=true")
+            if not cls.TELETHON_PHONE:
+                raise ValueError("TELETHON_PHONE не установлен, но PARSER_ENABLED=true")
+
         return True
 
 

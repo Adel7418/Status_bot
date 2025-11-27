@@ -12,6 +12,7 @@ from app.handlers.group_interaction import router as group_router
 from app.handlers.master import router as master_router
 from app.handlers.order_edit import router as order_edit_router
 from app.handlers.order_search import router as order_search_router
+from app.handlers.parser_config import router as parser_config_router
 
 
 # Список всех роутеров
@@ -20,9 +21,11 @@ from app.handlers.order_search import router as order_search_router
 # financial_reports_router ПЕРЕД dispatcher_router, чтобы перехватывать кнопку "📊 Отчеты"
 # admin_history_router для работы с историей заявок
 # order_edit_router для редактирования заявок
+# parser_config_router для настройки парсера (только админы)
 routers = [
     developer_router,
     admin_router,
+    parser_config_router,  # Настройка парсера
     admin_history_router,
     financial_reports_router,
     dispatcher_router,
