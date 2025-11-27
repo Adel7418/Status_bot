@@ -500,3 +500,25 @@ class SpecializationRate(Base):
             name="chk_percentages_sum_100",
         ),
     )
+
+
+class ParserConfig(Base):
+    """Модель конфигурации парсера заявок из Telegram-группы"""
+
+    __tablename__ = "parser_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="ID Telegram-группы для мониторинга"
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, comment="Включен ли парсер"
+    )
+
+    # Системные поля
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (Index("idx_parser_config_enabled", "enabled"),)

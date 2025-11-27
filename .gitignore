@@ -110,3 +110,7 @@ temp_*
 
 # Alembic
 alembic/versions/__pycache__/
+
+# Telethon session files (содержат авторизацию Telegram)
+*.session
+*.session-journal
