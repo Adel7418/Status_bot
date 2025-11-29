@@ -5,6 +5,7 @@ Handlers для настройки парсера заявок
 - /set_group — установка ID группы для парсинга
 """
 
+import asyncio
 import logging
 
 from aiogram import F, Router
