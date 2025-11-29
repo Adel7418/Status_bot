@@ -264,6 +264,8 @@ async def main():
 
         # Инициализация парсера заявок (если включен в конфигурации)
         # Важно: парсер инициализируется ПОСЛЕ создания DI middleware
+        # Инициализация парсера заявок (если включен в конфигурации)
+        # Важно: парсер инициализируется ПОСЛЕ создания DI middleware
         if Config.PARSER_ENABLED:
             try:
                 from app.database.orm_database import ORMDatabase
@@ -273,20 +275,25 @@ async def main():
                 if not isinstance(db, ORMDatabase):
                     raise TypeError("Парсер требует ORM базу данных (установите USE_ORM=true)")
 
+                # Создаем экземпляр ВСЕГДА, чтобы он был доступен для команд (например, auth)
                 parser_integration = ParserIntegration(bot, db)
-                await parser_integration.start()
                 
-                if parser_integration.is_running:
-                    logger.info("✅ Парсер заявок из Telegram-группы запущен")
-                else:
-                    logger.warning("⚠️ Парсер инициализирован, но не активен (отключён в БД или нет group_id)")
-
-                # Обновляем DI middleware чтобы инжектировать parser_integration
+                # Инжектируем сразу
                 di_middleware.parser_integration = parser_integration
                 logger.info("✅ ParserIntegration добавлен в DI middleware")
+
+                # Пытаемся запустить
+                try:
+                    await parser_integration.start()
+                    if parser_integration.is_running:
+                        logger.info("✅ Парсер заявок из Telegram-группы запущен")
+                    else:
+                        logger.warning("⚠️ Парсер инициализирован, но не активен (отключён в БД или нет group_id)")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка запуска парсера (сервис доступен для команд): {e}")
+                    
             except Exception as e:
-                logger.exception(f"❌ Ошибка запуска парсера заявок: {e}")
-                logger.warning("⚠️ Бот продолжит работу без парсера")
+                logger.exception(f"❌ Критическая ошибка инициализации парсера: {e}")
                 parser_integration = None
 
         # Инициализация сервиса ежедневных таблиц в реальном времени
