@@ -134,6 +134,8 @@ async def cmd_parser_status(
     message: Message,
     db: ORMDatabase,
     parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
 ) -> None:
     """
     Команда для проверки статуса парсера.
