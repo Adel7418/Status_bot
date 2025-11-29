@@ -112,11 +112,14 @@ def require_role(roles: str | list[str]):
 
         @functools.wraps(func)
         async def wrapper(*args, user_role: str = UserRole.UNKNOWN, **kwargs):
-            # Проверяем роль
+            # Проверяем роль (регистронезависимо)
+            user_role_upper = user_role.upper()
+            roles_upper = [r.upper() for r in roles]
+            matched = user_role_upper in roles_upper
             logger.debug(
-                f"@require_role: func={func.__name__}, user_role='{user_role}', required={roles}, matched={user_role in roles}"
+                f"@require_role: func={func.__name__}, user_role='{user_role}', required={roles}, matched={matched}"
             )
-            if user_role not in roles:
+            if not matched:
                 logger.warning(
                     f"Access denied for {func.__name__}: user_role={user_role}, required={roles}"
                 )

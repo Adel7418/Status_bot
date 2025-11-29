@@ -1064,7 +1064,7 @@ async def callback_complete_order(callback: CallbackQuery, state: FSMContext, db
 @router.callback_query(F.data.startswith("dr_order:"))
 async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Database):
     """
-    ДР - запрос срока окончания и предоплаты
+    ДР - запрос срока окончания
 
     Args:
         callback: Callback query
@@ -1122,10 +1122,10 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
         # Сохраняем order_id в state
         await state.update_data(order_id=order_id)
 
-        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
+        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date")
 
-        # Переходим к вводу срока окончания и предоплаты
-        await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
+        # Переходим к вводу срока окончания
+        await state.set_state(LongRepairStates.enter_completion_date)
 
         message_obj = callback.message
         if not isinstance(message_obj, Message):
@@ -1134,8 +1134,12 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
 
         await message_obj.edit_text(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
-            f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
-            f"<i>Если предоплаты не было - просто укажите срок.</i>",
+            f"Введите <b>примерный срок окончания ремонта</b>.\n\n"
+            f"<b>Примеры:</b>\n"
+            f"• завтра\n"
+            f"• через 3 дня\n"
+            f"• через неделю\n"
+            f"• 25.12.2025",
             parse_mode="HTML",
         )
 
@@ -1145,10 +1149,10 @@ async def callback_dr_order(callback: CallbackQuery, state: FSMContext, db: Data
         await db.disconnect()
 
 
-@router.message(LongRepairStates.enter_completion_date_and_prepayment, F.text)
+@router.message(LongRepairStates.enter_completion_date, F.text)
 async def process_dr_info(message: Message, state: FSMContext, user_roles: list):
     """
-    Обработка ввода срока окончания и предоплаты для DR
+    Обработка ввода срока окончания для DR
 
     Args:
         message: Сообщение
@@ -1158,7 +1162,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
     import re
 
     user_id = message.from_user.id if message.from_user else "Unknown"
-    logger.debug(f"[DR] Processing DR info from user {user_id}")
+    logger.debug(f"[DR] Processing DR completion date from user {user_id}")
 
     # Получаем данные из state
     data = await state.get_data()
@@ -1169,7 +1173,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
     # Проверяем, что это текстовое сообщение
     if not message.text:
         await message.reply(
-            "⚠️ Пожалуйста, отправьте текстовое сообщение с информацией о сроках и предоплате."
+            "⚠️ Пожалуйста, отправьте текстовое сообщение со сроком окончания ремонта."
         )
         return
 
@@ -1201,49 +1205,7 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             await db.disconnect()
         return
 
-    # Ищем упоминание предоплаты и сумму
-    prepayment_amount = None
     completion_date = text
-
-    # Паттерн для поиска предоплаты: "предоплата 2000" или "аванс 1500" и т.д.
-    prepayment_patterns = [
-        r"предоплат[аы]?\s+(\d+(?:[.,]\d+)?)",
-        r"аванс\s+(\d+(?:[.,]\d+)?)",
-        r"предв\.?\s+(\d+(?:[.,]\d+)?)",
-    ]
-
-    for pattern in prepayment_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            prepayment_str = match.group(1).replace(",", ".")
-            logger.debug(f"[DR] Found prepayment pattern: {pattern}, value: {prepayment_str}")
-            try:
-                prepayment_amount = float(prepayment_str)
-                # Убираем упоминание предоплаты из срока
-                completion_date = re.sub(pattern, "", text, flags=re.IGNORECASE).strip()
-                # Убираем лишние запятые и пробелы
-                completion_date = re.sub(r"\s*,\s*$", "", completion_date).strip()
-                logger.debug(
-                    f"[DR] Parsed - completion_date: '{completion_date}', prepayment: {prepayment_amount}"
-                )
-                break
-            except ValueError as e:
-                logger.warning(
-                    f"[DR] Не удалось распарсить сумму предоплаты '{prepayment_str}': {e}"
-                )
-
-    # ВАЛИДАЦИЯ ПРЕДОПЛАТЫ
-    if prepayment_amount is not None:
-        prepayment_validation = validate_dr_prepayment(prepayment_amount)
-        if not prepayment_validation["valid"]:
-            await message.reply(
-                f"❌ <b>Ошибка валидации предоплаты:</b>\n\n"
-                f"{prepayment_validation['error']}\n\n"
-                f"Пожалуйста, введите корректную сумму предоплаты.",
-                parse_mode="HTML",
-            )
-            # Оставляем пользователя в текущем состоянии для повторного ввода
-            return
 
     # 🆕 АВТООПРЕДЕЛЕНИЕ ДАТЫ из естественного языка
     from app.utils import (
@@ -1375,19 +1337,18 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
             await state.clear()
             return
 
-        # Обновляем заявку
-        logger.debug(
-            f"[DR] Updating order #{order_id}: "
-            f"completion_date='{completion_date}', prepayment={prepayment_amount}"
-        )
+        # Сохраняем дату в состоянии
+        await state.update_data(completion_date=completion_date)
 
-        # Сохраняем данные в состоянии для подтверждения
-        await state.update_data(
-            completion_date=completion_date, prepayment_amount=prepayment_amount
+        # Переходим к вводу информации о запчастях
+        await state.set_state(LongRepairStates.enter_parts_info)
+        
+        await message.answer(
+            f"🔧 <b>Информация о запчастях</b>\n\n"
+            f"Укажите, какие запчасти требуют замены.\n\n"
+            f"<i>Если запчасти не требуются, напишите 'нет' или 'не требуются'</i>",
+            parse_mode="HTML",
         )
-
-        # Показываем подтверждение длительного ремонта
-        await show_dr_confirmation(message, state)
 
     except Exception as e:
         logger.exception(f"[DR] ❌ Error processing DR for order #{order_id}: {e}")
@@ -1399,6 +1360,128 @@ async def process_dr_info(message: Message, state: FSMContext, user_roles: list)
     finally:
         await db.disconnect()
         logger.debug(f"[DR] DB disconnected for order #{order_id}")
+
+
+@router.message(LongRepairStates.enter_parts_info, F.text)
+async def process_parts_info(message: Message, state: FSMContext):
+    """
+    Обработка информации о запчастях
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    if not message.text:
+        await message.reply("⚠️ Пожалуйста, отправьте текстовое сообщение.")
+        return
+    
+    parts_info = message.text.strip()
+    
+    # Проверяем на отмену
+    if parts_info.lower() in ["отмена", "отменить", "❌ отмена", "cancel"]:
+        await message.answer(
+            "❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove()
+        )
+        await state.clear()
+        
+        # Показываем главное меню
+        db = get_database()
+        await db.connect()
+        try:
+            user = None
+            if message.from_user and message.from_user.id:
+                user = await db.get_user_by_telegram_id(message.from_user.id)
+            if user:
+                user_roles = user.get_roles()
+                menu_keyboard = await get_menu_with_counter(user_roles)
+                await message.answer(
+                    "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
+                )
+        finally:
+            await db.disconnect()
+        return
+    
+    # Сохраняем информацию о запчастях
+    await state.update_data(parts_info=parts_info)
+    
+    # Переходим к вводу суммы согласования
+    await state.set_state(LongRepairStates.enter_estimated_cost)
+    
+    await message.answer(
+        f"💰 <b>Предварительная сумма</b>\n\n"
+        f"Укажите предварительную сумму согласования с клиентом.\n\n"
+        f"<b>Примеры:</b>\n"
+        f"• 5000\n"
+        f"• 12500.50\n\n"
+        f"<i>Если сумма еще не согласована, напишите 'нет' или '0'</i>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(LongRepairStates.enter_estimated_cost, F.text)
+async def process_estimated_cost(message: Message, state: FSMContext):
+    """
+    Обработка предварительной суммы согласования с клиентом
+    
+    Args:
+        message: Сообщение
+        state: FSM контекст
+    """
+    if not message.text:
+        await message.reply("⚠️ Пожалуйста, отправьте текстовое сообщение.")
+        return
+    
+    cost_text = message.text.strip()
+    
+    # Проверяем на отмену
+    if cost_text.lower() in ["отмена", "отменить", "❌ отмена", "cancel"]:
+        await message.answer(
+            "❌ Перевод в длительный ремонт отменен.", reply_markup=ReplyKeyboardRemove()
+        )
+        await state.clear()
+        
+        # Показываем главное меню
+        db = get_database()
+        await db.connect()
+        try:
+            user = None
+            if message.from_user and message.from_user.id:
+                user = await db.get_user_by_telegram_id(message.from_user.id)
+            if user:
+                user_roles = user.get_roles()
+                menu_keyboard = await get_menu_with_counter(user_roles)
+                await message.answer(
+                    "🏠 <b>Главное меню</b>", parse_mode="HTML", reply_markup=menu_keyboard
+                )
+        finally:
+            await db.disconnect()
+        return
+    
+    # Парсим сумму
+    estimated_cost = None
+    if cost_text.lower() not in ["нет", "не", "no", "0"]:
+        try:
+            # Заменяем запятую на точку и пробуем распарсить
+            cost_text_cleaned = cost_text.replace(",", ".").replace(" ", "")
+            estimated_cost = float(cost_text_cleaned)
+            
+            if estimated_cost < 0:
+                await message.reply(
+                    "❌ Сумма не может быть отрицательной. Попробуйте еще раз."
+                )
+                return
+        except ValueError:
+            await message.reply(
+                f"❌ Не удалось распознать сумму: '{cost_text}'\n\n"
+                f"Пожалуйста, введите число (например: 5000 или 12500.50)"
+            )
+            return
+    
+    # Сохраняем сумму
+    await state.update_data(estimated_cost=estimated_cost)
+    
+    # Показываем подтверждение
+    await show_dr_confirmation(message, state)
 
 
 @router.message(F.text == "📊 Моя статистика")
@@ -2209,8 +2292,16 @@ async def process_out_of_city_confirmation_callback(
             details=f"Completed order #{order_id_from_state}, total: {total_amount}, materials: {materials_cost}",
         )
 
-        # ✨ УВЕДОМЛЕНИЕ ДИСПЕТЧЕРА О ЗАКРЫТИИ ЗАЯВКИ
+        # ✨ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРОВ И ДИСПЕТЧЕРОВ О ЗАКРЫТИИ ЗАЯВКИ
+        # Получаем список получателей (админы + диспетчеры)
+        recipients = await db.get_admins_and_dispatchers()
+        recipient_ids = {user.telegram_id for user in recipients}
+        
+        # Добавляем назначенного диспетчера, если его нет в списке (на всякий случай)
         if updated_order is not None and updated_order.dispatcher_id:
+            recipient_ids.add(updated_order.dispatcher_id)
+
+        if recipient_ids:
             from app.utils import safe_send_message
 
             notification_text = (
@@ -2231,21 +2322,22 @@ async def process_out_of_city_confirmation_callback(
             if out_of_city:
                 notification_text += "\n🚗 <b>Выезд:</b> Да"
 
-            result = await safe_send_message(
-                callback_query.bot,
-                updated_order.dispatcher_id,
-                notification_text,
-                parse_mode="HTML",
-            )
+            for recipient_id in recipient_ids:
+                result = await safe_send_message(
+                    callback_query.bot,
+                    recipient_id,
+                    notification_text,
+                    parse_mode="HTML",
+                )
 
-            if not result:
-                logger.error(
-                    f"Failed to notify dispatcher {updated_order.dispatcher_id} about order #{order_id_from_state} completion"
-                )
-            else:
-                logger.info(
-                    f"Dispatcher {updated_order.dispatcher_id} notified about order #{order_id_from_state} completion"
-                )
+                if not result:
+                    logger.error(
+                        f"Failed to notify user {recipient_id} about order #{order_id_from_state} completion"
+                    )
+                else:
+                    logger.info(
+                        f"User {recipient_id} notified about order #{order_id_from_state} completion"
+                    )
 
         # Удаляем предыдущее сообщение о выезде за город
         try:
@@ -2828,7 +2920,8 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
     data = await state.get_data()
     order_id = data.get("order_id")
     completion_date = data.get("completion_date")
-    prepayment_amount = data.get("prepayment_amount")
+    parts_info = data.get("parts_info")
+    estimated_cost = data.get("estimated_cost")
 
     # Получаем информацию о заявке
     db = get_database()
@@ -2849,10 +2942,17 @@ async def show_dr_confirmation(message: Message, state: FSMContext):
             f"⏰ <b>Примерный срок завершения:</b> {completion_date}\n"
         )
 
-        if prepayment_amount:
-            text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+        # Добавляем информацию о запчастях
+        if parts_info and parts_info.lower() not in ["нет", "не", "no", "не требуются"]:
+            text += f"🔩 <b>Требуемые запчасти:</b>\n{parts_info}\n\n"
         else:
-            text += "💰 <b>Предоплата:</b> не указана\n"
+            text += "🔩 <b>Запчасти:</b> не требуются\n\n"
+
+        # Добавляем предварительную сумму
+        if estimated_cost:
+            text += f"💰 <b>Предварительная сумма:</b> {estimated_cost:.2f} ₽\n"
+        else:
+            text += "💰 <b>Предварительная сумма:</b> не согласована\n"
 
         text += (
             "\n⚠️ <b>Внимание:</b> После подтверждения заявка будет переведена в статус "
@@ -2914,7 +3014,8 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
     data = await state.get_data()
     order_id = data.get("order_id")
     completion_date = data.get("completion_date")
-    prepayment_amount = data.get("prepayment_amount")
+    parts_info = data.get("parts_info", "")
+    estimated_cost = data.get("estimated_cost")
 
     db = get_database()
     await db.connect()
@@ -2924,6 +3025,26 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
         if not order:
             await message.reply("❌ Ошибка: заявка не найдена")
             return
+
+        # Формируем информацию для заметок
+        dr_notes = []
+        
+        # Добавляем информацию о запчастях
+        if parts_info and parts_info.lower() not in ["нет", "не", "no", "не требуются"]:
+            dr_notes.append(f"Требуемые запчасти: {parts_info}")
+        
+        # Добавляем предварительную сумму
+        if estimated_cost:
+            dr_notes.append(f"Предварительная сумма согласования: {estimated_cost:.2f} ₽")
+        
+        # Объединяем с существующими заметками
+        existing_notes = order.notes or ""
+        dr_info = "\n".join(dr_notes)
+        
+        if existing_notes:
+            updated_notes = f"{existing_notes}\n\n[ДР] {dr_info}" if dr_info else existing_notes
+        else:
+            updated_notes = f"[ДР] {dr_info}" if dr_info else None
 
         # Обновляем заявку
         from app.database.orm_database import ORMDatabase
@@ -2937,16 +3058,16 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                         """
                 UPDATE orders
                 SET status = :status,
-                    estimated_completion_date = :completion_date,
-                    prepayment_amount = :prepayment_amount,
+                    estimated_completion_date = :estimated_completion_date,
+                    notes = :notes,
                     updated_at = :updated_at
                 WHERE id = :order_id
                 """
                     ),
                     {
                         "status": OrderStatus.DR,
-                        "completion_date": completion_date,
-                        "prepayment_amount": prepayment_amount,
+                        "estimated_completion_date": completion_date,
+                        "notes": updated_notes,
                         "updated_at": get_now(),
                         "order_id": order_id,
                     },
@@ -2959,7 +3080,7 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             await db.add_audit_log(
                 user_id=message.from_user.id,
                 action="LONG_REPAIR_ORDER",
-                details=f"Order #{order_id} translated to long repair. Completion: {completion_date}, Prepayment: {prepayment_amount or 'none'}",
+                details=f"Order #{order_id} translated to long repair. Completion: {completion_date}, Parts: {parts_info or 'none'}, Cost: {estimated_cost or 'none'}",
             )
 
         # Форматируем дату с расчетом дней для отображения
@@ -2975,8 +3096,11 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
             f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
         )
 
-        if prepayment_amount:
-            result_text += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+        if parts_info and parts_info.lower() not in ["нет", "не", "no", "не требуются"]:
+            result_text += f"🔩 <b>Требуемые запчасти:</b>\n{parts_info}\n\n"
+
+        if estimated_cost:
+            result_text += f"💰 <b>Предварительная сумма:</b> {estimated_cost:.2f} ₽\n"
 
         result_text += "\n<i>Диспетчер уведомлен</i>"
 
@@ -3021,8 +3145,11 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                 f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
             )
 
-            if prepayment_amount:
-                notification += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+            if parts_info and parts_info.lower() not in ["нет", "не", "no", "не требуются"]:
+                notification += f"🔩 <b>Требуемые запчасти:</b>\n{parts_info}\n\n"
+
+            if estimated_cost:
+                notification += f"💰 <b>Предварительная сумма:</b> {estimated_cost:.2f} ₽\n"
 
             notification += "\n💡 Свяжитесь с клиентом для подтверждения"
 
@@ -3060,8 +3187,11 @@ async def confirm_dr_translation(message: Message, state: FSMContext):
                     f"⏰ <b>Срок завершения:</b> {completion_date_formatted}\n"
                 )
 
-                if prepayment_amount:
-                    master_notification += f"💰 <b>Предоплата:</b> {prepayment_amount:.2f} ₽\n"
+                if parts_info and parts_info.lower() not in ["нет", "не", "no", "не требуются"]:
+                    master_notification += f"🔩 <b>Требуемые запчасти:</b>\n{parts_info}\n\n"
+
+                if estimated_cost:
+                    master_notification += f"💰 <b>Предварительная сумма:</b> {estimated_cost:.2f} ₽\n"
 
                 result = await safe_send_message(
                     message.bot,

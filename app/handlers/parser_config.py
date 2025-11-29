@@ -7,9 +7,9 @@ Handlers для настройки парсера заявок
 
 import logging
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app.core.config import Config
 from app.database.orm_database import ORMDatabase
@@ -24,7 +24,7 @@ router = Router(name="parser_config")
 
 @router.message(Command("set_group"))
 @require_role(["admin"])
-async def cmd_set_group(message: Message, db: ORMDatabase) -> None:
+async def cmd_set_group(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
     """
     Команда для установки ID группы парсера.
 
@@ -145,3 +145,121 @@ async def cmd_parser_status(message: Message, db: ORMDatabase) -> None:
         f"• TELETHON_PHONE: {'✅ установлен' if Config.TELETHON_PHONE else '❌ не установлен'}",
         parse_mode="HTML",
     )
+
+
+@router.message(Command("parser_enable"))
+@require_role(["admin"])
+async def cmd_parser_enable(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
+    """
+    Команда для включения парсера.
+    """
+    if not Config.PARSER_ENABLED:
+        await message.answer(
+            "❌ <b>Парсер отключён в конфигурации</b>\n\n"
+            "Установите в .env:\n"
+            "<code>PARSER_ENABLED=true</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        async with db.session_factory() as session:
+            repo = ParserConfigRepository(session)
+            config = await repo.enable_parser()
+
+        await message.answer(
+            f"✅ <b>Парсер включён!</b>\n\n"
+            f"📋 <b>Group ID:</b> <code>{config.group_id}</code>\n\n"
+            f"Бот начнёт мониторить сообщения из группы.",
+            parse_mode="HTML",
+        )
+        logger.info(f"Администратор {message.from_user.id} включил парсер")
+
+    except ValueError as e:
+        await message.answer(f"❌ <b>Ошибка:</b> {e}", parse_mode="HTML")
+    except Exception as e:
+        logger.exception(f"Ошибка при включении парсера: {e}")
+        await message.answer("❌ Произошла ошибка при включении парсера")
+
+
+@router.message(Command("parser_disable"))
+@require_role(["admin"])
+async def cmd_parser_disable(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
+    """
+    Команда для отключения парсера.
+    """
+    if not Config.PARSER_ENABLED:
+        await message.answer(
+            "❌ <b>Парсер отключён в конфигурации</b>\n\n"
+            "Установите в .env:\n"
+            "<code>PARSER_ENABLED=true</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        async with db.session_factory() as session:
+            repo = ParserConfigRepository(session)
+            config = await repo.disable_parser()
+
+        await message.answer(
+            "🛑 <b>Парсер отключён</b>\n\n"
+            "Бот прекратит мониторинг сообщений из группы.",
+            parse_mode="HTML",
+        )
+        logger.info(f"Администратор {message.from_user.id} отключил парсер")
+
+    except Exception as e:
+        logger.exception(f"Ошибка при отключении парсера: {e}")
+        await message.answer("❌ Произошла ошибка при отключении парсера")
+
+
+@router.callback_query(F.data.startswith("confirm_order:"))
+async def callback_confirm_order(callback: CallbackQuery, parser_integration=None) -> None:
+    """
+    Обработчик callback для кнопок подтверждения создания заявки из парсера.
+
+    Формат callback_data: confirm_order:yes:{message_id} или confirm_order:no:{message_id}
+
+    Args:
+        callback: CallbackQuery от Telegram
+        parser_integration: ParserIntegration instance (инжектируется через middleware)
+    """
+    logger.debug(f"callback_confirm_order: parser_integration={parser_integration}")
+
+    if not parser_integration or not parser_integration.confirmation_service:
+        logger.warning("Сервис подтверждения недоступен")
+        await callback.answer("❌ Сервис подтверждения недоступен", show_alert=True)
+        return
+    
+    # Парсим callback_data
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("❌ Некорректные данные callback", show_alert=True)
+        return
+    
+    _, action, message_id = parts
+    confirmed = action == "yes"
+    
+    # Обрабатываем подтверждение
+    success = await parser_integration.confirmation_service.handle_confirmation(
+        confirmation_message_id=callback.message.message_id,
+        confirmed=confirmed,
+        user_id=callback.from_user.id,
+    )
+    
+    if not success:
+        await callback.answer("❌ Подтверждение не найдено", show_alert=True)
+        return
+    
+    # Удаляем сообщение с кнопками
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.error(f"Не удалось удалить сообщение подтверждения: {e}")
+    
+    # Отправляем уведомление
+    if confirmed:
+        await callback.answer("✅ Заявка создана!", show_alert=False)
+    else:
+        await callback.answer("❌ Создание заявки отменено", show_alert=False)

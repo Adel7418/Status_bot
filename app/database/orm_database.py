@@ -1450,6 +1450,8 @@ class ORMDatabase:
         Проверяет тип техники в заявке (equipment_type):
         - Если содержит "электрик" или "электрика" - используется ставка 50/50
         - Если содержит "сантехник" или "сантехника" - используется ставка 50/50
+        - Если содержит "холодильник" - используется ставка 50/50
+        - Если содержит "водонагреватель" или "бойлер" - используется ставка 50/50
         - Если ничего не найдено, возвращается None (используется стандартная логика)
 
         Args:
@@ -1477,6 +1479,26 @@ class ORMDatabase:
             if "сантехник" in equipment_lower or "сантехника" in equipment_lower:
                 stmt = select(SpecializationRate).where(
                     SpecializationRate.specialization_name.ilike("%сантехник%"),
+                    SpecializationRate.deleted_at.is_(None),
+                )
+                result = await session.execute(stmt)
+                rate = result.scalar_one_or_none()
+                if rate:
+                    return (rate.master_percentage, rate.company_percentage)
+
+            if "холодильник" in equipment_lower:
+                stmt = select(SpecializationRate).where(
+                    SpecializationRate.specialization_name.ilike("%холодильник%"),
+                    SpecializationRate.deleted_at.is_(None),
+                )
+                result = await session.execute(stmt)
+                rate = result.scalar_one_or_none()
+                if rate:
+                    return (rate.master_percentage, rate.company_percentage)
+
+            if "водонагреватель" in equipment_lower or "бойлер" in equipment_lower:
+                stmt = select(SpecializationRate).where(
+                    SpecializationRate.specialization_name.ilike("%водонагреватель%"),
                     SpecializationRate.deleted_at.is_(None),
                 )
                 result = await session.execute(stmt)

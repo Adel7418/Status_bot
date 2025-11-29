@@ -26,15 +26,17 @@ class DependencyInjectionMiddleware(BaseMiddleware):
     - Контролировать жизненный цикл соединений
     """
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, parser_integration=None):
         """
         Инициализация
 
         Args:
             db: Экземпляр базы данных (singleton)
+            parser_integration: Экземпляр ParserIntegration (опционально)
         """
         super().__init__()
         self.db = db
+        self.parser_integration = parser_integration
 
     async def __call__(
         self,
@@ -65,6 +67,10 @@ class DependencyInjectionMiddleware(BaseMiddleware):
         else:
             # Для ORM версии services пока не реализован
             data["services"] = None
+
+        # Инжектируем ParserIntegration если доступен
+        if self.parser_integration:
+            data["parser_integration"] = self.parser_integration
 
         # Вызываем следующий handler
         return await handler(event, data)

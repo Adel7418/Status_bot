@@ -32,7 +32,7 @@ class TelethonClient:
         api_hash: str,
         phone: str,
         session_name: str = "parser_session",
-        on_message_callback: Callable[[str, int], Awaitable[None]] | None = None,
+        on_message_callback: Callable[[str, int, int | None], Awaitable[None]] | None = None,
     ) -> None:
         """
         Инициализация Telethon клиента.
@@ -43,7 +43,7 @@ class TelethonClient:
             phone: Номер телефона для авторизации
             session_name: Имя session файла (default: "parser_session")
             on_message_callback: Callback для обработки новых сообщений
-                                Сигнатура: async def callback(text: str, message_id: int)
+                                Сигнатура: async def callback(text: str, message_id: int, sender_id: int | None)
         """
         self.api_id = api_id
         self.api_hash = api_hash
@@ -126,12 +126,12 @@ class TelethonClient:
         if old_group_id != group_id:
             self.logger.info(f"Группа для мониторинга изменена: {old_group_id} → {group_id}")
 
-    def set_message_callback(self, callback: Callable[[str, int], None]) -> None:
+    def set_message_callback(self, callback: Callable[[str, int, int | None], None]) -> None:
         """
         Устанавливает callback для обработки новых сообщений.
 
         Args:
-            callback: Async функция с сигнатурой (text: str, message_id: int) -> None
+            callback: Async функция с сигнатурой (text: str, message_id: int, sender_id: int | None) -> None
         """
         self.on_message_callback = callback
         self.logger.debug("Callback для обработки сообщений установлен")
@@ -167,9 +167,9 @@ class TelethonClient:
             try:
                 # Если callback корутина — await, иначе просто вызываем
                 if asyncio.iscoroutinefunction(self.on_message_callback):
-                    await self.on_message_callback(message.text, message.id)
+                    await self.on_message_callback(message.text, message.id, message.sender_id)
                 else:
-                    self.on_message_callback(message.text, message.id)
+                    self.on_message_callback(message.text, message.id, message.sender_id)
             except Exception as e:
                 self.logger.exception(
                     f"Ошибка в callback обработки сообщения (ID: {message.id}): {e}",
@@ -180,7 +180,7 @@ class TelethonClient:
     @classmethod
     def from_config(
         cls,
-        on_message_callback: Callable[[str, int], Awaitable[None]] | None = None,
+        on_message_callback: Callable[[str, int, int | None], Awaitable[None]] | None = None,
     ) -> "TelethonClient":
         """
         Создаёт TelethonClient из конфигурации приложения.

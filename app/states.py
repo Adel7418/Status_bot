@@ -100,11 +100,11 @@ class EditClosedOrderStates(StatesGroup):
 class LongRepairStates(StatesGroup):
     """Состояния для перевода заявки в длительный ремонт"""
 
-    enter_completion_date_and_prepayment = (
-        State()
-    )  # Ввод срока окончания + предоплаты (опционально)
+    enter_completion_date = State()  # Ввод срока окончания ремонта
+    enter_parts_info = State()  # Ввод информации о запчастях
+    enter_estimated_cost = State()  # Ввод предварительной суммы согласования с клиентом
     confirm_dr = State()  # Подтверждение перевода в длительный ремонт
-    change_date = State()  # Изменение даты завершения
+    change_date = State()  # Изменение даты завершения  # Изменение даты завершения
 
 
 class RescheduleOrderStates(StatesGroup):

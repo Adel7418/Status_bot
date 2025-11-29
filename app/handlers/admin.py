@@ -1429,6 +1429,26 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
 
     telegram_id = int(data.split(":")[1])
 
+    # ПРОВЕРКА: Кнопка выбора чата работает только в личных сообщениях
+    message_obj = callback.message
+    if not isinstance(message_obj, Message):
+        await callback.answer("❌ Ошибка: сообщение недоступно", show_alert=True)
+        return
+
+    # Проверяем тип чата
+    if message_obj.chat.type != "private":
+        await callback.answer(
+            "⚠️ ВНИМАНИЕ!\n\n"
+            "Установка рабочей группы возможна только через личные сообщения сботом.\n\n"
+            "📱 Пожалуйста:\n"
+            "1. Откройте личный чат с ботом\n"
+            "2. Перейдите в раздел 'Мастера'\n"
+            "3. Выберите мастера и нажмите 'Установить рабочую группу'\n\n"
+            "Это ограничение Telegram API.",
+            show_alert=True
+        )
+        return
+
     # Сохраняем telegram_id мастера в состоянии
     await state.update_data(master_telegram_id=telegram_id)
     await state.set_state(SetWorkChatStates.enter_chat_id)
@@ -1450,11 +1470,6 @@ async def callback_set_work_chat(callback: CallbackQuery, state: FSMContext, use
     builder.row(KeyboardButton(text="❌ Отмена"))
 
     keyboard = builder.as_markup(resize_keyboard=True)
-
-    message_obj = callback.message
-    if not isinstance(message_obj, Message):
-        await callback.answer("❌ Ошибка: сообщение недоступно", show_alert=True)
-        return
 
     await message_obj.answer(
         "💬 <b>Установка рабочей группы</b>\n\n"

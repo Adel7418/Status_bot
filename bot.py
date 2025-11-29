@@ -30,6 +30,10 @@ from app.services.scheduler import TaskScheduler
 from app.utils.sentry import init_sentry
 
 
+# Глобальная переменная для доступа к parser_integration из обработчиков
+parser_integration = None
+
+
 """
 Гибкая настройка логирования:
 - Пытаемся писать в файл logs/bot.log с ротацией
@@ -80,12 +84,16 @@ if log_level == logging.DEBUG:
     logging.getLogger("app").setLevel(logging.DEBUG)
     logging.getLogger("aiogram").setLevel(logging.INFO)  # aiogram остается INFO чтобы не спамить
     logging.getLogger("apscheduler").setLevel(logging.INFO)
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)  # Отключаем DEBUG логи SQLite
+    logging.getLogger("telethon").setLevel(logging.INFO)  # Уменьшаем детализацию telethon
     logger.info("DEBUG режим включен (LOG_LEVEL=DEBUG)")
 else:
     # Production/INFO - минимальное логирование
     logging.getLogger("app").setLevel(log_level)
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+    logging.getLogger("telethon").setLevel(logging.WARNING)
 
 
 async def on_startup(bot: Bot, db: Database, scheduler: TaskScheduler):
@@ -152,6 +160,8 @@ async def on_shutdown(bot: Bot, db: Database, scheduler: TaskScheduler):
 async def main():
     """Основная функция запуска бота"""
 
+    global parser_integration
+    
     bot = None
     db = None
     scheduler = None
@@ -217,37 +227,7 @@ async def main():
         # Инициализация планировщика (передаем shared DB instance)
         scheduler = TaskScheduler(bot, db)
 
-        # Инициализация парсера заявок (если включен в конфигурации)
-        if Config.PARSER_ENABLED:
-            try:
-                from app.database.orm_database import ORMDatabase
-                from app.services.parser_integration import ParserIntegration
-
-                # Парсер работает только с ORM
-                if not isinstance(db, ORMDatabase):
-                    raise TypeError("Парсер требует ORM базу данных (установите USE_ORM=true)")
-
-                parser_integration = ParserIntegration(bot, db)
-                await parser_integration.start()
-                logger.info("✅ Парсер заявок из Telegram-группы запущен")
-            except Exception as e:
-                logger.exception(f"❌ Ошибка запуска парсера заявок: {e}")
-                logger.warning("⚠️ Бот продолжит работу без парсера")
-                parser_integration = None
-
-        # Инициализация сервиса ежедневных таблиц в реальном времени
-        from app.services.realtime_daily_table import realtime_table_service
-
-        await realtime_table_service.init()
-        logger.info("Сервис ежедневных таблиц в реальном времени инициализирован")
-
-        # Инициализация сервиса активных заказов в реальном времени
-        from app.services.realtime_active_orders import realtime_active_orders_service
-
-        await realtime_active_orders_service.init()
-        logger.info("Сервис активных заказов в реальном времени инициализирован")
-
-        # Подключение middleware (после инициализации БД)
+        # Подключение middleware (после инициализации БД, но ДО парсера)
         # 1. Logging middleware (первым - логирует все входящие события)
         logging_middleware = LoggingMiddleware()
         dp.message.middleware(logging_middleware)
@@ -274,12 +254,48 @@ async def main():
 
         # 4. Dependency Injection middleware (инжектирует Database и services в handlers)
         # Позволяет handlers получать db через параметры вместо прямого создания Database()
-        di_middleware = DependencyInjectionMiddleware(db)
+        # parser_integration будет добавлен позже после инициализации
+        di_middleware = DependencyInjectionMiddleware(db, parser_integration=None)
         dp.message.middleware(di_middleware)
         dp.callback_query.middleware(di_middleware)
         logger.info(
             "✅ Dependency Injection middleware activated - handlers can now use db parameter"
         )
+
+        # Инициализация парсера заявок (если включен в конфигурации)
+        # Важно: парсер инициализируется ПОСЛЕ создания DI middleware
+        if Config.PARSER_ENABLED:
+            try:
+                from app.database.orm_database import ORMDatabase
+                from app.services.parser_integration import ParserIntegration
+
+                # Парсер работает только с ORM
+                if not isinstance(db, ORMDatabase):
+                    raise TypeError("Парсер требует ORM базу данных (установите USE_ORM=true)")
+
+                parser_integration = ParserIntegration(bot, db)
+                await parser_integration.start()
+                logger.info("✅ Парсер заявок из Telegram-группы запущен")
+
+                # Обновляем DI middleware чтобы инжектировать parser_integration
+                di_middleware.parser_integration = parser_integration
+                logger.info("✅ ParserIntegration добавлен в DI middleware")
+            except Exception as e:
+                logger.exception(f"❌ Ошибка запуска парсера заявок: {e}")
+                logger.warning("⚠️ Бот продолжит работу без парсера")
+                parser_integration = None
+
+        # Инициализация сервиса ежедневных таблиц в реальном времени
+        from app.services.realtime_daily_table import realtime_table_service
+
+        await realtime_table_service.init()
+        logger.info("Сервис ежедневных таблиц в реальном времени инициализирован")
+
+        # Инициализация сервиса активных заказов в реальном времени
+        from app.services.realtime_active_orders import realtime_active_orders_service
+
+        await realtime_active_orders_service.init()
+        logger.info("Сервис активных заказов в реальном времени инициализирован")
 
         # 5. Validation handler middleware (обрабатывает ошибки State Machine)
         validation_middleware = ValidationHandlerMiddleware()

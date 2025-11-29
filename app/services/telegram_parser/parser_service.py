@@ -6,8 +6,11 @@ Order Parser Service
 """
 
 import logging
+import re
 
 from pydantic import ValidationError
+
+from app.utils.date_parser import format_datetime_for_storage, parse_natural_datetime
 
 from .equipment_dict import normalize_equipment_type
 from .patterns import (
@@ -73,10 +76,27 @@ class OrderParserService:
 
             # Шаг 2: Извлечь телефон
             phone = self._extract_phone_from_lines(lines)
+            logger.debug(f"Извлечён телефон: {phone}")
+
+            # Проверяем на некорректные/неполные номера
+            invalid_phone = self._find_invalid_phone(lines)
+            if invalid_phone and not phone:
+                # Нашли некорректный номер, но не нашли корректный
+                return self._create_error_result(
+                    f"⚠️ Некорректный номер телефона: {invalid_phone}\n\n"
+                    f"Номер должен содержать 11 цифр в формате:\n"
+                    f"• 89001234567\n"
+                    f"• +79001234567\n"
+                    f"• 8 (900) 123-45-67",
+                    "invalid_format",
+                    ["phone"],
+                )
+
             if phone:
                 phone = normalize_phone(phone)
-                # Удаляем строку с телефоном из lines
-                lines = [line for line in lines if phone.replace("+", "") not in line.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")]
+                logger.debug(f"Нормализованный телефон: {phone}")
+                # Удаляем телефон из строк (не всю строку, а только номер телефона)
+                lines = self._remove_phone_from_lines(lines, phone)
 
             # Шаг 3: Извлечь временной индикатор
             scheduled_time = self._extract_time_from_lines(lines)
@@ -112,9 +132,16 @@ class OrderParserService:
 
             # Шаг 6: Остаток от equipment_problem — это описание проблемы
             problem_description = self._extract_problem_description(equipment_problem, equipment_type)
-            if not problem_description:
+
+            # Проверка: описание должно быть указано и не должно совпадать с типом оборудования
+            if not problem_description or problem_description == equipment_type:
                 return self._create_error_result(
-                    "Не удалось определить описание проблемы",
+                    f"⚠️ Не указано описание проблемы\n\n"
+                    f"Пожалуйста, добавьте описание проблемы после типа оборудования.\n"
+                    f"Например:\n"
+                    f"• Электрика не работает розетка\n"
+                    f"• Стиральная машина не крутит барабан\n"
+                    f"• Холодильник не морозит",
                     "missing_fields",
                     ["problem_description"],
                 )
@@ -174,17 +201,31 @@ class OrderParserService:
         # Убираем пустые строки
         lines = [line for line in lines if line]
 
-        # Если только одна строка - попробуем разбить по точкам
+        # Если только одна строка - попробуем разбить умнее
         if len(lines) == 1:
-            # Разбиваем по точкам, но только если точка не в середине числа (вроде 14.00)
-            parts = []
-            for part in lines[0].split("."):
-                part = part.strip()
-                if part:
-                    parts.append(part)
-            # Используем разбиение по точкам, если получилось > 1 части
+            single_line = lines[0]
+
+            # Вариант 1: Разбиваем по точкам (но только если точка не в середине числа)
+            # Ищем точки, за которыми идёт пробел и заглавная буква или цифра
+            parts = re.split(r'\.\s+(?=[А-ЯA-Z0-9])', single_line)
+            parts = [p.strip() for p in parts if p.strip()]
             if len(parts) > 1:
                 return parts
+
+            # Вариант 2: Если в строке есть адресные слова, пытаемся разбить перед ними
+            # Например: "Электрика проспект Ленина 5" -> ["Электрика", "проспект Ленина 5"]
+            address_split_keywords = ["улица", "ул", "проспект", "пр", "переулок", "пер", "стадион", "площадь"]
+            for keyword in address_split_keywords:
+                # Ищем keyword как отдельное слово (не часть другого слова)
+                pattern = r'\b(' + re.escape(keyword) + r')\b'
+                match = re.search(pattern, single_line, re.IGNORECASE)
+                if match:
+                    # Разбиваем текст перед найденным адресным словом
+                    pos = match.start()
+                    before = single_line[:pos].strip()
+                    after = single_line[pos:].strip()
+                    if before and after:
+                        return [before, after]
 
         return lines
 
@@ -208,15 +249,73 @@ class OrderParserService:
         full_text = " ".join(lines)
         return extract_phone(full_text)
 
-    def _extract_time_from_lines(self, lines: list[str]) -> str | None:
+    def _find_invalid_phone(self, lines: list[str]) -> str | None:
         """
-        Извлекает временной индикатор из списка строк.
+        Ищет некорректные (неполные) номера телефонов.
 
         Args:
             lines: Список строк сообщения
 
         Returns:
-            Временной индикатор или None
+            Некорректный номер или None
+        """
+        import re
+
+        # Паттерн для поиска неполных номеров: начинается с 8 или +7, но меньше 11 цифр
+        invalid_pattern = re.compile(r"(?:\+?7|8)\d{5,9}(?!\d)")
+
+        for line in lines:
+            match = invalid_pattern.search(line)
+            if match:
+                return match.group(0)
+
+        # Также ищем просто последовательности цифр 7-10 символов
+        digit_pattern = re.compile(r"\b\d{7,10}\b")
+        for line in lines:
+            match = digit_pattern.search(line)
+            if match:
+                # Проверяем, похоже ли это на телефон
+                digits = match.group(0)
+                if len(digits) >= 9:  # Похоже на попытку ввести телефон
+                    return digits
+
+        return None
+
+    def _remove_phone_from_lines(self, lines: list[str], phone: str) -> list[str]:
+        """
+        Удаляет номер телефона из строк, сохраняя остальной текст.
+
+        Args:
+            lines: Список строк сообщения
+            phone: Номер телефона для удаления
+
+        Returns:
+            Список строк с удалённым номером телефона
+        """
+        from app.services.telegram_parser.patterns import PHONE_PATTERN
+
+        logger.debug(f"Удаление телефона из строк. До: {lines}")
+        cleaned_lines = []
+        for line in lines:
+            # Удаляем телефонный номер из строки
+            cleaned_line = PHONE_PATTERN.sub("", line).strip()
+            logger.debug(f"Строка '{line}' -> '{cleaned_line}'")
+            # Добавляем только непустые строки
+            if cleaned_line:
+                cleaned_lines.append(cleaned_line)
+
+        logger.debug(f"После удаления телефона: {cleaned_lines}")
+        return cleaned_lines
+
+    def _extract_time_from_lines(self, lines: list[str]) -> str | None:
+        """
+        Извлекает и парсит временной индикатор из списка строк.
+
+        Args:
+            lines: Список строк сообщения
+
+        Returns:
+            Отформатированное время для сохранения в БД или None
         """
         time_indicators: list[str] = []
 
@@ -226,7 +325,25 @@ class OrderParserService:
 
         if time_indicators:
             # Объединяем все временные индикаторы в одну строку
-            return " ".join(time_indicators)
+            raw_time_text = " ".join(time_indicators)
+
+            # Используем parse_natural_datetime для обработки времени
+            try:
+                parsed_dt, user_friendly_text = parse_natural_datetime(raw_time_text, validate=False)
+
+                # Форматируем для сохранения в БД
+                # Если datetime был успешно распарсен - форматируем его
+                # format_datetime_for_storage вернёт строку вида:
+                # "29.11.2025 15:30 (через 1.25 часа)" или "29.11.2025 15:30"
+                formatted_time = format_datetime_for_storage(parsed_dt, user_friendly_text)
+
+                self.logger.debug(f"Время распарсено: '{raw_time_text}' -> '{formatted_time}'")
+                return formatted_time
+
+            except Exception as e:
+                self.logger.warning(f"Не удалось обработать время '{raw_time_text}' через parse_natural_datetime: {e}")
+                # Возвращаем исходный текст если парсинг не удался
+                return raw_time_text
 
         return None
 
@@ -326,9 +443,9 @@ class OrderParserService:
         else:
             problem = equipment_problem
 
-        # Если после всех манипуляций пусто — возвращаем исходный текст
+        # Если после всех манипуляций пусто — возвращаем пустую строку
         if not problem or len(problem) < 3:
-            problem = equipment_problem
+            return ""
 
         return problem
 
