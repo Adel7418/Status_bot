@@ -275,7 +275,11 @@ async def main():
 
                 parser_integration = ParserIntegration(bot, db)
                 await parser_integration.start()
-                logger.info("✅ Парсер заявок из Telegram-группы запущен")
+                
+                if parser_integration.is_running:
+                    logger.info("✅ Парсер заявок из Telegram-группы запущен")
+                else:
+                    logger.warning("⚠️ Парсер инициализирован, но не активен (отключён в БД или нет group_id)")
 
                 # Обновляем DI middleware чтобы инжектировать parser_integration
                 di_middleware.parser_integration = parser_integration
