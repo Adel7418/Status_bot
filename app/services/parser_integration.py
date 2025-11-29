@@ -191,16 +191,24 @@ class ParserIntegration:
             self.logger.info("✅ TelethonClient создан")
 
             # Запуск Telethon
-            await self.telethon_client.start(group_id=config.group_id)
-            self.logger.info(f"✅ Telethon запущен для группы {config.group_id}")
+            try:
+                await self.telethon_client.start(group_id=config.group_id)
+                self.logger.info(f"✅ Telethon запущен для группы {config.group_id}")
 
-            # Запускаем в фоновой задаче
-            self.telethon_task = asyncio.create_task(
-                self.telethon_client.run_until_disconnected()
-            )
-            self.is_running = True
-
-            self.logger.info("🟢 Парсер заявок успешно запущен!")
+                # Запускаем в фоновой задаче
+                self.telethon_task = asyncio.create_task(
+                    self.telethon_client.run_until_disconnected()
+                )
+                self.is_running = True
+                self.logger.info("🟢 Парсер заявок успешно запущен!")
+            except RuntimeError as e:
+                # Если требуется аутентификация - не падаем, а ждем команды
+                if "Требуется аутентификация" in str(e):
+                    self.logger.warning(f"⚠️ {e}")
+                    self.logger.info("Парсер ожидает аутентификации. Команда: /parser_auth")
+                    # Не ставим is_running=True, но и не рейзим ошибку
+                else:
+                    raise e
 
         except Exception as e:
             self.logger.exception(f"Ошибка при запуске парсера: {e}")

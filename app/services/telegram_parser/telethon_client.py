@@ -90,8 +90,18 @@ class TelethonClient:
 
         # Подключаемся к Telegram
         if code_callback:
+            # Интерактивный режим (аутентификация)
             await self.client.start(phone=self.phone, code_callback=code_callback)
         else:
+            # Фоновый режим: проверяем авторизацию перед стартом
+            await self.client.connect()
+            if not await self.client.is_user_authorized():
+                await self.client.disconnect()
+                raise RuntimeError(
+                    "Требуется аутентификация! Используйте команду /parser_auth"
+                )
+            
+            # Если авторизованы - просто стартуем (это не вызовет запрос кода)
             await self.client.start(phone=self.phone)
             
         self.logger.info("✅ Telethon клиент авторизован")
