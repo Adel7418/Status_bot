@@ -55,9 +55,9 @@ class ParserIntegration:
         self.is_running = False
         self.telethon_task: asyncio.Task | None = None
         
-        # Для аутентификации
         self.auth_future: asyncio.Future[str] | None = None
         self.password_future: asyncio.Future[str] | None = None
+        self._pending_password: str | None = None  # Для хранения пароля, если он пришел раньше запроса
         self.auth_user_id: int | None = None
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -72,6 +72,7 @@ class ParserIntegration:
             return
 
         self.auth_user_id = user_id
+        self._pending_password = None
         
         # Инициализация клиента если нужно
         if not self.telethon_client:
@@ -108,6 +109,13 @@ class ParserIntegration:
 
         async def password_callback() -> str:
             """Callback для запроса пароля 2FA у пользователя"""
+            # Если пароль уже был получен ранее (race condition), используем его
+            if self._pending_password:
+                self.logger.info("Используем ранее полученный пароль")
+                password = self._pending_password
+                self._pending_password = None
+                return password
+
             self.password_future = asyncio.Future()
             
             # Отправляем сообщение пользователю
@@ -139,6 +147,7 @@ class ParserIntegration:
         finally:
             self.auth_future = None
             self.password_future = None
+            self._pending_password = None
             self.auth_user_id = None
 
     def submit_auth_code(self, code: str) -> None:
@@ -153,7 +162,9 @@ class ParserIntegration:
         if self.password_future and not self.password_future.done():
             self.password_future.set_result(password)
         else:
-            self.logger.warning("Получен пароль, но никто его не ждет")
+            # Сохраняем пароль, если он пришел раньше запроса
+            self.logger.info("Получен пароль раньше запроса, сохраняем")
+            self._pending_password = password
 
     async def start(self) -> None:
         """
