@@ -63,12 +63,17 @@ class TelethonClient:
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    async def start(self, group_id: int | None = None) -> None:
+    async def start(
+        self,
+        group_id: int | None = None,
+        code_callback: Callable[[], Awaitable[str]] | None = None,
+    ) -> None:
         """
         Запускает Telethon клиент и начинает мониторинг группы.
 
         Args:
             group_id: ID Telegram-группы для мониторинга (опционально)
+            code_callback: Callback для получения кода авторизации (если требуется)
 
         Raises:
             ValueError: Если group_id не указан и не был установлен ранее
@@ -84,7 +89,11 @@ class TelethonClient:
         )
 
         # Подключаемся к Telegram
-        await self.client.start(phone=self.phone)
+        if code_callback:
+            await self.client.start(phone=self.phone, code_callback=code_callback)
+        else:
+            await self.client.start(phone=self.phone)
+            
         self.logger.info("✅ Telethon клиент авторизован")
 
         # Регистрируем обработчик новых сообщений (слушаем все чаты, фильтруем внутри)

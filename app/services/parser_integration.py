@@ -54,8 +54,81 @@ class ParserIntegration:
 
         self.is_running = False
         self.telethon_task: asyncio.Task | None = None
+        
+        # Для аутентификации
+        self.auth_future: asyncio.Future[str] | None = None
+        self.auth_user_id: int | None = None
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+    async def authenticate_user(self, user_id: int) -> None:
+        """
+        Запускает процесс интерактивной аутентификации.
+        Блокирует выполнение до завершения аутентификации.
+        """
+        if self.is_running:
+            self.logger.info("Парсер уже запущен, аутентификация не требуется")
+            return
+
+        self.auth_user_id = user_id
+        
+        # Инициализация клиента если нужно
+        if not self.telethon_client:
+            self.telethon_client = TelethonClient.from_config(
+                on_message_callback=self._on_new_message,
+            )
+
+        # Получаем group_id
+        if not self.group_id:
+            async with self.db.session_factory() as session:
+                repo = ParserConfigRepository(session)
+                config = await repo.get_config()
+                if config and config.group_id:
+                    self.group_id = config.group_id
+        
+        if not self.group_id:
+            raise ValueError("ID группы не установлен. Используйте /set_group.")
+
+        async def code_callback() -> str:
+            """Callback для запроса кода у пользователя"""
+            self.auth_future = asyncio.Future()
+            
+            # Отправляем сообщение пользователю
+            await self.bot.send_message(
+                user_id,
+                "🔐 <b>Требуется код подтверждения!</b>\n\n"
+                "Введите код, который пришел вам в Telegram (в этом чате).\n"
+                "Формат: просто цифры (например: 12345)",
+                parse_mode="HTML"
+            )
+            
+            # Ждем код от пользователя
+            return await self.auth_future
+
+        try:
+            # Запускаем клиент с callback-ом
+            await self.telethon_client.start(
+                group_id=self.group_id,
+                code_callback=code_callback
+            )
+            
+            # Если успешно - запускаем мониторинг
+            self.is_running = True
+            self.telethon_task = asyncio.create_task(
+                self.telethon_client.run_until_disconnected()
+            )
+            self.logger.info("🟢 Парсер успешно аутентифицирован и запущен")
+            
+        finally:
+            self.auth_future = None
+            self.auth_user_id = None
+
+    def submit_auth_code(self, code: str) -> None:
+        """Передает код подтверждения в ожидающий процесс аутентификации"""
+        if self.auth_future and not self.auth_future.done():
+            self.auth_future.set_result(code)
+        else:
+            self.logger.warning("Получен код подтверждения, но никто его не ждет")
 
     async def start(self) -> None:
         """
