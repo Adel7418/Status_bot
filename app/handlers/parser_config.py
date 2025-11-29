@@ -321,6 +321,10 @@ async def cmd_parser_auth(
     
     # Устанавливаем состояние ожидания кода (оптимистично)
     await state.set_state(ParserAuthState.waiting_for_code)
+    # Форсируем обновление данных, чтобы состояние точно сохранилось
+    await state.update_data(auth_started=True)
+    # Даем время на сохранение состояния перед блокирующим вызовом
+    await asyncio.sleep(0.5)
     
     try:
         # Это заблокирует выполнение до завершения auth (или ошибки)
