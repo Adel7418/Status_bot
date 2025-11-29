@@ -15,6 +15,7 @@ from app.core.config import Config
 from app.database.orm_database import ORMDatabase
 from app.database.parser_config_repository import ParserConfigRepository
 from app.decorators import require_role
+from app.services.parser_integration import ParserIntegration
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,13 @@ router = Router(name="parser_config")
 
 @router.message(Command("set_group"))
 @require_role(["admin"])
-async def cmd_set_group(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
+async def cmd_set_group(
+    message: Message,
+    db: ORMDatabase,
+    parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
+) -> None:
     """
     Команда для установки ID группы парсера.
 
@@ -51,6 +58,16 @@ async def cmd_set_group(message: Message, db: ORMDatabase, *, user_role: str = "
             repo = ParserConfigRepository(session)
             await repo.set_group_id(group_id)
 
+        # Перезапускаем парсер с новой группой
+        if parser_integration:
+            try:
+                await parser_integration.stop()
+                await parser_integration.start()
+                logger.info(f"Парсер перезапущен с новым group_id: {group_id}")
+            except Exception as e:
+                logger.error(f"Ошибка при перезапуске парсера: {e}")
+                await message.answer(f"⚠️ Настройки сохранены, но парсер не удалось перезапустить: {e}")
+
         await message.answer(
             f"✅ Группа для парсинга установлена!\n\n"
             f"📋 <b>Group ID:</b> <code>{group_id}</code>\n"
@@ -72,6 +89,16 @@ async def cmd_set_group(message: Message, db: ORMDatabase, *, user_role: str = "
             async with db.session_factory() as session:
                 repo = ParserConfigRepository(session)
                 await repo.set_group_id(group_id)
+
+            # Перезапускаем парсер с новой группой
+            if parser_integration:
+                try:
+                    await parser_integration.stop()
+                    await parser_integration.start()
+                    logger.info(f"Парсер перезапущен с новым group_id: {group_id}")
+                except Exception as e:
+                    logger.error(f"Ошибка при перезапуске парсера: {e}")
+                    await message.answer(f"⚠️ Настройки сохранены, но парсер не удалось перезапустить: {e}")
 
             await message.answer(
                 f"✅ Группа для парсинга установлена!\n\n"
@@ -149,7 +176,13 @@ async def cmd_parser_status(message: Message, db: ORMDatabase) -> None:
 
 @router.message(Command("parser_enable"))
 @require_role(["admin"])
-async def cmd_parser_enable(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
+async def cmd_parser_enable(
+    message: Message,
+    db: ORMDatabase,
+    parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
+) -> None:
     """
     Команда для включения парсера.
     """
@@ -166,6 +199,15 @@ async def cmd_parser_enable(message: Message, db: ORMDatabase, *, user_role: str
         async with db.session_factory() as session:
             repo = ParserConfigRepository(session)
             config = await repo.enable_parser()
+
+        # Запускаем парсер
+        if parser_integration:
+            try:
+                await parser_integration.start()
+                logger.info("Парсер запущен через команду")
+            except Exception as e:
+                logger.error(f"Ошибка при запуске парсера: {e}")
+                await message.answer(f"⚠️ Настройки сохранены, но парсер не удалось запустить: {e}")
 
         await message.answer(
             f"✅ <b>Парсер включён!</b>\n\n"
@@ -184,7 +226,13 @@ async def cmd_parser_enable(message: Message, db: ORMDatabase, *, user_role: str
 
 @router.message(Command("parser_disable"))
 @require_role(["admin"])
-async def cmd_parser_disable(message: Message, db: ORMDatabase, *, user_role: str = "UNKNOWN") -> None:
+async def cmd_parser_disable(
+    message: Message,
+    db: ORMDatabase,
+    parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
+) -> None:
     """
     Команда для отключения парсера.
     """
@@ -201,6 +249,15 @@ async def cmd_parser_disable(message: Message, db: ORMDatabase, *, user_role: st
         async with db.session_factory() as session:
             repo = ParserConfigRepository(session)
             config = await repo.disable_parser()
+
+        # Останавливаем парсер
+        if parser_integration:
+            try:
+                await parser_integration.stop()
+                logger.info("Парсер остановлен через команду")
+            except Exception as e:
+                logger.error(f"Ошибка при остановке парсера: {e}")
+                await message.answer(f"⚠️ Настройки сохранены, но парсер не удалось остановить: {e}")
 
         await message.answer(
             "🛑 <b>Парсер отключён</b>\n\n"
