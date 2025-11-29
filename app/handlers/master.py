@@ -3003,7 +3003,7 @@ async def handle_dr_confirm(message: Message, state: FSMContext):
             await db.disconnect()
     else:
         # Если введен текст, обрабатываем как изменение даты
-        await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
+        await state.set_state(LongRepairStates.enter_completion_date)
         await process_dr_info(message, state, [])
 
 

@@ -634,7 +634,7 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
         # Переходим к вводу срока окончания и предоплаты
         from app.states import LongRepairStates
 
-        await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
+        await state.set_state(LongRepairStates.enter_completion_date)
 
         await message_obj.reply(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"

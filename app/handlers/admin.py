@@ -2161,12 +2161,12 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
         # Сохраняем order_id и мастера в state
         await state.update_data(order_id=order_id, acting_as_master_id=master.telegram_id)
 
-        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date_and_prepayment")
+        logger.debug("[DR] Transitioning to LongRepairStates.enter_completion_date")
 
         # Переходим к вводу срока окончания и предоплаты
         from app.states import LongRepairStates
 
-        await state.set_state(LongRepairStates.enter_completion_date_and_prepayment)
+        await state.set_state(LongRepairStates.enter_completion_date)
 
         message_obj = callback.message
         if not isinstance(message_obj, Message):
