@@ -297,75 +297,11 @@ async def cmd_parser_disable(
         await message.answer("❌ Произошла ошибка при отключении парсера")
 
 
-@router.message(Command("parser_auth"))
-@require_role(["admin"])
-async def cmd_parser_auth(
-    message: Message,
-    state: FSMContext,
-    parser_integration: ParserIntegration | None = None,
-    *,
-    user_role: str = "UNKNOWN",
-) -> None:
-    """
-    Команда для интерактивной аутентификации парсера.
-    """
-    if not Config.PARSER_ENABLED:
-        await message.answer("❌ Парсер отключён в конфигурации (.env)")
-        return
-
-    if not parser_integration:
-        await message.answer("⚠️ Сервис парсера недоступен")
-        return
-
-    await message.answer("🔄 Начинаю процесс аутентификации...")
-    
-    # Устанавливаем состояние ожидания кода (оптимистично)
-    await state.set_state(ParserAuthState.waiting_for_code)
-    # Форсируем обновление данных, чтобы состояние точно сохранилось
-    await state.update_data(auth_started=True)
-    # Даем время на сохранение состояния перед блокирующим вызовом
-    await asyncio.sleep(0.5)
-    
-    try:
-        # Это заблокирует выполнение до завершения auth (или ошибки)
-        await parser_integration.authenticate_user(message.from_user.id)
-        # Если метод вернулся без исключений - значит auth успешен
-        await message.answer("✅ Аутентификация успешно завершена! Парсер запущен.")
-    except Exception as e:
-        await message.answer(f"❌ Ошибка аутентификации: {e}")
-    finally:
-        await state.clear()
-
-
-@router.message(ParserAuthState.waiting_for_code)
-async def process_auth_code(
-    message: Message,
-    state: FSMContext,
-    parser_integration: ParserIntegration | None = None,
-) -> None:
-    """
-    Обработчик ввода кода подтверждения.
-    """
-    if not parser_integration:
-        await message.answer("⚠️ Сервис парсера недоступен")
-        return
-
-    code = message.text.strip()
-    if not code.isdigit():
-        await message.answer("⚠️ Код должен состоять только из цифр. Попробуйте еще раз.")
-        return
-
-    # Передаем код в сервис
-    parser_integration.submit_auth_code(code)
-    
-    # Не сбрасываем состояние здесь, оно сбросится в cmd_parser_auth после завершения
-    await message.answer("⏳ Код принят, проверяю...")
-
-
 @router.message(Command("parser_reset"))
 @require_role(["admin"])
 async def cmd_parser_reset(
     message: Message,
+    state: FSMContext,
     parser_integration: ParserIntegration | None = None,
     *,
     user_role: str = "UNKNOWN",
@@ -373,9 +309,18 @@ async def cmd_parser_reset(
     """
     Команда для сброса сессии парсера (удаление файла сессии).
     Полезна при ошибках аутентификации.
+    Работает в любом состоянии FSM.
     """
     import os
     
+    logger.info(f"Admin {message.from_user.id} called /parser_reset")
+    
+    # Сбрасываем любое активное состояние
+    current_state = await state.get_state()
+    if current_state:
+        logger.info(f"Clearing state {current_state} during reset")
+        await state.clear()
+
     if not Config.PARSER_ENABLED:
         await message.answer("❌ Парсер отключён в конфигурации")
         return
@@ -409,6 +354,92 @@ async def cmd_parser_reset(
     except Exception as e:
         logger.error(f"Ошибка при удалении файла сессии: {e}")
         await message.answer(f"❌ Ошибка при удалении файла сессии: {e}")
+
+
+@router.message(Command("parser_auth"))
+@require_role(["admin"])
+async def cmd_parser_auth(
+    message: Message,
+    state: FSMContext,
+    parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
+) -> None:
+    """
+    Команда для интерактивной аутентификации парсера.
+    """
+    logger.info(f"Admin {message.from_user.id} called /parser_auth in chat {message.chat.type}")
+
+    if not Config.PARSER_ENABLED:
+        await message.answer("❌ Парсер отключён в конфигурации (.env)")
+        return
+
+    if not parser_integration:
+        await message.answer("⚠️ Сервис парсера недоступен")
+        return
+
+    # Принудительно отправляем в ЛС, чтобы не путать контекст FSM
+    if message.chat.type != "private":
+        bot_username = (await message.bot.get_me()).username
+        await message.answer(
+            f"⚠️ В целях безопасности и корректной работы, пожалуйста, выполните эту команду в личных сообщениях боту:\n"
+            f"👉 @{bot_username}"
+        )
+        return
+
+    await message.answer("🔄 Начинаю процесс аутентификации...")
+    
+    # Устанавливаем состояние ожидания кода
+    await state.set_state(ParserAuthState.waiting_for_code)
+    await state.update_data(auth_started=True)
+    await asyncio.sleep(0.5)
+    
+    try:
+        logger.info("Calling authenticate_user...")
+        # Это заблокирует выполнение до завершения auth (или ошибки)
+        await parser_integration.authenticate_user(message.from_user.id)
+        # Если метод вернулся без исключений - значит auth успешен
+        logger.info("Authentication successful")
+        await message.answer("✅ Аутентификация успешно завершена! Парсер запущен.")
+    except Exception as e:
+        logger.error(f"Authentication failed: {e}")
+        await message.answer(f"❌ Ошибка аутентификации: {e}")
+    finally:
+        logger.info("Clearing auth state")
+        await state.clear()
+
+
+@router.message(ParserAuthState.waiting_for_code)
+async def process_auth_code(
+    message: Message,
+    state: FSMContext,
+    parser_integration: ParserIntegration | None = None,
+) -> None:
+    """
+    Обработчик ввода кода подтверждения.
+    """
+    logger.info(f"Received message in waiting_for_code state from {message.from_user.id}")
+
+    # Если это команда, игнорируем (пусть обрабатывается другими хендлерами)
+    if message.text.startswith("/"):
+        logger.info("Message is a command, ignoring in auth handler")
+        return
+
+    if not parser_integration:
+        await message.answer("⚠️ Сервис парсера недоступен")
+        return
+
+    code = message.text.strip()
+    if not code.isdigit():
+        await message.answer("⚠️ Код должен состоять только из цифр. Попробуйте еще раз.")
+        return
+
+    logger.info(f"Submitting auth code: {code}")
+    # Передаем код в сервис
+    parser_integration.submit_auth_code(code)
+    
+    # Не сбрасываем состояние здесь, оно сбросится в cmd_parser_auth после завершения
+    await message.answer("⏳ Код принят, проверяю...")
 
 
 @router.callback_query(F.data.startswith("confirm_order:"))
