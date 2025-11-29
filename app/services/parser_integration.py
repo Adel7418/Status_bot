@@ -237,7 +237,17 @@ class ParserIntegration:
                 await self.telethon_task
 
         self.is_running = False
+        self.is_running = False
         self.logger.info("🛑 Парсер заявок остановлен")
+
+    async def reset_client(self) -> None:
+        """
+        Сбрасывает текущий клиент Telethon.
+        Используется при сбросе сессии, чтобы гарантировать пересоздание клиента.
+        """
+        await self.stop()
+        self.telethon_client = None
+        self.logger.info("🔄 TelethonClient сброшен (будет пересоздан при следующем запуске)")
 
     async def _on_new_message(self, text: str, message_id: int, sender_id: int | None) -> None:
         """

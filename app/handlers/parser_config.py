@@ -376,13 +376,13 @@ async def cmd_parser_reset(
         await message.answer("❌ Парсер отключён в конфигурации")
         return
 
-    # 1. Останавливаем парсер
+    # 1. Останавливаем парсер и сбрасываем клиент
     if parser_integration:
         try:
-            await parser_integration.stop()
-            logger.info("Парсер остановлен перед сбросом")
+            await parser_integration.reset_client()
+            logger.info("Парсер остановлен и сброшен перед удалением сессии")
         except Exception as e:
-            logger.error(f"Ошибка при остановке парсера: {e}")
+            logger.error(f"Ошибка при сбросе парсера: {e}")
 
     # 2. Удаляем файл сессии
     session_file = f"{Config.TELETHON_SESSION_NAME}.session"
