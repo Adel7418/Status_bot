@@ -358,6 +358,55 @@ async def process_auth_code(
     await message.answer("⏳ Код принят, проверяю...")
 
 
+@router.message(Command("parser_reset"))
+@require_role(["admin"])
+async def cmd_parser_reset(
+    message: Message,
+    parser_integration: ParserIntegration | None = None,
+    *,
+    user_role: str = "UNKNOWN",
+) -> None:
+    """
+    Команда для сброса сессии парсера (удаление файла сессии).
+    Полезна при ошибках аутентификации.
+    """
+    import os
+    
+    if not Config.PARSER_ENABLED:
+        await message.answer("❌ Парсер отключён в конфигурации")
+        return
+
+    # 1. Останавливаем парсер
+    if parser_integration:
+        try:
+            await parser_integration.stop()
+            logger.info("Парсер остановлен перед сбросом")
+        except Exception as e:
+            logger.error(f"Ошибка при остановке парсера: {e}")
+
+    # 2. Удаляем файл сессии
+    session_file = f"{Config.TELETHON_SESSION_NAME}.session"
+    try:
+        if os.path.exists(session_file):
+            os.remove(session_file)
+            logger.info(f"Файл сессии {session_file} удален")
+            await message.answer(
+                f"✅ <b>Сессия сброшена</b>\n\n"
+                f"Файл <code>{session_file}</code> удален.\n"
+                f"Теперь вы можете заново пройти аутентификацию через /parser_auth",
+                parse_mode="HTML"
+            )
+        else:
+            await message.answer(
+                f"⚠️ Файл сессии <code>{session_file}</code> не найден.\n"
+                f"Можно пробовать /parser_auth",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"Ошибка при удалении файла сессии: {e}")
+        await message.answer(f"❌ Ошибка при удалении файла сессии: {e}")
+
+
 @router.callback_query(F.data.startswith("confirm_order:"))
 async def callback_confirm_order(callback: CallbackQuery, parser_integration=None) -> None:
     """
