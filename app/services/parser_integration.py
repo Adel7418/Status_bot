@@ -308,8 +308,9 @@ class ParserIntegration:
         parse_result = self.parser_service.parse_message(text, message_id)
 
         if not parse_result.success:
-            self.logger.warning(
-                f"Не удалось распарсить сообщение {message_id}: {parse_result.error_message}"
+            # Логируем как INFO, чтобы не спамить в логах (так как это могут быть обычные сообщения)
+            self.logger.info(
+                f"Сообщение {message_id} не распознано как заявка: {parse_result.error_message}"
             )
 
             # Отправляем уведомление в группу для:
@@ -343,7 +344,7 @@ class ParserIntegration:
             async with self.db.session_factory() as session:
                 from app.database.orm_models import Order
                 from sqlalchemy import select, and_, or_, func
-
+                
                 client_phone = parse_result.data.phone or "Не указан"
                 client_address = parse_result.data.address
 
@@ -492,6 +493,7 @@ class ParserIntegration:
                     scheduled_time=order.scheduled_time,  # Время прибытия/ремонта
                     status="NEW",  # Допустимые статусы: NEW, ASSIGNED, ACCEPTED, ONSITE, CLOSED, REFUSED, DR
                     created_at=get_now(),
+                    updated_at=get_now(),  # Явно указываем updated_at, чтобы избежать IntegrityError
                 )
 
                 session.add(new_order)
