@@ -128,7 +128,11 @@ async def cmd_set_group(
 
 @router.message(Command("parser_status"))
 @require_role(["admin"])
-async def cmd_parser_status(message: Message, db: ORMDatabase) -> None:
+async def cmd_parser_status(
+    message: Message,
+    db: ORMDatabase,
+    parser_integration: ParserIntegration | None = None,
+) -> None:
     """
     Команда для проверки статуса парсера.
     """
@@ -161,15 +165,33 @@ async def cmd_parser_status(message: Message, db: ORMDatabase) -> None:
         f"<code>{config.group_id}</code>" if config.group_id else "<i>не установлен</i>"
     )
 
+    # Проверяем реальный статус процесса
+    runtime_status = "❓ Неизвестно (сервис не инжектирован)"
+    is_connected = False
+    
+    if parser_integration:
+        if parser_integration.is_running:
+            runtime_status = "🟢 Запущен"
+            # Проверяем подключение Telethon
+            if parser_integration.telethon_client and parser_integration.telethon_client.client:
+                if parser_integration.telethon_client.client.is_connected():
+                    is_connected = True
+                    runtime_status += " (Подключен к Telegram)"
+                else:
+                    runtime_status += " (⚠️ Нет подключения к Telegram)"
+        else:
+            runtime_status = "🔴 Остановлен"
+    else:
+        runtime_status = "⚠️ Ошибка: Сервис не доступен"
+
     await message.answer(
         f"📊 <b>Статус парсера</b>\n\n"
-        f"{status_emoji} <b>Статус:</b> {status_text}\n"
+        f"{status_emoji} <b>Конфигурация БД:</b> {status_text}\n"
+        f"⚙️ <b>Процесс:</b> {runtime_status}\n"
         f"📋 <b>Group ID:</b> {group_text}\n\n"
-        f"<b>Конфигурация (.env):</b>\n"
+        f"<b>Параметры (.env):</b>\n"
         f"• PARSER_ENABLED: {Config.PARSER_ENABLED}\n"
-        f"• TELETHON_API_ID: {'✅ установлен' if Config.TELETHON_API_ID else '❌ не установлен'}\n"
-        f"• TELETHON_API_HASH: {'✅ установлен' if Config.TELETHON_API_HASH else '❌ не установлен'}\n"
-        f"• TELETHON_PHONE: {'✅ установлен' if Config.TELETHON_PHONE else '❌ не установлен'}",
+        f"• TELETHON_SESSION: {Config.TELETHON_SESSION_NAME}\n",
         parse_mode="HTML",
     )
 
