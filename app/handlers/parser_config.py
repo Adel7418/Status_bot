@@ -172,18 +172,19 @@ async def cmd_parser_status(
 
     # Проверяем реальный статус процесса
     runtime_status = "❓ Неизвестно (сервис не инжектирован)"
-    is_connected = False
     
     if parser_integration:
         if parser_integration.is_running:
-            runtime_status = "🟢 Запущен"
+            status_details = "Запущен"
             # Проверяем подключение Telethon
             if parser_integration.telethon_client and parser_integration.telethon_client.client:
                 if parser_integration.telethon_client.client.is_connected():
-                    is_connected = True
-                    runtime_status += " (Подключен к Telegram)"
+                    status_details += " (Подключен к Telegram)"
                 else:
-                    runtime_status += " (⚠️ Нет подключения к Telegram)"
+                    status_details += " (⚠️ Нет подключения к Telegram)"
+            runtime_status = f"🟢 {status_details}"
+        elif parser_integration.waiting_for_auth:
+            runtime_status = "🔴 Остановлен (Требуется аутентификация /parser_auth)"
         else:
             runtime_status = "🔴 Остановлен"
     else:
