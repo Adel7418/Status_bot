@@ -67,6 +67,7 @@ class TelethonClient:
         self,
         group_id: int | None = None,
         code_callback: Callable[[], Awaitable[str]] | None = None,
+        password_callback: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         """
         Запускает Telethon клиент и начинает мониторинг группы.
@@ -74,6 +75,7 @@ class TelethonClient:
         Args:
             group_id: ID Telegram-группы для мониторинга (опционально)
             code_callback: Callback для получения кода авторизации (если требуется)
+            password_callback: Callback для получения пароля 2FA (если требуется)
 
         Raises:
             ValueError: Если group_id не указан и не был установлен ранее
@@ -91,7 +93,11 @@ class TelethonClient:
         # Подключаемся к Telegram
         if code_callback:
             # Интерактивный режим (аутентификация)
-            await self.client.start(phone=self.phone, code_callback=code_callback)
+            await self.client.start(
+                phone=self.phone,
+                code_callback=code_callback,
+                password=password_callback
+            )
         else:
             # Фоновый режим: проверяем авторизацию перед стартом
             await self.client.connect()

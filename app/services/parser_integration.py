@@ -57,6 +57,7 @@ class ParserIntegration:
         
         # Для аутентификации
         self.auth_future: asyncio.Future[str] | None = None
+        self.password_future: asyncio.Future[str] | None = None
         self.auth_user_id: int | None = None
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -105,11 +106,27 @@ class ParserIntegration:
             # Ждем код от пользователя
             return await self.auth_future
 
+        async def password_callback() -> str:
+            """Callback для запроса пароля 2FA у пользователя"""
+            self.password_future = asyncio.Future()
+            
+            # Отправляем сообщение пользователю
+            await self.bot.send_message(
+                user_id,
+                "🔐 <b>Требуется облачный пароль (2FA)!</b>\n\n"
+                "Ваш аккаунт защищен паролем. Пожалуйста, введите его.",
+                parse_mode="HTML"
+            )
+            
+            # Ждем пароль от пользователя
+            return await self.password_future
+
         try:
-            # Запускаем клиент с callback-ом
+            # Запускаем клиент с callback-ами
             await self.telethon_client.start(
                 group_id=self.group_id,
-                code_callback=code_callback
+                code_callback=code_callback,
+                password_callback=password_callback
             )
             
             # Если успешно - запускаем мониторинг
@@ -121,6 +138,7 @@ class ParserIntegration:
             
         finally:
             self.auth_future = None
+            self.password_future = None
             self.auth_user_id = None
 
     def submit_auth_code(self, code: str) -> None:
@@ -129,6 +147,13 @@ class ParserIntegration:
             self.auth_future.set_result(code)
         else:
             self.logger.warning("Получен код подтверждения, но никто его не ждет")
+
+    def submit_password(self, password: str) -> None:
+        """Передает пароль 2FA в ожидающий процесс аутентификации"""
+        if self.password_future and not self.password_future.done():
+            self.password_future.set_result(password)
+        else:
+            self.logger.warning("Получен пароль, но никто его не ждет")
 
     async def start(self) -> None:
         """

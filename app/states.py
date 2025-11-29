@@ -136,6 +136,6 @@ class EditMasterSpecializationStates(StatesGroup):
 
 class ParserAuthState(StatesGroup):
     """Состояния для аутентификации парсера"""
-
-    waiting_for_code = State()  # Ожидание кода подтверждения от Telegram
+    waiting_for_code = State()
+    waiting_for_password = State()  # Ожидание кода подтверждения от Telegram
     waiting_for_password = State()  # Ожидание пароля 2FA (если есть)

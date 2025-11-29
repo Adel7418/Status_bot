@@ -447,11 +447,105 @@ async def process_auth_code(
         return
 
     logger.info(f"Submitting auth code: {code} (raw: {raw_code})")
-    # Передаем код в сервис
+    
+    # Мы не можем знать наверняка, запросит ли Telethon пароль, 
+    # поэтому мы просто отправляем код. 
+    # Если Telethon запросит пароль, сработает callback в ParserIntegration,
+    # который отправит сообщение "Требуется пароль".
+    # Нам нужно перехватить это сообщение или просто разрешить ввод пароля.
+    
+    # ХАК: Мы переходим в состояние ожидания пароля СРАЗУ, 
+    # но с возможностью вернуться, если это была ошибка кода.
+    # Но лучше просто добавить хендлер для пароля и переключать состояние
+    # когда пользователь увидит сообщение о пароле? 
+    # Нет, FSM так не работает.
+    
+    # Решение: ParserIntegration.authenticate_user блокирует выполнение.
+    # Внутри него вызывается password_callback.
+    # Мы можем попытаться определить, что сейчас происходит, но это сложно.
+    
+    # Проще всего: добавить хендлер для пароля, который будет активен
+    # если мы перейдем в состояние waiting_for_password.
+    # А переход в это состояние мы сделаем... Хм.
+    # Мы не можем изменить состояние из callback-а, так как у нас нет доступа к FSMContext там.
+    
+    # ВАРИАНТ: Разрешить ввод пароля в том же состоянии waiting_for_code?
+    # Нет, это грязно.
+    
+    # ВАРИАНТ: Использовать магию.
+    # Когда ParserIntegration отправляет сообщение "Требуется пароль",
+    # мы можем (теоретически) перехватить это? Нет.
+    
+    # ВАРИАНТ: Просто добавить хендлер на waiting_for_code, который
+    # если это не цифры, пробует считать это паролем?
+    # Нет, пароль может быть цифрами.
+    
+    # ПРАВИЛЬНЫЙ ВАРИАНТ:
+    # В ParserIntegration.authenticate_user мы передаем callback.
+    # В этом callback мы можем отправить сообщение.
+    # Пользователь увидит "Введите пароль".
+    # Но бот все еще в waiting_for_code.
+    
+    # Мы добавим хендлер, который ловит ВСЕ в waiting_for_code.
+    # Если это похоже на код (цифры, дефисы) -> submit_auth_code.
+    # Если это НЕ похоже на код -> submit_password?
+    # А если пароль "12345"?
+    
+    # ДАВАЙТЕ СДЕЛАЕМ ТАК:
+    # Мы добавим состояние waiting_for_password.
+    # Но как в него перейти?
+    # Мы можем сделать это "вслепую".
+    # После отправки кода, мы можем предположить, что следующее сообщение - это либо
+    # новый код (если ошибка), либо пароль.
+    
+    # НО! У нас есть проблема: authenticate_user блокирует хендлер cmd_parser_auth.
+    # Мы не можем там менять состояние.
+    
+    # РЕШЕНИЕ:
+    # Мы просто добавим хендлер для waiting_for_password.
+    # А переключать состояние будет... ПОЛЬЗОВАТЕЛЬ? Нет.
+    
+    # А что если мы будем принимать пароль в waiting_for_code?
+    # Если submit_auth_code вызывается второй раз?
+    
+    # Давайте сделаем так:
+    # В process_auth_code мы отправляем код.
+    # И СРАЗУ переводим состояние в waiting_for_password.
+    # Если аутентификация завершится успешно, cmd_parser_auth сделает state.clear().
+    # Если потребуется пароль, пользователь напишет его, и мы поймаем его в waiting_for_password.
+    # Если код был неверен, Telethon выбросит ошибку, cmd_parser_auth поймает её и сбросит стейт.
+    # Пользователю придется начать заново. Это приемлемо.
+    
     parser_integration.submit_auth_code(code)
     
-    # Не сбрасываем состояние здесь, оно сбросится в cmd_parser_auth после завершения
-    await message.answer("⏳ Код принят, проверяю...")
+    # Переходим в состояние ожидания пароля (на всякий случай)
+    await state.set_state(ParserAuthState.waiting_for_password)
+    await message.answer("⏳ Код принят. Если у вас включена 2FA, введите пароль следующим сообщением.")
+
+
+@router.message(ParserAuthState.waiting_for_password)
+async def process_auth_password(
+    message: Message,
+    state: FSMContext,
+    parser_integration: ParserIntegration | None = None,
+) -> None:
+    """
+    Обработчик ввода пароля 2FA.
+    """
+    logger.info(f"Received message in waiting_for_password state from {message.from_user.id}")
+
+    if message.text.startswith("/"):
+        return
+
+    if not parser_integration:
+        await message.answer("⚠️ Сервис парсера недоступен")
+        return
+
+    password = message.text.strip()
+    logger.info("Submitting 2FA password")
+    
+    parser_integration.submit_password(password)
+    await message.answer("⏳ Пароль принят, проверяю...")
 
 
 @router.callback_query(F.data.startswith("confirm_order:"))
