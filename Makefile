@@ -113,8 +113,6 @@ mb-update:  ## Обновить код и пересобрать
 	@git pull origin main
 	@docker compose -f $(MB_COMPOSE) down
 	@docker compose -f $(MB_COMPOSE) build
-	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 alembic upgrade head
-	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 alembic upgrade head
 	@docker compose -f $(MB_COMPOSE) up -d
 	@echo "✅ Обновлено и запущено!"
 
@@ -123,7 +121,6 @@ mb-update-city1:  ## Обновить только city1
 	@git pull origin main
 	@docker compose -f $(MB_COMPOSE) stop bot_city1
 	@docker compose -f $(MB_COMPOSE) build bot_city1
-	@docker compose -f $(MB_COMPOSE) run --rm bot_city1 alembic upgrade head
 	@docker compose -f $(MB_COMPOSE) up -d bot_city1
 	@echo "✅ city1 обновлён!"
 
@@ -132,7 +129,6 @@ mb-update-city2:  ## Обновить только city2
 	@git pull origin main
 	@docker compose -f $(MB_COMPOSE) stop bot_city2
 	@docker compose -f $(MB_COMPOSE) build bot_city2
-	@docker compose -f $(MB_COMPOSE) run --rm bot_city2 alembic upgrade head
 	@docker compose -f $(MB_COMPOSE) up -d bot_city2
 	@echo "✅ city2 обновлён!"
 
