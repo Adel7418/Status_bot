@@ -53,14 +53,17 @@ class ParserIntegration:
         self.group_id: int | None = None  # ID группы для парсера
 
         self.is_running = False
+        self.waiting_for_auth = False  # Флаг ожидания аутентификации
         self.telethon_task: asyncio.Task | None = None
         
+        # Для аутентификации
         self.auth_future: asyncio.Future[str] | None = None
         self.password_future: asyncio.Future[str] | None = None
         self._pending_password: str | None = None  # Для хранения пароля, если он пришел раньше запроса
         self.auth_user_id: int | None = None
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger.info(f"ParserIntegration initialized. Attributes: {list(self.__dict__.keys())}")
 
     async def authenticate_user(self, user_id: int) -> None:
         """
@@ -73,6 +76,7 @@ class ParserIntegration:
 
         self.auth_user_id = user_id
         self._pending_password = None
+        self.waiting_for_auth = False
         
         # Инициализация клиента если нужно
         if not self.telethon_client:
@@ -139,6 +143,7 @@ class ParserIntegration:
             
             # Если успешно - запускаем мониторинг
             self.is_running = True
+            self.waiting_for_auth = False
             self.telethon_task = asyncio.create_task(
                 self.telethon_client.run_until_disconnected()
             )
@@ -236,6 +241,7 @@ class ParserIntegration:
                     self.telethon_client.run_until_disconnected()
                 )
                 self.is_running = True
+                self.waiting_for_auth = False
                 self.logger.info("🟢 Парсер заявок успешно запущен!")
             except RuntimeError as e:
                 # Если требуется аутентификация - не падаем, а ждем команды
@@ -243,6 +249,7 @@ class ParserIntegration:
                     self.logger.warning(f"⚠️ {e}")
                     self.logger.info("Парсер ожидает аутентификации. Команда: /parser_auth")
                     # Не ставим is_running=True, но и не рейзим ошибку
+                    self.waiting_for_auth = True
                 else:
                     raise e
 

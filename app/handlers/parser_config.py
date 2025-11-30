@@ -183,7 +183,7 @@ async def cmd_parser_status(
                 else:
                     status_details += " (⚠️ Нет подключения к Telegram)"
             runtime_status = f"🟢 {status_details}"
-        elif parser_integration.waiting_for_auth:
+        elif getattr(parser_integration, "waiting_for_auth", False):
             runtime_status = "🔴 Остановлен (Требуется аутентификация /parser_auth)"
         else:
             runtime_status = "🔴 Остановлен"
