@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.exceptions import TelegramBadRequest
 
 from app.config import OrderStatus, UserRole
 from app.database import Database, get_database
@@ -1791,13 +1792,18 @@ async def process_total_amount(message: Message, state: FSMContext):
     # Переходим к запросу суммы расходного материала
     await state.set_state(CompleteOrderStates.enter_materials_cost)
 
-    materials_prompt = await message.reply(
+    prompt_text = (
         f"✅ Общая сумма заказа: <b>{total_amount:.2f} ₽</b>\n\n"
         f"Теперь введите <b>сумму расходного материала</b> (в рублях):\n"
         f"Например: 1500 или 1500.50\n\n"
-        f"Если расходного материала не было, введите: 0",
-        parse_mode="HTML",
+        f"Если расходного материала не было, введите: 0"
     )
+
+    try:
+        materials_prompt = await message.reply(prompt_text, parse_mode="HTML")
+    except TelegramBadRequest:
+        # Если сообщение пользователя удалено, отправляем новое сообщение
+        materials_prompt = await message.answer(prompt_text, parse_mode="HTML")
 
     # Сохраняем ID текущего сообщения для последующего удаления
     await state.update_data(
@@ -1817,25 +1823,42 @@ async def process_materials_cost(message: Message, state: FSMContext):
     """
     # Проверяем, что это текстовое сообщение
     if not message.text:
-        await message.reply(
-            "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
-            "Введите число (например: 500, 0):"
-        )
+        try:
+            await message.reply(
+                "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+                "Введите число (например: 500, 0):"
+            )
+        except TelegramBadRequest:
+            await message.answer(
+                "❌ Пожалуйста, отправьте текстовое сообщение с суммой.\n"
+                "Введите число (например: 500, 0):"
+            )
         return
 
     # Проверяем, что введена корректная сумма
     try:
         materials_cost = float(message.text.replace(",", ".").strip())
         if materials_cost < 0:
-            await message.reply(
-                "❌ Сумма не может быть отрицательной.\n"
-                "Попробуйте еще раз (или введите 0, если расходов не было):"
-            )
+            try:
+                await message.reply(
+                    "❌ Сумма не может быть отрицательной.\n"
+                    "Попробуйте еще раз (или введите 0, если расходов не было):"
+                )
+            except TelegramBadRequest:
+                await message.answer(
+                    "❌ Сумма не может быть отрицательной.\n"
+                    "Попробуйте еще раз (или введите 0, если расходов не было):"
+                )
             return
     except ValueError:
-        await message.reply(
-            "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):"
-        )
+        try:
+            await message.reply(
+                "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):"
+            )
+        except TelegramBadRequest:
+            await message.answer(
+                "❌ Неверный формат суммы.\n" "Пожалуйста, введите число (например: 1500 или 0):"
+            )
         return
 
     # Сохраняем сумму расходного материала
@@ -1867,13 +1890,24 @@ async def process_materials_cost(message: Message, state: FSMContext):
 
     from app.keyboards.inline import get_yes_no_keyboard
 
-    materials_confirm = await message.reply(
+    confirm_text = (
         f"💰 <b>Подтвердите сумму расходных материалов:</b>\n\n"
         f"Сумма: <b>{materials_cost:.2f} ₽</b>\n\n"
-        f"Верно ли указана сумма?",
-        parse_mode="HTML",
-        reply_markup=get_yes_no_keyboard("confirm_materials", int(order_id) if order_id else 0),
+        f"Верно ли указана сумма?"
     )
+
+    try:
+        materials_confirm = await message.reply(
+            confirm_text,
+            parse_mode="HTML",
+            reply_markup=get_yes_no_keyboard("confirm_materials", int(order_id) if order_id else 0),
+        )
+    except TelegramBadRequest:
+        materials_confirm = await message.answer(
+            confirm_text,
+            parse_mode="HTML",
+            reply_markup=get_yes_no_keyboard("confirm_materials", int(order_id) if order_id else 0),
+        )
 
     # Сохраняем ID текущего сообщения для последующего удаления
     await state.update_data(
@@ -2284,7 +2318,6 @@ async def process_out_of_city_confirmation_callback(
         )
 
         # Обновляем статус на CLOSED (с валидацией через State Machine)
-        from app.config import OrderStatus
 
         await db.update_order_status(
             order_id=int(order_id_from_state) if order_id_from_state else 0,
