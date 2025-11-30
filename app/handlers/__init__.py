@@ -13,6 +13,8 @@ from app.handlers.master import router as master_router
 from app.handlers.order_edit import router as order_edit_router
 from app.handlers.order_search import router as order_search_router
 from app.handlers.parser_config import router as parser_config_router
+from app.handlers.parser_stats import router as parser_stats_router
+from app.handlers.template import router as template_router
 
 
 # Список всех роутеров
@@ -26,6 +28,7 @@ routers = [
     developer_router,
     admin_router,
     parser_config_router,  # Настройка парсера
+    parser_stats_router,  # Статистика парсера
     admin_history_router,
     financial_reports_router,
     dispatcher_router,
@@ -33,6 +36,7 @@ routers = [
     master_router,
     order_edit_router,  # Редактирование заявок
     group_router,
+    template_router,  # Шаблон заявки
     common_router,
 ]
 

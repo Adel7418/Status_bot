@@ -139,3 +139,10 @@ class ParserAuthState(StatesGroup):
     waiting_for_code = State()
     waiting_for_password = State()  # Ожидание кода подтверждения от Telegram
     waiting_for_password = State()  # Ожидание пароля 2FA (если есть)
+
+
+class EditParsedOrderStates(StatesGroup):
+    """Состояния для редактирования распарсенной заявки перед созданием"""
+
+    select_field = State()  # Выбор поля для редактирования
+    enter_value = State()  # Ввод нового значения

@@ -8,12 +8,14 @@ Parser Integration Service
 import asyncio
 import contextlib
 import logging
+import time
 
 from aiogram import Bot
 
 from app.core.config import Config
 from app.database.orm_database import ORMDatabase
 from app.database.parser_config_repository import ParserConfigRepository
+from app.services.parser_analytics import ParserAnalyticsService
 from app.services.telegram_parser import (
     OrderConfirmationService,
     OrderParsed,
@@ -50,6 +52,7 @@ class ParserIntegration:
         self.telethon_client: TelethonClient | None = None
         self.parser_service: OrderParserService | None = None
         self.confirmation_service: OrderConfirmationService | None = None
+        self.analytics_service: ParserAnalyticsService = ParserAnalyticsService(db.session_factory)
         self.group_id: int | None = None  # ID группы для парсера
 
         self.is_running = False
@@ -310,9 +313,25 @@ class ParserIntegration:
             if bot_id and sender_id == bot_id:
                 self.logger.debug(f"Игнорируем сообщение от бота (sender_id={sender_id})")
                 return
+        
+        # Игнорируем слишком короткие сообщения (< 15 символов)
+        # Это обычно фрагменты редактирования или команды, не заявки
+        if len(text.strip()) < 15:
+            self.logger.debug(f"Пропускаем короткое сообщение ({len(text)} символов): {text[:20]}")
+            return
+        
+        # Игнорируем сообщения, содержащие только время (паттерн ЧЧ:ММ)
+        import re
+        time_only_pattern = r'^\s*\d{1,2}:\d{2}\s*$'
+        if re.match(time_only_pattern, text.strip()):
+            self.logger.debug(f"Пропускаем сообщение с только временем: {text}")
+            return
 
-        # Парсинг сообщения
+
+        # Парсинг сообщения (измеряем время)
+        start_time = time.time()
         parse_result = self.parser_service.parse_message(text, message_id)
+        processing_time_ms = int((time.time() - start_time) * 1000)
 
         if not parse_result.success:
             # Логируем как INFO, чтобы не спамить в логах (так как это могут быть обычные сообщения)
@@ -338,12 +357,32 @@ class ParserIntegration:
                     )
                 except Exception as e:
                     self.logger.error(f"Ошибка при отправке уведомления об ошибке: {e}")
+            
+            # Записываем аналитику (неуспешный парсинг)
+            await self.analytics_service.track_parse_event(
+                message_id=message_id,
+                group_id=self.group_id,
+                success=False,
+                error_type=parse_result.status,
+                processing_time_ms=processing_time_ms,
+            )
             return
 
         # Успешный парсинг — отправляем подтверждение
         self.logger.info(
             f"✅ Сообщение {message_id} успешно распарсено: "
             f"{parse_result.data.equipment_type} - {parse_result.data.address}"
+        )
+        
+        # Записываем аналитику (успешный парсинг)
+        await self.analytics_service.track_parse_event(
+            message_id=message_id,
+            group_id=self.group_id,
+            success=True,
+            parsed_equipment_type=parse_result.data.equipment_type,
+            parsed_address=parse_result.data.address,
+            parsed_phone=parse_result.data.phone,
+            processing_time_ms=processing_time_ms,
         )
 
         # Проверяем на дубликаты и историю клиента ПЕРЕД отправкой подтверждения
@@ -507,9 +546,14 @@ class ParserIntegration:
                 await session.commit()
                 await session.refresh(new_order)
 
-                self.logger.info(
-                    f"✅ Заявка #{new_order.id} успешно создана из сообщения {order.message_id}"
+                # Обновляем аналитику
+                await self.analytics_service.mark_confirmed(
+                    message_id=order.message_id,
+                    confirmed=True,
+                    created_order_id=new_order.id,
                 )
+                
+                self.logger.info(f"Заявка #{new_order.id} создана из распарсенного сообщения {order.message_id}")
 
                 # Отправляем уведомление диспетчерам
                 if Config.DISPATCHER_GROUP_ID:

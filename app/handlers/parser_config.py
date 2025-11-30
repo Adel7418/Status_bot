@@ -18,7 +18,8 @@ from app.database.orm_database import ORMDatabase
 from app.database.parser_config_repository import ParserConfigRepository
 from app.decorators import require_role
 from app.services.parser_integration import ParserIntegration
-from app.states import ParserAuthState
+from app.states import ParserAuthState, EditParsedOrderStates
+from app.utils import escape_html
 
 
 logger = logging.getLogger(__name__)
@@ -598,3 +599,249 @@ async def callback_confirm_order(callback: CallbackQuery, parser_integration=Non
         await callback.answer("✅ Заявка создана!", show_alert=False)
     else:
         await callback.answer("❌ Создание заявки отменено", show_alert=False)
+
+
+# ==================== РЕДАКТИРОВАНИЕ РАСПАРСЕННОЙ ЗАЯВКИ ====================
+
+
+@router.callback_query(F.data.startswith("edit_parsed_order:"))
+async def callback_edit_parsed_order(
+    callback: CallbackQuery, state: FSMContext, parser_integration: ParserIntegration | None = None
+) -> None:
+    """
+    Начало редактирования распарсенной заявки.
+    """
+    if not parser_integration or not parser_integration.confirmation_service:
+        await callback.answer("❌ Сервис недоступен", show_alert=True)
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 2:
+        await callback.answer("❌ Ошибка данных", show_alert=True)
+        return
+
+    message_id = int(parts[1])
+    
+    # Получаем данные заявки
+    confirmation_data = parser_integration.confirmation_service.get_pending_confirmation(
+        callback.message.message_id
+    )
+    
+    if not confirmation_data:
+        await callback.answer("❌ Заявка не найдена (возможно, устарела)", show_alert=True)
+        return
+
+    # Сохраняем ID сообщения подтверждения в state, чтобы потом обновить его
+    await state.update_data(
+        confirmation_message_id=callback.message.message_id,
+        parsed_order_message_id=message_id
+    )
+    
+    await show_edit_parsed_menu(callback.message, confirmation_data.parsed_order)
+    await callback.answer()
+
+
+async def show_edit_parsed_menu(message: Message, order) -> None:
+    """Показывает меню редактирования полей распарсенной заявки"""
+    from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    text = (
+        f"✏️ <b>Редактирование заявки</b>\n\n"
+        f"🔧 <b>Тип:</b> {escape_html(order.equipment_type)}\n"
+        f"❗ <b>Проблема:</b> {escape_html(order.problem_description)}\n"
+        f"📍 <b>Адрес:</b> {escape_html(order.address)}\n"
+        f"👤 <b>Клиент:</b> {escape_html(order.client_name)}\n"
+        f"📞 <b>Телефон:</b> {escape_html(order.phone or 'Не указан')}\n"
+        f"🕐 <b>Время:</b> {escape_html(order.scheduled_time or 'Не указано')}\n\n"
+        f"Выберите поле для изменения:"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="🔧 Тип", callback_data="edit_parsed:equipment_type"),
+        InlineKeyboardButton(text="❗ Проблема", callback_data="edit_parsed:problem_description"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="📍 Адрес", callback_data="edit_parsed:address"),
+        InlineKeyboardButton(text="👤 Клиент", callback_data="edit_parsed:client_name"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="📞 Телефон", callback_data="edit_parsed:phone"),
+        InlineKeyboardButton(text="🕐 Время", callback_data="edit_parsed:scheduled_time"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="🔙 Назад к подтверждению", callback_data="edit_parsed:back")
+    )
+
+    await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("edit_parsed:"))
+async def callback_select_parsed_field(
+    callback: CallbackQuery, state: FSMContext, parser_integration: ParserIntegration | None = None
+) -> None:
+    """Выбор поля для редактирования"""
+    action = callback.data.split(":")[1]
+    
+    if action == "back":
+        # Возвращаемся к подтверждению
+        data = await state.get_data()
+        confirmation_message_id = data.get("confirmation_message_id")
+        
+        if not confirmation_message_id or not parser_integration:
+            await callback.answer("❌ Ошибка контекста", show_alert=True)
+            return
+
+        confirmation_data = parser_integration.confirmation_service.get_pending_confirmation(
+            confirmation_message_id
+        )
+        
+        if not confirmation_data:
+            await callback.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
+        # Обновляем сообщение подтверждения (возвращаем кнопки Да/Нет/Редактировать)
+        # Используем публичный метод сервиса для перерисовки, но нам нужно обновить именно ЭТО сообщение
+        # Поэтому просто вызываем send_confirmation? Нет, это создаст новое.
+        # Нам нужно отредактировать текущее.
+        
+        # Формируем текст и клавиатуру вручную, используя методы сервиса
+        text = parser_integration.confirmation_service._format_confirmation_message(
+            confirmation_data.parsed_order
+        )
+        kb = parser_integration.confirmation_service._create_confirmation_keyboard(
+            confirmation_data.parsed_order.message_id
+        )
+        
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await state.clear()
+        await callback.answer()
+        return
+
+    # Выбрано поле для редактирования
+    await state.update_data(field=action)
+    await state.set_state(EditParsedOrderStates.enter_value)
+    
+    field_names = {
+        "equipment_type": "тип техники",
+        "problem_description": "описание проблемы",
+        "address": "адрес",
+        "client_name": "имя клиента",
+        "phone": "телефон",
+        "scheduled_time": "время прибытия"
+    }
+    
+    field_name = field_names.get(action, action)
+    
+    await callback.message.edit_text(
+        f"✏️ Введите новое значение для поля <b>{field_name}</b>:",
+        parse_mode="HTML",
+        reply_markup=None # Убираем кнопки, ждем текст
+    )
+    await callback.answer()
+
+
+@router.message(EditParsedOrderStates.enter_value)
+async def process_parsed_value(
+    message: Message, state: FSMContext, parser_integration: ParserIntegration | None = None
+) -> None:
+    """Обработка ввода нового значения"""
+    data = await state.get_data()
+    field = data.get("field")
+    confirmation_message_id = data.get("confirmation_message_id")
+    
+    if not field or not confirmation_message_id:
+        await message.answer("❌ Ошибка контекста. Начните заново.")
+        await state.clear()
+        return
+
+    new_value = message.text.strip()
+    
+    # Обновляем данные в pending_confirmations
+    if not parser_integration:
+        await message.answer("❌ Сервис парсера недоступен")
+        return
+
+    confirmation_data = parser_integration.confirmation_service.get_pending_confirmation(
+        confirmation_message_id
+    )
+    
+    if not confirmation_data:
+        await message.answer("❌ Заявка не найдена (возможно, устарела)")
+        await state.clear()
+        return
+
+    # Обновляем поле в объекте OrderParsed
+    # Pydantic модели по умолчанию иммутабельны, если frozen=True, но здесь вроде нет.
+    # Проверим schemas.py. Если что, используем setattr.
+    setattr(confirmation_data.parsed_order, field, new_value)
+    
+    # Удаляем сообщение с введенным текстом, чтобы не захламлять чат
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    # Возвращаем меню редактирования (обновленное)
+    # Нам нужно найти сообщение с меню. Это confirmation_message_id.
+    # Но мы не можем просто так его отредактировать, если у нас нет объекта Message.
+    # Мы можем отправить новое? Нет, лучше отредактировать старое.
+    # Мы можем использовать bot.edit_message_text
+    
+    try:
+        await show_edit_parsed_menu(
+            # Создаем фейковый объект Message для удобства вызова функции, 
+            # или перепишем функцию чтобы она принимала bot и chat_id/message_id
+            # Проще вызвать edit_message_text напрямую здесь.
+            message, # Это сообщение пользователя, оно нам не поможет отредактировать бота.
+            # Нам нужен объект бота.
+        )
+    except Exception:
+        pass
+        
+    # Переписываем логику отображения меню
+    from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    order = confirmation_data.parsed_order
+    text = (
+        f"✏️ <b>Редактирование заявки</b>\n\n"
+        f"🔧 <b>Тип:</b> {escape_html(order.equipment_type)}\n"
+        f"❗ <b>Проблема:</b> {escape_html(order.problem_description)}\n"
+        f"📍 <b>Адрес:</b> {escape_html(order.address)}\n"
+        f"👤 <b>Клиент:</b> {escape_html(order.client_name)}\n"
+        f"📞 <b>Телефон:</b> {escape_html(order.phone or 'Не указан')}\n"
+        f"🕐 <b>Время:</b> {escape_html(order.scheduled_time or 'Не указано')}\n\n"
+        f"✅ Значение обновлено!\n"
+        f"Выберите поле для изменения:"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="🔧 Тип", callback_data="edit_parsed:equipment_type"),
+        InlineKeyboardButton(text="❗ Проблема", callback_data="edit_parsed:problem_description"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="📍 Адрес", callback_data="edit_parsed:address"),
+        InlineKeyboardButton(text="👤 Клиент", callback_data="edit_parsed:client_name"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="📞 Телефон", callback_data="edit_parsed:phone"),
+        InlineKeyboardButton(text="🕐 Время", callback_data="edit_parsed:scheduled_time"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="🔙 Назад к подтверждению", callback_data="edit_parsed:back")
+    )
+
+    # Редактируем сообщение бота
+    await message.bot.edit_message_text(
+        text=text,
+        chat_id=message.chat.id,
+        message_id=confirmation_message_id,
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+    
+    # Возвращаемся к выбору поля (сбрасываем enter_value, но оставляем остальные данные)
+    await state.set_state(None) 

@@ -2176,8 +2176,7 @@ async def callback_admin_dr_order(callback: CallbackQuery, state: FSMContext, us
         await message_obj.answer(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n"
             f"<b>От имени мастера:</b> {master.get_display_name()}\n\n"
-            f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
-            f"<i>Если предоплаты не было - просто укажите срок.</i>",
+            f"Введите <b>примерный срок окончания ремонта</b>.",
             parse_mode="HTML",
         )
 

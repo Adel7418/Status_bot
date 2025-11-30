@@ -522,3 +522,55 @@ class ParserConfig(Base):
     )
 
     __table_args__ = (Index("idx_parser_config_enabled", "enabled"),)
+
+
+class ParserAnalytics(Base):
+    """Модель аналитики парсера заявок"""
+
+    __tablename__ = "parser_analytics"
+
+    # Основные поля
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="ID сообщения в Telegram"
+    )
+    group_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="ID группы-источника"
+    )
+    success: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, comment="Успешно распарсено?"
+    )
+    error_type: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="Тип ошибки парсинга"
+    )
+    parsed_equipment_type: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Распознанный тип техники"
+    )
+    parsed_address: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Распознанный адрес"
+    )
+    parsed_phone: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="Распознанный телефон"
+    )
+    confirmed: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, comment="Подтверждено пользователем?"
+    )
+    created_order_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="ID созданной заявки"
+    )
+    processing_time_ms: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Время обработки в миллисекундах"
+    )
+
+    # Системные поля
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Индексы
+    __table_args__ = (
+        Index("idx_parser_analytics_success", "success"),
+        Index("idx_parser_analytics_created_at", "created_at"),
+        Index("idx_parser_analytics_error_type", "error_type"),
+        Index("idx_parser_analytics_equipment_type", "parsed_equipment_type"),
+        Index("idx_parser_analytics_confirmed", "confirmed"),
+        Index("idx_parser_analytics_group", "group_id", "created_at"),
+    )

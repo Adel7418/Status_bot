@@ -638,8 +638,7 @@ async def callback_group_dr_order(callback: CallbackQuery, state: FSMContext, us
 
         await message_obj.reply(
             f"⏳ <b>ДР - Заявка #{order_id}</b>\n\n"
-            f"Введите <b>примерный срок окончания ремонта</b> и <b>предоплату</b> (если была).\n\n"
-            f"<i>Если предоплаты не было - просто укажите срок.</i>",
+            f"Введите <b>примерный срок окончания ремонта</b>.",
             parse_mode="HTML",
         )
 

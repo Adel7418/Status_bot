@@ -43,7 +43,7 @@ class OrderConfirmationService:
         """
         self.bot = bot
         self.on_confirm_callback = on_confirm_callback
-
+        self.on_reject_callback = None  # Callback для отклонения
         # Хранилище ожидающих подтверждения заявок
         # message_id (confirmation) → ConfirmationData
         self.pending_confirmations: dict[int, ConfirmationData] = {}
@@ -199,7 +199,21 @@ class OrderConfirmationService:
             lines.append(f"📞 <b>Телефон:</b> {order.phone}")
 
         if order.scheduled_time:
-            lines.append(f"🕐 <b>Время:</b> {order.scheduled_time}")
+            # Форматируем время с датой
+            from datetime import datetime
+            if isinstance(order.scheduled_time, datetime):
+                time_str = order.scheduled_time.strftime("%d.%m.%Y %H:%M")
+            elif isinstance(order.scheduled_time, str):
+                # Если это строка, пытаемся распарсить
+                try:
+                    dt = datetime.fromisoformat(order.scheduled_time.replace("Z", "+00:00"))
+                    time_str = dt.strftime("%d.%m.%Y %H:%M")
+                except:
+                    time_str = order.scheduled_time
+            else:
+                time_str = str(order.scheduled_time)
+            
+            lines.append(f"🕐 <b>Время:</b> {time_str}")
 
         return "\n".join(lines)
 
@@ -224,7 +238,13 @@ class OrderConfirmationService:
                         text="❌ Нет",
                         callback_data=f"confirm_order:no:{message_id}",
                     ),
-                ]
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="✏️ Редактировать",
+                        callback_data=f"edit_parsed_order:{message_id}",
+                    ),
+                ],
             ]
         )
 
