@@ -44,29 +44,6 @@ pre-commit:  ## Запустить pre-commit
 	pre-commit run --all-files
 
 # ========================================
-# DATABASE MIGRATIONS (local)
-# ========================================
-
-migrate:  ## Применить миграции локально
-	alembic upgrade head
-
-migrate-create:  ## Создать миграцию (make migrate-create MSG="описание")
-	@if [ -z "$(MSG)" ]; then \
-		echo "❌ Укажите MSG=\"описание\""; \
-		exit 1; \
-	fi
-	alembic revision --autogenerate -m "$(MSG)"
-
-migrate-history:  ## История миграций
-	alembic history
-
-migrate-current:  ## Текущая версия БД
-	alembic current
-
-migrate-rollback:  ## Откатить миграцию
-	alembic downgrade -1
-
-# ========================================
 # MULTIBOT (Docker: два бота + Redis)
 # ========================================
 
