@@ -12,6 +12,7 @@ from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, UpdateType
+from aiogram.types import BotCommand
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 
@@ -122,6 +123,20 @@ async def on_startup(bot: Bot, db: Database, scheduler: TaskScheduler):
     #         )
     #     except Exception as e:
     #         logger.error("Failed to notify admin %s: %s", admin_id, e)
+
+    # Установка команд бота
+    commands = [
+        BotCommand(command="start", description="Главное меню"),
+        BotCommand(command="help", description="Справка"),
+        BotCommand(command="create_order", description="Создать заявку"),
+        BotCommand(command="my_orders", description="Мои заявки"),
+        BotCommand(command="masters", description="Список мастеров"),
+        BotCommand(command="parser_status", description="Статус парсера"),
+        BotCommand(command="stats", description="Статистика парсера"),
+        BotCommand(command="auth", description="Авторизация парсера"),
+    ]
+    await bot.set_my_commands(commands)
+    logger.info("Команды бота обновлены")
 
     logger.info("Бот успешно запущен!")
 
