@@ -1954,6 +1954,20 @@ async def process_materials_confirmation_callback(callback_query: CallbackQuery,
         f"[MATERIALS_CONFIRM] Processing action: {action}, answer: {answer}, order_id: {order_id}"
     )
 
+    # Проверка статуса заявки
+    if order_id:
+        db = get_database()
+        await db.connect()
+        try:
+            order = await db.get_order_by_id(int(order_id))
+            if order and order.status == OrderStatus.CLOSED:
+                await callback_query.answer("❌ Заявка уже закрыта!", show_alert=True)
+                # Очищаем состояние, так как заявка закрыта
+                await state.clear()
+                return
+        finally:
+            await db.disconnect()
+
     if answer == "yes":
         # Удаляем предыдущее сообщение о подтверждении материалов
         try:
@@ -2083,6 +2097,19 @@ async def process_review_confirmation_callback(callback_query: CallbackQuery, st
     data = await state.get_data()
     order_id_from_state = data.get("order_id")
 
+    # Проверка статуса заявки
+    if order_id_from_state:
+        db = get_database()
+        await db.connect()
+        try:
+            order = await db.get_order_by_id(int(order_id_from_state))
+            if order and order.status == OrderStatus.CLOSED:
+                await callback_query.answer("❌ Заявка уже закрыта!", show_alert=True)
+                await state.clear()
+                return
+        finally:
+            await db.disconnect()
+
     # Отправляем новое сообщение вместо редактирования
     if callback_query.message is None:
         await callback_query.answer("❌ Сообщение недоступно", show_alert=True)
@@ -2179,6 +2206,15 @@ async def process_out_of_city_confirmation_callback(
             message_obj = callback_query.message
             if isinstance(message_obj, Message):
                 await message_obj.edit_text("❌ Ошибка: заявка не найдена.")
+            return
+
+        # Проверка на статус CLOSED
+        if order.status == OrderStatus.CLOSED:
+            await callback_query.answer("❌ Заявка уже закрыта!", show_alert=True)
+            message_obj = callback_query.message
+            if isinstance(message_obj, Message):
+                await message_obj.edit_text("❌ Заявка уже закрыта.")
+            await state.clear()
             return
 
         # Если не админ, проверяем мастера
