@@ -39,7 +39,7 @@ async def find_dismissed_masters_with_role(db: ORMDatabase) -> list[dict]:
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.models import Master, User
+    from app.database.models import Master, User
 
     async with db.get_session() as session:
         # Получаем всех пользователей с ролью MASTER
