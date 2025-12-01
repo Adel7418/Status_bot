@@ -8,12 +8,13 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from app.config import UserRole
 
 
-def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(role: str | list[str], chat_type: str = "private") -> ReplyKeyboardMarkup:
     """
     Получение главного меню в зависимости от роли
 
     Args:
         role: Роль пользователя (строка или список ролей)
+        chat_type: Тип чата ("private", "group", "supergroup")
 
     Returns:
         ReplyKeyboardMarkup
@@ -50,8 +51,8 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
         builder.row(KeyboardButton(text="🔍 Поиск заказов"), KeyboardButton(text="👥 Мастера"))
         builder.row(KeyboardButton(text="📊 Отчеты"), KeyboardButton(text="👤 Пользователи"))
         
-        # Если админ также является мастером - добавляем кнопки мастера
-        if has_master:
+        # Если админ также является мастером - добавляем кнопки мастера ТОЛЬКО в группе
+        if has_master and chat_type in ["group", "supergroup"]:
             builder.row(
                 KeyboardButton(text="📋 Мои заявки"), KeyboardButton(text="📊 Моя статистика")
             )

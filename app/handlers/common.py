@@ -21,17 +21,18 @@ logger = logging.getLogger(__name__)
 router = Router(name="common")
 
 
-async def get_menu_with_counter(user_roles: list[str]) -> ReplyKeyboardMarkup:
+async def get_menu_with_counter(user_roles: list[str], chat_type: str = "private") -> ReplyKeyboardMarkup:
     """
     Получение главного меню
 
     Args:
         user_roles: Список ролей пользователя
+        chat_type: Тип чата ("private", "group", "supergroup")
 
     Returns:
         ReplyKeyboardMarkup
     """
-    return get_main_menu_keyboard(user_roles)
+    return get_main_menu_keyboard(user_roles, chat_type=chat_type)
 
 
 @router.message(CommandStart())
@@ -104,8 +105,8 @@ async def cmd_start(
 
     logger.info("Sending welcome message...")
 
-    # Получаем меню с счетчиком новых заявок
-    menu_keyboard = await get_menu_with_counter(user_roles)
+    # Получаем меню с счетчиком новых заявок (передаем тип чата)
+    menu_keyboard = await get_menu_with_counter(user_roles, chat_type=message.chat.type)
 
     # Отправляем приветствие с клавиатурой
     await message.answer(welcome_text, reply_markup=menu_keyboard)
@@ -219,7 +220,7 @@ async def cmd_cancel(message: Message, state: FSMContext, user_role: str, user_r
     # Очищаем состояние
     await state.clear()
 
-    menu_keyboard = await get_menu_with_counter(user_roles)
+    menu_keyboard = await get_menu_with_counter(user_roles, chat_type=message.chat.type)
     await message.answer("❌ Действие отменено.", reply_markup=menu_keyboard)
 
     logger.info(
@@ -422,10 +423,10 @@ async def handle_unknown_text(message: Message, user_role: str, user_roles: list
         await message.answer(
             "❌ У вас нет доступа к системе.\n"
             "Обратитесь к администратору для получения доступа.",
-            reply_markup=get_main_menu_keyboard(user_roles),
+            reply_markup=get_main_menu_keyboard(user_roles, chat_type=message.chat.type),
         )
     else:
         await message.answer(
             "❓ Не понимаю эту команду. Используйте меню ниже или /help для справки.",
-            reply_markup=get_main_menu_keyboard(user_roles),
+            reply_markup=get_main_menu_keyboard(user_roles, chat_type=message.chat.type),
         )
