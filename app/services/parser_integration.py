@@ -553,24 +553,55 @@ class ParserIntegration:
                     created_order_id=new_order.id,
                 )
                 
+
                 self.logger.info(f"Заявка #{new_order.id} создана из распарсенного сообщения {order.message_id}")
 
-                # Отправляем уведомление диспетчерам
+                # Уведомления
+                from app.utils.helpers import escape_html, safe_send_message
+                
+                # 1. Уведомление в группу (если настроено)
                 if Config.DISPATCHER_GROUP_ID:
-                    message_text = f"✅ <b>Заявка #{new_order.id} создана из парсера!</b>\n\n"
-                    message_text += f"🔧 {order.equipment_type}\n"
-                    message_text += f"📍 {order.address}\n"
-                    message_text += f"📞 {order.phone or 'не указан'}"
+                    group_message_text = f"✅ <b>Заявка #{new_order.id} создана из парсера!</b>\n\n"
+                    group_message_text += f"🔧 {order.equipment_type}\n"
+                    group_message_text += f"📍 {order.address}\n"
+                    group_message_text += f"📞 {order.phone or 'не указан'}"
 
                     # Добавляем информацию о времени, если оно указано
                     if order.scheduled_time:
-                        message_text += f"\n⏰ Время: {order.scheduled_time}"
+                        group_message_text += f"\n⏰ Время: {order.scheduled_time}"
 
                     await self.bot.send_message(
                         chat_id=Config.DISPATCHER_GROUP_ID,
-                        text=message_text,
+                        text=group_message_text,
                         parse_mode="HTML",
                     )
+                
+                # 2. Уведомления в личку всем админам и диспетчерам (как при ручном создании)
+                admins_and_dispatchers = await self.db.get_admins_and_dispatchers()
+                
+                notification_text = (
+                    f"🆕 <b>Новая заявка #{new_order.id} из парсера</b>\n\n"
+                    f"🔧 Тип: {escape_html(order.equipment_type)}\n"
+                    f"📝 {escape_html(order.problem_description)}\n\n"
+                    f"👤 Клиент: {escape_html(order.client_name)}\n"
+                    f"📍 {escape_html(order.address)}\n"
+                    f"📞 {order.phone or 'не указан'}\n"
+                )
+                
+                if order.scheduled_time:
+                    notification_text += f"\n⏰ Прибытие: {escape_html(order.scheduled_time)}"
+                
+                notification_text += "\n\n⚠️ <b>Требует назначения мастера!</b>"
+                
+                # Отправляем уведомления каждому диспетчеру в личку
+                for user in admins_and_dispatchers:
+                    try:
+                        await safe_send_message(
+                            self.bot, user.telegram_id, notification_text, parse_mode="HTML"
+                        )
+                        self.logger.info(f"Уведомление отправлено {user.telegram_id} о заявке #{new_order.id} из парсера")
+                    except Exception as e:
+                        self.logger.error(f"Не удалось уведомить пользователя {user.telegram_id}: {e}")
 
         except Exception as e:
             self.logger.exception(
