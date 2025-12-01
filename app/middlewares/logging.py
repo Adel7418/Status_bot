@@ -77,6 +77,7 @@ class LoggingMiddleware(BaseMiddleware):
             chat_type = event.chat.type
             text_preview = ""
 
+
             if event.text:
                 # Показываем первые 50 символов текста
                 text_preview = event.text[:50]
@@ -93,6 +94,12 @@ class LoggingMiddleware(BaseMiddleware):
             else:
                 text_preview = "[other media]"
 
+            # Импортируем функцию маскирования
+            from app.utils.pii_masking import sanitize_log_message
+            
+            # Маскируем чувствительные данные (пароли, телефоны, email)
+            text_preview = sanitize_log_message(text_preview)
+            
             # Логируем текст с безопасной обработкой Unicode
             safe_text = text_preview.encode("ascii", "replace").decode("ascii")
             logger.log(

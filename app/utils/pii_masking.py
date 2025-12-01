@@ -259,6 +259,7 @@ def sanitize_log_message(message: str) -> str:
     Паттерны:
     - Телефоны: +7XXXXXXXXXX, 8XXXXXXXXXX
     - Email: xxx@xxx.xxx
+    - Пароли: слова длиннее 8 символов с буквами и цифрами
 
     Args:
         message: Исходное сообщение
@@ -272,7 +273,13 @@ def sanitize_log_message(message: str) -> str:
     )
 
     # Маскируем email
-    return re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]", message)
+    message = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]", message)
+    
+    # Маскируем возможные пароли (8+ символов с буквами и цифрами)
+    # Паттерн: слово содержит как минимум одну букву и одну цифру, длина 8+
+    message = re.sub(r"\b(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}\b", "[REDACTED]", message)
+    
+    return message
 
 
 # Константы для удобства
