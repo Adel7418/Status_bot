@@ -49,6 +49,13 @@ def get_main_menu_keyboard(role: str | list[str]) -> ReplyKeyboardMarkup:
         builder.row(KeyboardButton(text=all_orders_text), KeyboardButton(text="➕ Создать заявку"))
         builder.row(KeyboardButton(text="🔍 Поиск заказов"), KeyboardButton(text="👥 Мастера"))
         builder.row(KeyboardButton(text="📊 Отчеты"), KeyboardButton(text="👤 Пользователи"))
+        
+        # Если админ также является мастером - добавляем кнопки мастера
+        if has_master:
+            builder.row(
+                KeyboardButton(text="📋 Мои заявки"), KeyboardButton(text="📊 Моя статистика")
+            )
+        
         builder.row(KeyboardButton(text="⚙️ Настройки"))
 
     elif has_dispatcher or has_master:
