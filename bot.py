@@ -340,9 +340,6 @@ async def main():
         # Вызов startup функции перед запуском
         await on_startup(bot, db, scheduler)
 
-        # Запуск бота
-        logger.info("Запуск бота...")
-
         # Явно указываем только используемые типы updates
         allowed_updates_list = [
             UpdateType.MESSAGE,
