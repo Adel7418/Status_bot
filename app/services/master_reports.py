@@ -63,11 +63,22 @@ class MasterReportsService:
         # Получаем все заявки мастера
         all_orders = await self.db.get_orders_by_master(master_id, exclude_closed=False)
 
+
         # Фильтруем по периоду, если указан
         if period_start and period_end:
-            all_orders = [
-                o for o in all_orders if o.created_at and period_start <= o.created_at <= period_end
-            ]
+            from app.utils.helpers import MOSCOW_TZ
+
+            filtered_orders = []
+            for o in all_orders:
+                if o.created_at:
+                    # Убеждаемся что created_at имеет timezone
+                    created_at = o.created_at
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=MOSCOW_TZ)
+                    # Сравниваем timezone-aware datetimes
+                    if period_start <= created_at <= period_end:
+                        filtered_orders.append(o)
+            all_orders = filtered_orders
 
         # Разделяем на активные и завершенные (включаем REFUSED в завершенные)
         active_orders = [
