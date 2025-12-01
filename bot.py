@@ -128,9 +128,6 @@ async def on_startup(bot: Bot, db: Database, scheduler: TaskScheduler):
     commands = [
         BotCommand(command="start", description="Главное меню"),
         BotCommand(command="help", description="Справка"),
-        BotCommand(command="create_order", description="Создать заявку"),
-        BotCommand(command="my_orders", description="Мои заявки"),
-        BotCommand(command="masters", description="Список мастеров"),
         BotCommand(command="parser_status", description="Статус парсера"),
         BotCommand(command="parser_stats", description="Статистика парсера"),
         BotCommand(command="parser_auth", description="Авторизация парсера"),
