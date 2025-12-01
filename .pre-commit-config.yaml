@@ -48,7 +48,7 @@ repos:
       - id: mypy
         name: MyPy type checking
         additional_dependencies: [types-python-dateutil]
-        args: [--ignore-missing-imports, --no-strict-optional, --python-version=3.11]
+        args: [--ignore-missing-imports, --no-strict-optional, --python-version=3.12]
         exclude: ^(tests/|migrations/|scripts/)
         # Для ускорения можно добавить: stages: [push]
 
@@ -84,9 +84,9 @@ repos:
   #       stages: [pre-push]
 
 # Конфигурация для отдельных хуков
-# Используем python3.11 для совместимости с CI/CD и локальным окружением
+# Используем python3.12 для совместимости с текущим окружением
 default_language_version:
-  python: python3.11
+  python: python3.12
 
 
 # Какие файлы исключить

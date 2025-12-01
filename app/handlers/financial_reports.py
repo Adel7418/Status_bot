@@ -278,6 +278,81 @@ def get_monthly_master_report_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def get_custom_daily_date_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора произвольной даты (последние 7 дней)"""
+    today = get_now()
+    keyboard = []
+
+    # Добавляем последние 7 дней
+    for i in range(7):
+        date = today - timedelta(days=i)
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"📅 {date.strftime('%d.%m.%Y')} ({date.strftime('%A')})",
+                callback_data=f"daily_master_report_{date.strftime('%Y-%m-%d')}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="report_daily_master_summary"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_custom_weekly_date_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора произвольной недели (последние 4 недели)"""
+    today = get_now()
+    keyboard = []
+
+    # Добавляем последние 4 недели
+    for i in range(4):
+        # Вычисляем начало недели (понедельник)
+        days_offset = today.weekday() + (7 * i)
+        week_start = today - timedelta(days=days_offset)
+        week_end = week_start + timedelta(days=6)
+
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"📅 {week_start.strftime('%d.%m')} - {week_end.strftime('%d.%m.%Y')}",
+                callback_data=f"weekly_master_report_{week_start.strftime('%Y-%m-%d')}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="report_weekly_master_summary"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_custom_monthly_date_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора произвольного месяца (последние 6 месяцев)"""
+    today = get_now()
+    keyboard = []
+
+    # Добавляем последние 6 месяцев
+    for i in range(6):
+        # Вычисляем начало месяца
+        if i == 0:
+            month_start = today.replace(day=1)
+        else:
+            # Переходим к предыдущему месяцу
+            month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+            for _ in range(i - 1):
+                month_start = (month_start - timedelta(days=1)).replace(day=1)
+
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"📅 {month_start.strftime('%B %Y')}",
+                callback_data=f"monthly_master_report_{month_start.strftime('%Y-%m-%d')}",
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="report_monthly_master_summary"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
 def get_report_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
     """Клавиатура действий с отчетом"""
     keyboard = [
@@ -1002,6 +1077,48 @@ async def callback_report_monthly_master_summary(callback: CallbackQuery, user_r
         callback,
         "📊 <b>Ежемесячная сводка по мастерам</b>\n\n" "Выберите месяц:",
         reply_markup=get_monthly_master_report_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "select_daily_master_date")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_select_daily_master_date(callback: CallbackQuery, user_role: str):
+    """Выбор произвольной даты для ежедневной сводки по мастерам"""
+    await safe_edit_message(
+        callback,
+        "📅 <b>Выбор даты</b>\n\n"
+        "Выберите дату для генерации ежедневной сводки по мастерам:",
+        reply_markup=get_custom_daily_date_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "select_weekly_master_date")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_select_weekly_master_date(callback: CallbackQuery, user_role: str):
+    """Выбор произвольной недели для еженедельной сводки по мастерам"""
+    await safe_edit_message(
+        callback,
+        "📅 <b>Выбор недели</b>\n\n"
+        "Выберите неделю для генерации еженедельной сводки по мастерам:",
+        reply_markup=get_custom_weekly_date_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "select_monthly_master_date")
+@require_role([UserRole.ADMIN, UserRole.DISPATCHER])
+@handle_errors
+async def callback_select_monthly_master_date(callback: CallbackQuery, user_role: str):
+    """Выбор произвольного месяца для ежемесячной сводки по мастерам"""
+    await safe_edit_message(
+        callback,
+        "📅 <b>Выбор месяца</b>\n\n"
+        "Выберите месяц для генерации ежемесячной сводки по мастерам:",
+        reply_markup=get_custom_monthly_date_keyboard(),
     )
     await callback.answer()
 
