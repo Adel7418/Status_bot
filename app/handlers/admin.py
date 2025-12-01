@@ -1170,6 +1170,13 @@ async def callback_fire_master(callback: CallbackQuery, user_role: str):
                 parse_mode="HTML",
             )
 
+
+        # Удаляем роль MASTER у пользователя (чтобы он потерял доступ к боту)
+        await db.remove_user_role(telegram_id, UserRole.MASTER)
+
+        # Также удаляем роль SENIOR_MASTER если есть
+        await db.remove_user_role(telegram_id, UserRole.SENIOR_MASTER)
+
         # Удаляем мастера из системы
         await db.delete_master(telegram_id)
 
