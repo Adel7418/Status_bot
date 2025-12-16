@@ -90,6 +90,14 @@ class Config:
     # По умолчанию выключено, чтобы не ломать прод при установке зависимостей
     USE_ORM: bool = os.getenv("USE_ORM", "false").lower() in ("true", "1", "yes")
 
+    # Фича-флаг: бонус за отзыв (10% от чистой прибыли мастеру)
+    # Включается только для city1 через env.city1
+    REVIEW_BONUS_ENABLED: bool = os.getenv("REVIEW_BONUS_ENABLED", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
     # Интервал проверки SLA заявок (в минутах)
     SLA_CHECK_INTERVAL: int = int(os.getenv("SLA_CHECK_INTERVAL", "30"))
 

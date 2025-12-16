@@ -2314,6 +2314,10 @@ async def process_out_of_city_confirmation_callback(
         bonus_text = ""
         if out_of_city:
             bonus_text += " + бонус за выезд"
+        if has_review:
+            from app.core.config import Config
+            if Config.REVIEW_BONUS_ENABLED:
+                bonus_text += " + бонус за отзыв"
 
         # Обновляем суммы в базе данных
         await db.update_order_amounts(

@@ -116,3 +116,76 @@ def test_calculate_profit_split_equipment_type():
     net_profit = 5000
     assert master_profit == net_profit * 0.5  # 2500
     assert company_profit == net_profit * 0.5  # 2500
+
+
+def test_calculate_profit_split_with_review_bonus(monkeypatch):
+    """Тест расчета прибыли с бонусом за отзыв (когда REVIEW_BONUS_ENABLED=true)."""
+    # Имитируем включенный бонус за отзыв
+    from app.core import config
+
+    monkeypatch.setattr(config.Config, "REVIEW_BONUS_ENABLED", True)
+
+    # Net profit >= 7000 (50/50) + 10% review bonus
+    master_profit, company_profit = calculate_profit_split(
+        total_amount=10000, materials_cost=2000, has_review=True
+    )
+    net_profit = 8000
+    base_master_profit = net_profit * 0.5  # 4000
+    review_bonus = net_profit * 0.1  # 800
+    expected_master_profit = base_master_profit + review_bonus  # 4800
+    expected_company_profit = net_profit - expected_master_profit  # 3200
+    assert master_profit == expected_master_profit
+    assert company_profit == expected_company_profit
+
+
+def test_calculate_profit_split_without_review_bonus_disabled(monkeypatch):
+    """Тест что бонус за отзыв НЕ применяется когда REVIEW_BONUS_ENABLED=false."""
+    from app.core import config
+
+    monkeypatch.setattr(config.Config, "REVIEW_BONUS_ENABLED", False)
+
+    # Net profit >= 7000 (50/50), отзыв есть, но бонус выключен
+    master_profit, company_profit = calculate_profit_split(
+        total_amount=10000, materials_cost=2000, has_review=True
+    )
+    net_profit = 8000
+    # Без бонуса - стандартная 50/50
+    assert master_profit == net_profit * 0.5  # 4000
+    assert company_profit == net_profit * 0.5  # 4000
+
+
+def test_calculate_profit_split_review_and_out_of_city(monkeypatch):
+    """Тест суммирования бонусов за отзыв и выезд за город."""
+    from app.core import config
+
+    monkeypatch.setattr(config.Config, "REVIEW_BONUS_ENABLED", True)
+
+    # Net profit >= 7000 (50/50) + 10% out_of_city + 10% review = +20% bonus
+    master_profit, company_profit = calculate_profit_split(
+        total_amount=10000, materials_cost=2000, has_review=True, out_of_city=True
+    )
+    net_profit = 8000
+    base_master_profit = net_profit * 0.5  # 4000
+    out_of_city_bonus = net_profit * 0.1  # 800
+    review_bonus = net_profit * 0.1  # 800
+    expected_master_profit = base_master_profit + out_of_city_bonus + review_bonus  # 5600
+    expected_company_profit = net_profit - expected_master_profit  # 2400
+    assert master_profit == expected_master_profit
+    assert company_profit == expected_company_profit
+
+
+def test_calculate_profit_split_no_review_no_bonus(monkeypatch):
+    """Тест что без отзыва бонус не начисляется, даже если функция включена."""
+    from app.core import config
+
+    monkeypatch.setattr(config.Config, "REVIEW_BONUS_ENABLED", True)
+
+    # Net profit >= 7000 (50/50), но отзыва нет
+    master_profit, company_profit = calculate_profit_split(
+        total_amount=10000, materials_cost=2000, has_review=False
+    )
+    net_profit = 8000
+    # Без отзыва - стандартная 50/50, бонус не применяется
+    assert master_profit == net_profit * 0.5  # 4000
+    assert company_profit == net_profit * 0.5  # 4000
+

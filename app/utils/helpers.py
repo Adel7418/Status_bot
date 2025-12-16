@@ -360,7 +360,7 @@ def calculate_profit_split(
     Args:
         total_amount: Общая сумма заказа
         materials_cost: Сумма расходного материала
-        has_review: Взял ли мастер отзыв у клиента (не влияет на расчет прибыли)
+        has_review: Взял ли мастер отзыв у клиента (+10% к прибыли если REVIEW_BONUS_ENABLED=true)
         out_of_city: Был ли выезд за город
         equipment_type: Тип техники в заявке (опционально, например "Электрика", "Сантехника")
         specialization_rate: Готовая процентная ставка (master_percentage, company_percentage) (опционально)
@@ -430,5 +430,13 @@ def calculate_profit_split(
         out_of_city_bonus = net_profit * 0.1
         master_profit += out_of_city_bonus
         company_profit -= out_of_city_bonus
+
+    # Если взят отзыв и функция включена - добавляем 10% к прибыли мастера
+    from app.core.config import Config
+
+    if has_review and Config.REVIEW_BONUS_ENABLED:
+        review_bonus = net_profit * 0.1
+        master_profit += review_bonus
+        company_profit -= review_bonus
 
     return (master_profit, company_profit)
