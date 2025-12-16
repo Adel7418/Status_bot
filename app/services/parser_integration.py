@@ -152,11 +152,86 @@ class ParserIntegration:
             )
             self.logger.info("🟢 Парсер успешно аутентифицирован и запущен")
             
+        except Exception as e:
+            # Обрабатываем ошибки аутентификации
+            error_message = self._format_auth_error(e)
+            self.logger.error(f"Ошибка аутентификации: {error_message}")
+            
+            # Отправляем понятное сообщение пользователю
+            await self.bot.send_message(
+                user_id,
+                f"❌ <b>Ошибка аутентификации:</b>\n\n{error_message}\n\n"
+                f"💡 Попробуйте снова: /parser_auth",
+                parse_mode="HTML"
+            )
+            raise
+            
         finally:
             self.auth_future = None
             self.password_future = None
             self._pending_password = None
             self.auth_user_id = None
+    
+    def _format_auth_error(self, error: Exception) -> str:
+        """
+        Форматирует ошибку аутентификации в понятное сообщение для пользователя.
+        
+        Args:
+            error: Исключение от Telethon
+            
+        Returns:
+            Понятное описание ошибки
+        """
+        error_str = str(error)
+        error_type = type(error).__name__
+        
+        # Telethon errors
+        if "PhoneCodeInvalid" in error_type or "PHONE_CODE_INVALID" in error_str:
+            return (
+                "🔢 <b>Неверный код подтверждения</b>\n\n"
+                "Проверьте код в Telegram и попробуйте снова.\n"
+                "Код действителен только несколько минут."
+            )
+        elif "PasswordHashInvalid" in error_type or "PASSWORD_HASH_INVALID" in error_str:
+            return (
+                "🔐 <b>Неверный пароль 2FA</b>\n\n"
+                "Проверьте пароль облачной аутентификации и попробуйте снова."
+            )
+        elif "PhoneCodeExpired" in error_type or "PHONE_CODE_EXPIRED" in error_str:
+            return (
+                "⏰ <b>Код подтверждения истек</b>\n\n"
+                "Запросите новый код и попробуйте снова."
+            )
+        elif "SessionPasswordNeeded" in error_type:
+            return (
+                "🔐 <b>Требуется пароль 2FA</b>\n\n"
+                "Ваш аккаунт защищен двухфакторной аутентификацией."
+            )
+        elif "FloodWait" in error_type or "FLOOD_WAIT" in error_str:
+            # Извлекаем время ожидания если есть
+            import re
+            match = re.search(r'(\d+)', error_str)
+            seconds = int(match.group(1)) if match else 60
+            minutes = seconds // 60
+            if minutes > 0:
+                return (
+                    f"⏳ <b>Слишком много попыток</b>\n\n"
+                    f"Подождите {minutes} минут и попробуйте снова."
+                )
+            else:
+                return (
+                    f"⏳ <b>Слишком много попыток</b>\n\n"
+                    f"Подождите {seconds} секунд и попробуйте снова."
+                )
+        elif "AuthRestart" in error_type:
+            return (
+                "🔄 <b>Процесс аутентификации сброшен</b>\n\n"
+                "Начните процесс заново с /parser_reset и /parser_auth"
+            )
+        else:
+            # Общая ошибка
+            return f"⚠️ {error_type}: {error_str}"
+
 
     def submit_auth_code(self, code: str) -> None:
         """Передает код подтверждения в ожидающий процесс аутентификации"""
