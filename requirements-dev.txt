@@ -37,7 +37,7 @@ safety==3.2.11
 # TYPE STUBS
 # ========================================
 
-types-python-dateutil==2.9.0.20241206
+types-python-dateutil==2.9.0.20251008
 
 # ========================================
 # DATABASE MIGRATIONS
