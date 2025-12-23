@@ -10,29 +10,8 @@ from dotenv import load_dotenv
 
 
 # Загрузка переменных окружения
-# Поддержка multibot: загружаем env.city1 если указано в переменной окружения ENV_FILE
-# Также проверяем наличие файла env.city1 напрямую для надежности
+# Поддержка multibot: загружаем env файл согласно переменной окружения ENV_FILE
 env_file = os.getenv("ENV_FILE", ".env")
-
-# Если ENV_FILE не установлен, проверяем наличие env.city1 напрямую
-# Используем текущую рабочую директорию (где запущен bot.py)
-if env_file == ".env":
-    # Проверяем наличие env.city1 в текущей рабочей директории
-    env_city1_path = os.path.join(os.getcwd(), "env.city1")
-    if os.path.exists(env_city1_path):
-        env_file = env_city1_path
-        logger = logging.getLogger(__name__)
-        logger.info("Обнаружен файл env.city1, используем его для загрузки конфигурации")
-    else:
-        # Также проверяем в директории проекта (где находится app/)
-        project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        env_city1_path = os.path.join(project_dir, "env.city1")
-        if os.path.exists(env_city1_path):
-            env_file = env_city1_path
-            logger = logging.getLogger(__name__)
-            logger.info(
-                "Обнаружен файл env.city1 в директории проекта, используем его для загрузки конфигурации"
-            )
 
 if env_file in ("env.city1", "env.city2") or (env_file != ".env" and "city" in env_file):
     # Используем абсолютный путь для надежности
@@ -91,7 +70,7 @@ class Config:
     USE_ORM: bool = os.getenv("USE_ORM", "false").lower() in ("true", "1", "yes")
 
     # Фича-флаг: бонус за отзыв (10% от чистой прибыли мастеру)
-    # Включается только для city1 через env.city1
+    # Включается через переменную окружения REVIEW_BONUS_ENABLED=true
     REVIEW_BONUS_ENABLED: bool = os.getenv("REVIEW_BONUS_ENABLED", "false").lower() in (
         "true",
         "1",

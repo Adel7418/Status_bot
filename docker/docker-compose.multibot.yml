@@ -17,6 +17,7 @@ services:
     env_file:
       - ../env.city1                 # специфичный для city1
     environment:
+      - ENV_FILE=env.city1           # Явно указываем файл конфигурации
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/0
       - PYTHONIOENCODING=utf-8
@@ -52,6 +53,7 @@ services:
     env_file:
       - ../env.city2                 # специфичный для city2
     environment:
+      - ENV_FILE=env.city2           # Явно указываем файл конфигурации
       - DATABASE_PATH=/app/data/bot_database.db
       - REDIS_URL=redis://redis:6379/1   # отдельная БД Redis для второго бота
       - PYTHONIOENCODING=utf-8
