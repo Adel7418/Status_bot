@@ -16,6 +16,7 @@ from app.utils.helpers import (
     format_date,
     format_datetime,
     format_phone,
+    get_city_key,
     get_now,
     get_user_display_name,
     log_action,
@@ -55,6 +56,8 @@ __all__ = [
     "format_datetime_user_friendly",
     "format_estimated_completion_with_days",
     "format_phone",
+    # City utilities
+    "get_city_key",
     # DateTime utilities
     "get_now",
     # User utilities
