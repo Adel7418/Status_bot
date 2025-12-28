@@ -62,12 +62,19 @@ class RoleCheckMiddleware(BaseMiddleware):
 
             # Добавляем пользователя и его роли в данные
             data["user"] = db_user
-            data["user_role"] = (
-                db_user.get_primary_role()
-            )  # Основная роль для обратной совместимости
-            data["user_roles"] = db_user.get_roles()  # Список всех ролей
+            primary_role = db_user.get_primary_role()
+            all_roles = db_user.get_roles()
+            data["user_role"] = primary_role  # Основная роль для обратной совместимости
+            data["user_roles"] = all_roles  # Список всех ролей
 
-            logger.debug("User %s with roles %s processed", user.id, db_user.get_roles())
+            logger.info(
+                "RoleCheckMiddleware: User %s - db_user.role='%s', primary_role='%s', all_roles=%s, data['user_role']='%s'",
+                user.id,
+                db_user.role,
+                primary_role,
+                all_roles,
+                data.get("user_role"),
+            )
 
         # Вызываем следующий handler
         return await handler(event, data)
