@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_sheet_name(name: str, max_length: int = 31) -> str:
-    """
+    r"""
     Очищает имя для использования в качестве названия листа Excel.
 
     Excel не допускает символы: : / \ ? * [ ]

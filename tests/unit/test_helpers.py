@@ -108,10 +108,15 @@ def test_calculate_profit_split_specialization_rate():
 
 
 def test_calculate_profit_split_equipment_type():
-    """Тест расчета для типа техники 'электрика'."""
-    # Для электрики всегда 50/50, даже если чистая прибыль < 7000
+    """Тест расчета для типа техники с переданной ставкой из БД."""
+    # После рефакторинга equipment_type не определяет ставку напрямую
+    # Ставка должна быть получена из БД и передана через specialization_rate
+    # Для электрики из БД: 50/50, даже если чистая прибыль < 7000
     master_profit, company_profit = calculate_profit_split(
-        total_amount=6000, materials_cost=1000, equipment_type="Электрика"
+        total_amount=6000,
+        materials_cost=1000,
+        equipment_type="Электрика",
+        specialization_rate=(50.0, 50.0),  # Ставка из БД
     )
     net_profit = 5000
     assert master_profit == net_profit * 0.5  # 2500
