@@ -118,8 +118,8 @@ async def callback_show_current_settings(callback: CallbackQuery, user_role: str
         f"🏙 <b>Город:</b> <code>{city_key}</code>\n"
         f"💰 <b>Порог процентной ставки:</b> {current_threshold:.2f} ₽\n\n"
         f"📊 <b>Как это работает:</b>\n"
-        f"• Если чистая прибыль ≥ {current_threshold:.2f} ₽ → ставка 50/50\n"
-        f"• Если чистая прибыль < {current_threshold:.2f} ₽ → ставка 40/60\n\n"
+        f"• Если чистая прибыль &gt;= {current_threshold:.2f} ₽ → ставка 50/50\n"
+        f"• Если чистая прибыль &lt; {current_threshold:.2f} ₽ → ставка 40/60\n\n"
         f"💡 <i>Чтобы изменить порог, нажмите кнопку ниже</i>"
     )
 
@@ -173,8 +173,8 @@ async def callback_set_profit_rate(callback: CallbackQuery, state: FSMContext, u
         f"Введите новое значение порога в рублях.\n"
         f"Например: <code>8000</code> или <code>8000.50</code>\n\n"
         f"📊 <b>Как это работает:</b>\n"
-        f"• Если мастер закрыл заявку на сумму ≥ порога → процентовка 50/50\n"
-        f"• Если сумма < порога → процентовка 40/60\n\n"
+        f"• Если мастер закрыл заявку на сумму &gt;= порога → процентовка 50/50\n"
+        f"• Если сумма &lt; порога → процентовка 40/60\n\n"
         f"💡 <i>Для отмены нажмите кнопку ниже</i>",
         parse_mode="HTML",
         reply_markup=get_cancel_keyboard(),
@@ -258,8 +258,8 @@ async def process_profit_rate_threshold(message: Message, state: FSMContext):
             f"🏙 Город: <code>{city_key}</code>\n"
             f"💰 Новый порог: <b>{threshold:.2f} ₽</b>\n\n"
             f"📊 <b>Теперь:</b>\n"
-            f"• Если чистая прибыль ≥ {threshold:.2f} ₽ → ставка 50/50\n"
-            f"• Если чистая прибыль < {threshold:.2f} ₽ → ставка 40/60",
+            f"• Если чистая прибыль &gt;= {threshold:.2f} ₽ → ставка 50/50\n"
+            f"• Если чистая прибыль &lt; {threshold:.2f} ₽ → ставка 40/60",
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard([UserRole.ADMIN]),
         )
