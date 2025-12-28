@@ -26,13 +26,14 @@ router = Router(name="settings")
 @router.message(Command("settings"))
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def cmd_settings(message: Message, state: FSMContext):
+async def cmd_settings(message: Message, state: FSMContext, user_role: str):
     """
     Команда /settings - главное меню настроек
 
     Args:
         message: Сообщение
         state: FSM контекст
+        user_role: Роль пользователя (инжектируется middleware)
     """
     # Получаем текущие настройки
     city_key = get_city_key()
@@ -90,12 +91,13 @@ async def cmd_settings(message: Message, state: FSMContext):
 @router.callback_query(F.data == "settings:show_current")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_show_current_settings(callback: CallbackQuery):
+async def callback_show_current_settings(callback: CallbackQuery, user_role: str):
     """
     Показать текущие настройки
 
     Args:
         callback: Callback query
+        user_role: Роль пользователя (инжектируется middleware)
     """
     city_key = get_city_key()
     db = get_database()
@@ -139,13 +141,14 @@ async def callback_show_current_settings(callback: CallbackQuery):
 @router.callback_query(F.data == "settings:profit_rate")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_set_profit_rate(callback: CallbackQuery, state: FSMContext):
+async def callback_set_profit_rate(callback: CallbackQuery, state: FSMContext, user_role: str):
     """
     Начало процесса настройки порога процентной ставки
 
     Args:
         callback: Callback query
         state: FSM контекст
+        user_role: Роль пользователя (инжектируется middleware)
     """
     city_key = get_city_key()
     db = get_database()
@@ -281,12 +284,13 @@ async def process_profit_rate_threshold(message: Message, state: FSMContext):
 @router.callback_query(F.data == "settings:back")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_settings_back(callback: CallbackQuery):
+async def callback_settings_back(callback: CallbackQuery, user_role: str):
     """
     Возврат в главное меню настроек
 
     Args:
         callback: Callback query
+        user_role: Роль пользователя (инжектируется middleware)
     """
     # Повторно вызываем главное меню настроек
     city_key = get_city_key()
@@ -343,12 +347,13 @@ async def callback_settings_back(callback: CallbackQuery):
 @router.callback_query(F.data == "settings:specialization_rates")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_specialization_rates_menu(callback: CallbackQuery):
+async def callback_specialization_rates_menu(callback: CallbackQuery, user_role: str):
     """
     Меню управления ставками по типам техники
 
     Args:
         callback: Callback query
+        user_role: Роль пользователя (инжектируется middleware)
     """
     db = get_database()
 
@@ -409,13 +414,14 @@ async def callback_specialization_rates_menu(callback: CallbackQuery):
 @router.callback_query(F.data == "settings:add_rate")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_add_specialization_rate(callback: CallbackQuery, state: FSMContext):
+async def callback_add_specialization_rate(callback: CallbackQuery, state: FSMContext, user_role: str):
     """
     Начало процесса добавления ставки
 
     Args:
         callback: Callback query
         state: FSM контекст
+        user_role: Роль пользователя (инжектируется middleware)
     """
     await state.set_state(SettingsStates.enter_equipment_type)
 
@@ -589,12 +595,13 @@ async def process_master_percentage(message: Message, state: FSMContext):
 @router.callback_query(F.data == "settings:delete_rate_list")
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_delete_rate_list(callback: CallbackQuery):
+async def callback_delete_rate_list(callback: CallbackQuery, user_role: str):
     """
     Список ставок для удаления
 
     Args:
         callback: Callback query
+        user_role: Роль пользователя (инжектируется middleware)
     """
     db = get_database()
 
@@ -642,12 +649,13 @@ async def callback_delete_rate_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("settings:delete_rate:"))
 @require_role(UserRole.ADMIN)
 @handle_errors
-async def callback_delete_rate_confirm(callback: CallbackQuery):
+async def callback_delete_rate_confirm(callback: CallbackQuery, user_role: str):
     """
     Подтверждение удаления ставки
 
     Args:
         callback: Callback query
+        user_role: Роль пользователя (инжектируется middleware)
     """
     if not callback.data:
         return
