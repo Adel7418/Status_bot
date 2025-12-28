@@ -44,6 +44,56 @@ pre-commit:  ## Запустить pre-commit
 	pre-commit run --all-files
 
 # ========================================
+# LOCAL DEV (Docker на локальной машине)
+# ========================================
+
+DEV_COMPOSE = docker-compose.dev.yml
+
+dev-start:  ## 🚀 Запустить dev бота (локально)
+	@echo "🚀 Запуск dev бота..."
+	@mkdir -p data/city1 logs/city1 backups/city1 data/redis
+	@docker-compose -f $(DEV_COMPOSE) up -d
+	@echo "✅ Dev бот запущен!"
+	@echo "📋 Логи: make dev-logs"
+
+dev-stop:  ## Остановить dev бота
+	@echo "🛑 Остановка dev бота..."
+	@docker-compose -f $(DEV_COMPOSE) down
+	@echo "✅ Остановлен"
+
+dev-restart:  ## 🔄 Перезапустить dev бота (быстро)
+	@echo "🔄 Перезапуск dev бота..."
+	@docker-compose -f $(DEV_COMPOSE) restart bot_city1
+	@echo "✅ Перезапущен! (Логи: make dev-logs)"
+
+dev-rebuild:  ## 🏗️ Пересобрать и запустить (если изменились зависимости)
+	@echo "🏗️ Пересборка dev бота..."
+	@docker-compose -f $(DEV_COMPOSE) up -d --build
+	@echo "✅ Пересобран и запущен!"
+
+dev-logs:  ## 📋 Логи dev бота (real-time)
+	@docker-compose -f $(DEV_COMPOSE) logs -f --tail=30 bot_city1
+
+dev-logs-all:  ## 📋 Все логи (с начала)
+	@docker-compose -f $(DEV_COMPOSE) logs -f bot_city1
+
+dev-status:  ## Статус dev контейнеров
+	@docker-compose -f $(DEV_COMPOSE) ps
+
+dev-shell:  ## Войти в dev контейнер
+	@docker-compose -f $(DEV_COMPOSE) exec bot_city1 bash
+
+dev-migrate:  ## Применить миграции (dev)
+	@echo "🔄 Миграции dev..."
+	@docker-compose -f $(DEV_COMPOSE) exec bot_city1 alembic upgrade head
+	@echo "✅ Миграции применены"
+
+dev-clean:  ## 🗑️ Удалить контейнеры и volumes
+	@echo "🗑️ Очистка dev окружения..."
+	@docker-compose -f $(DEV_COMPOSE) down -v
+	@echo "✅ Очищено"
+
+# ========================================
 # MULTIBOT (Docker: два бота + Redis)
 # ========================================
 
