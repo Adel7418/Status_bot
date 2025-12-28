@@ -170,7 +170,7 @@ class MasterReportsService:
             await self.db.disconnect()
 
     async def _get_closed_orders_in_period(self, start_date: datetime, end_date: datetime) -> list:
-        """Получение закрытых заказов за период"""
+        """Получение закрытых и отказанных заказов за период"""
         # Убеждаемся, что даты имеют часовой пояс
         if start_date.tzinfo is None:
             start_date = start_date.replace(tzinfo=MOSCOW_TZ)
@@ -181,7 +181,8 @@ class MasterReportsService:
 
         closed_orders = []
         for order in all_orders:
-            if order.status == OrderStatus.CLOSED and order.updated_at:
+            # Включаем как CLOSED, так и REFUSED заказы
+            if order.status in [OrderStatus.CLOSED, OrderStatus.REFUSED] and order.updated_at:
                 # Убеждаемся, что order.updated_at имеет часовой пояс
                 order_updated_at = order.updated_at
                 if order_updated_at.tzinfo is None:
@@ -473,11 +474,12 @@ class MasterReportsService:
         cell_b1.alignment = center_alignment
 
         ws.row_dimensions[1].height = 25
-        # Определяем заголовки в зависимости от типа отчета
+        # Определяем заголовки в зависимости от типа отчета (добавляем колонку "Статус")
         if report_type == "monthly":
             # Для ежемесячных отчетов добавляем дату выполнения и материалы
             headers = [
                 "№ Заказа",
+                "Статус",
                 "Сумма",
                 "Материалы",
                 "Тип техники",
@@ -487,12 +489,13 @@ class MasterReportsService:
                 "Отзыв",
             ]
             # Растягиваем заголовок на остальные столбцы
-            for col in range(3, 9):  # C1:H1
+            for col in range(3, 10):  # C1:I1 (добавлен один столбец)
                 ws.cell(row=1, column=col).fill = header_fill
         elif report_type == "weekly":
             # Для еженедельных отчетов добавляем дату выполнения
             headers = [
                 "№ Заказа",
+                "Статус",
                 "Сумма",
                 "Тип техники",
                 "Сумма к сдаче",
@@ -501,13 +504,13 @@ class MasterReportsService:
                 "Отзыв",
             ]
             # Растягиваем заголовок на остальные столбцы
-            for col in range(3, 8):  # C1:G1
+            for col in range(3, 9):  # C1:H1 (добавлен один столбец)
                 ws.cell(row=1, column=col).fill = header_fill
         else:
             # Для ежедневных отчетов без даты выполнения
-            headers = ["№ Заказа", "Сумма", "Тип техники", "Сумма к сдаче", "Выезд", "Отзыв"]
+            headers = ["№ Заказа", "Статус", "Сумма", "Тип техники", "Сумма к сдаче", "Выезд", "Отзыв"]
             # Растягиваем заголовок на остальные столбцы
-            for col in range(3, 7):  # C1:F1
+            for col in range(3, 8):  # C1:G1 (добавлен один столбец)
                 ws.cell(row=1, column=col).fill = header_fill
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=3, column=col_idx, value=header)
@@ -519,6 +522,9 @@ class MasterReportsService:
         # Данные по заказам
         row = 4
         for order in orders:
+            # Получаем статус заказа
+            status_emoji = "✅" if order.status == OrderStatus.CLOSED else "❌"
+            
             if report_type == "monthly":
                 # Для ежемесячных отчетов добавляем дату выполнения и материалы
                 completion_date = ""
@@ -530,6 +536,7 @@ class MasterReportsService:
 
                 data = [
                     order.id,
+                    status_emoji,
                     total_order_amount,
                     order.materials_cost or 0,
                     order.equipment_type or "",
@@ -551,6 +558,7 @@ class MasterReportsService:
 
                 data = [
                     order.id,
+                    status_emoji,
                     net_total,
                     order.equipment_type or "",
                     order.company_profit or 0,  # Чистая прибыль компании
@@ -566,6 +574,7 @@ class MasterReportsService:
 
                 data = [
                     order.id,
+                    status_emoji,
                     net_total,
                     order.equipment_type or "",
                     order.company_profit or 0,  # Чистая прибыль компании
@@ -577,29 +586,29 @@ class MasterReportsService:
                 cell = ws.cell(row=row, column=col_idx, value=value)
                 cell.font = data_font
                 cell.border = thin_border
-                # Для ежемесячных: колонка 1 (№ Заказа) и 4 (Тип техники) - выравнивание по левому краю
-                # Для еженедельных и ежедневных: колонка 1 (№ Заказа) и 3 (Тип техники) - выравнивание по левому краю
+                # Для ежемесячных: колонка 1 (№ Заказа) и 5 (Тип техники) - выравнивание по левому краю
+                # Для еженедельных и ежедневных: колонка 1 (№ Заказа) и 4 (Тип техники) - выравнивание по левому краю
                 if report_type == "monthly":
-                    cell.alignment = left_alignment if col_idx in [1, 4] else center_alignment
+                    cell.alignment = left_alignment if col_idx in [1, 5] else center_alignment
                 else:
-                    cell.alignment = left_alignment if col_idx in [1, 3] else center_alignment
+                    cell.alignment = left_alignment if col_idx in [1, 4] else center_alignment
 
                 # Форматируем числа
                 if report_type == "monthly":
-                    if col_idx in [2, 3, 5]:  # Сумма, Материалы, Сумма к сдаче
+                    if col_idx in [3, 4, 6]:  # Сумма, Материалы, Сумма к сдаче
                         cell.number_format = "#,##0.00"
-                elif col_idx in [2, 4]:  # Суммы
+                elif col_idx in [3, 5]:  # Суммы (индексы сдвинулись из-за добавления столбца "Статус")
                     cell.number_format = "#,##0.00"
 
             row += 1
 
-        # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения)
+        # Устанавливаем ширину столбцов (увеличиваем для лучшего отображения, добавляем новый столбец)
         column_widths: dict[str, int]
         if report_type == "monthly":
-            column_widths = {"A": 16, "B": 18, "C": 18, "D": 25, "E": 18, "F": 20, "G": 12, "H": 12}
+            column_widths = {"A": 16, "B": 12, "C": 18, "D": 18, "E": 25, "F": 18, "G": 20, "H": 12, "I": 12}
         elif report_type == "weekly":
-            column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 20, "F": 12, "G": 12}
+            column_widths = {"A": 16, "B": 12, "C": 18, "D": 25, "E": 18, "F": 20, "G": 12, "H": 12}
         else:
-            column_widths = {"A": 16, "B": 18, "C": 25, "D": 18, "E": 12, "F": 12}
+            column_widths = {"A": 16, "B": 12, "C": 18, "D": 25, "E": 18, "F": 12, "G": 12}
         for col_letter, width in column_widths.items():
             ws.column_dimensions[col_letter].width = width
