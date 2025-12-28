@@ -3,6 +3,7 @@
 """
 
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from html import escape
@@ -16,6 +17,35 @@ logger = logging.getLogger(__name__)
 
 # Московский часовой пояс (UTC+3)
 MOSCOW_TZ = timezone(timedelta(hours=3))
+
+
+def get_city_key() -> str:
+    """
+    Получить ключ текущего города из переменной окружения ENV_FILE
+
+    Формат:
+    - "env.city1" -> "city1"
+    - "env.city2" -> "city2"
+    - ".env" или не задано -> "default"
+
+    Returns:
+        str: Ключ города для использования в настройках
+    """
+    env_file = os.getenv("ENV_FILE", ".env")
+
+    # Извлекаем название города из ENV_FILE
+    if env_file.startswith("env."):
+        city_key = env_file.replace("env.", "")
+        return city_key
+    elif "city" in env_file.lower():
+        # Если есть слово "city" в имени, пытаемся извлечь ключ
+        # Например: "env_city1.env" -> "city1"
+        match = re.search(r"city\d+", env_file.lower())
+        if match:
+            return match.group()
+
+    # По умолчанию возвращаем "default"
+    return "default"
 
 
 def get_now() -> datetime:
@@ -343,28 +373,31 @@ def calculate_profit_split(
     equipment_type: str | None = None,
     specialization_rate: tuple[float, float] | None = None,
     master_roles: list[str] | None = None,
+    profit_rate_threshold: float = 7000.0,
 ) -> tuple[float, float]:
     """
     Расчет распределения прибыли между мастером и компанией
 
     Правила определения процентной ставки:
-    1. Если передана готовая ставка (specialization_rate) - используется она
-    2. Если указан тип техники (equipment_type):
-       - "электрик" или "сантехник" - ставка 50/50
-       - "холодильник" - 50/50 до 20000, 60/40 после 20000 (в пользу мастера)
-    3. Если ничего не найдено:
-       - Чистая прибыль >= 7000: 50% мастеру, 50% компании
-       - Чистая прибыль < 7000: 40% мастеру, 60% компании
-    - Если выезд за город: +10% от чистой прибыли мастеру (вычитается из прибыли компании)
+    1. Если передана готовая ставка (specialization_rate) из БД - используется она
+    2. Если тип техники "холодильник" - особая логика (50/50 до 20000, 60/40 после)
+    3. Иначе используется стандартная логика с порогом:
+       - Чистая прибыль >= profit_rate_threshold: 50% мастеру, 50% компании
+       - Чистая прибыль < profit_rate_threshold: 40% мастеру, 60% компании
+    
+    Бонусы:
+    - Выезд за город: +10% от чистой прибыли мастеру
+    - Отзыв (если REVIEW_BONUS_ENABLED=true): +10% от чистой прибыли мастеру
 
     Args:
         total_amount: Общая сумма заказа
         materials_cost: Сумма расходного материала
         has_review: Взял ли мастер отзыв у клиента (+10% к прибыли если REVIEW_BONUS_ENABLED=true)
-        out_of_city: Был ли выезд за город
-        equipment_type: Тип техники в заявке (опционально, например "Электрика", "Сантехника")
-        specialization_rate: Готовая процентная ставка (master_percentage, company_percentage) (опционально)
+        out_of_city: Был ли выезд за город (+10% к прибыли)
+        equipment_type: Тип техники в заявке (опционально)
+        specialization_rate: Готовая процентная ставка из БД (master_percentage, company_percentage)
         master_roles: Список ролей мастера (опционально)
+        profit_rate_threshold: Порог для процентной ставки 50/50 (по умолчанию 7000.0)
 
     Returns:
         Кортеж (прибыль мастера, прибыль компании)
@@ -374,49 +407,27 @@ def calculate_profit_split(
 
     # Определяем базовый процент
     if specialization_rate:
-        # Используем переданную ставку
+        # Приоритет 1: Используем ставку из БД (specialization_rates)
         master_percentage, company_percentage = specialization_rate
         master_profit = net_profit * (master_percentage / 100)
         company_profit = net_profit * (company_percentage / 100)
-    elif equipment_type:
-        # Проверяем тип техники
-        equipment_lower = equipment_type.lower()
-        if "электрик" in equipment_lower or "электрика" in equipment_lower:
-            # Используем ставку 50/50 для электрики
+    elif equipment_type and "холодильник" in equipment_type.lower():
+        # Особый случай для холодильников: прогрессивная ставка
+        # TODO: В будущем можно вынести в БД с поддержкой диапазонов сумм
+        if net_profit < 20000:
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
-        elif "сантехник" in equipment_lower or "сантехника" in equipment_lower:
-            # Используем ставку 50/50 для сантехники
-            master_profit = net_profit * 0.5
-            company_profit = net_profit * 0.5
-        elif (
-            "водонагревател" in equipment_lower
-        ):  # Проверяем на "водонагревател" для учета словоформ
-            # Используем ставку 50/50 для водонагревателей
-            master_profit = net_profit * 0.5
-            company_profit = net_profit * 0.5
-        elif "холодильник" in equipment_lower:
-            # Для холодильников: 50/50 до 20000, 60/40 после 20000 в пользу мастера
-            if net_profit < 20000:
-                master_profit = net_profit * 0.5
-                company_profit = net_profit * 0.5
-            else:
-                master_profit = net_profit * 0.6
-                company_profit = net_profit * 0.4
-        # Стандартная логика для других типов техники
-        elif net_profit >= 7000:
+        else:
+            master_profit = net_profit * 0.6
+            company_profit = net_profit * 0.4
+    else:
+        # Приоритет 2: Стандартная логика с порогом из настроек
+        if net_profit >= profit_rate_threshold:
             master_profit = net_profit * 0.5
             company_profit = net_profit * 0.5
         else:
             master_profit = net_profit * 0.4
             company_profit = net_profit * 0.6
-    # Стандартная логика
-    elif net_profit >= 7000:
-        master_profit = net_profit * 0.5
-        company_profit = net_profit * 0.5
-    else:
-        master_profit = net_profit * 0.4
-        company_profit = net_profit * 0.6
 
     # Если мастер - старший или админ, его процент не может быть меньше 50%
     if master_roles and ("SENIOR_MASTER" in master_roles or "ADMIN" in master_roles):

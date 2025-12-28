@@ -14,6 +14,7 @@ from app.handlers.order_edit import router as order_edit_router
 from app.handlers.order_search import router as order_search_router
 from app.handlers.parser_config import router as parser_config_router
 from app.handlers.parser_stats import router as parser_stats_router
+from app.handlers.settings import router as settings_router
 from app.handlers.template import router as template_router
 
 
@@ -24,9 +25,11 @@ from app.handlers.template import router as template_router
 # admin_history_router для работы с историей заявок
 # order_edit_router для редактирования заявок
 # parser_config_router для настройки парсера (только админы)
+# settings_router для настроек бота (только админы)
 routers = [
     developer_router,
     admin_router,
+    settings_router,  # Настройки бота
     parser_config_router,  # Настройка парсера
     parser_stats_router,  # Статистика парсера
     admin_history_router,

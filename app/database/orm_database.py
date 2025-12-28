@@ -1445,14 +1445,17 @@ class ORMDatabase:
         self, equipment_type: str | None = None
     ) -> tuple[float, float] | None:
         """
-        Получение процентной ставки для типа техники
+        Получение процентной ставки для типа техники из БД
 
-        Проверяет тип техники в заявке (equipment_type):
-        - Если содержит "электрик" или "электрика" - используется ставка 50/50
-        - Если содержит "сантехник" или "сантехника" - используется ставка 50/50
-        - Если содержит "холодильник" - используется ставка 50/50
-        - Если содержит "водонагреватель" или "бойлер" - используется ставка 50/50
-        - Если ничего не найдено, возвращается None (используется стандартная логика)
+        Алгоритм поиска:
+        1. Точное совпадение по specialization_name (case-insensitive)
+        2. Частичное совпадение по specialization_name (LIKE %equipment_type%)
+        3. Частичное совпадение наоборот (equipment_type содержит specialization_name)
+
+        Примеры:
+        - equipment_type="Электрика" → найдет "Электрика" в БД
+        - equipment_type="Ремонт электрики" → найдет "Электрика" в БД
+        - equipment_type="Сантехника установка" → найдет "Сантехника" в БД
 
         Args:
             equipment_type: Тип техники в заявке (например, "Электрика", "Сантехника")
@@ -1463,47 +1466,40 @@ class ORMDatabase:
         if not equipment_type:
             return None
 
+        from app.database.orm_models import SpecializationRate
+
         async with self.get_session() as session:
             equipment_lower = equipment_type.lower()
-            # Проверяем, содержит ли тип техники ключевые слова
-            if "электрик" in equipment_lower or "электрика" in equipment_lower:
-                stmt = select(SpecializationRate).where(
-                    SpecializationRate.specialization_name.ilike("%электрик%"),
-                    SpecializationRate.deleted_at.is_(None),
-                )
-                result = await session.execute(stmt)
-                rate = result.scalar_one_or_none()
-                if rate:
+
+            # Шаг 1: Точное совпадение (case-insensitive)
+            stmt = select(SpecializationRate).where(
+                func.lower(SpecializationRate.specialization_name) == equipment_lower,
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await session.execute(stmt)
+            rate = result.scalar_one_or_none()
+            if rate:
+                return (rate.master_percentage, rate.company_percentage)
+
+            # Шаг 2: Частичное совпадение - ищем specialization_name в equipment_type
+            # Например: equipment_type="Ремонт электрики" содержит specialization_name="Электрика"
+            stmt = select(SpecializationRate).where(
+                SpecializationRate.deleted_at.is_(None),
+            )
+            result = await session.execute(stmt)
+            rates = result.scalars().all()
+
+            for rate in rates:
+                spec_name_lower = rate.specialization_name.lower()
+                # Проверяем, содержится ли название специализации в типе техники
+                if spec_name_lower in equipment_lower:
                     return (rate.master_percentage, rate.company_percentage)
 
-            if "сантехник" in equipment_lower or "сантехника" in equipment_lower:
-                stmt = select(SpecializationRate).where(
-                    SpecializationRate.specialization_name.ilike("%сантехник%"),
-                    SpecializationRate.deleted_at.is_(None),
-                )
-                result = await session.execute(stmt)
-                rate = result.scalar_one_or_none()
-                if rate:
-                    return (rate.master_percentage, rate.company_percentage)
-
-            if "холодильник" in equipment_lower:
-                stmt = select(SpecializationRate).where(
-                    SpecializationRate.specialization_name.ilike("%холодильник%"),
-                    SpecializationRate.deleted_at.is_(None),
-                )
-                result = await session.execute(stmt)
-                rate = result.scalar_one_or_none()
-                if rate:
-                    return (rate.master_percentage, rate.company_percentage)
-
-            if "водонагреватель" in equipment_lower or "бойлер" in equipment_lower:
-                stmt = select(SpecializationRate).where(
-                    SpecializationRate.specialization_name.ilike("%водонагреватель%"),
-                    SpecializationRate.deleted_at.is_(None),
-                )
-                result = await session.execute(stmt)
-                rate = result.scalar_one_or_none()
-                if rate:
+            # Шаг 3: Частичное совпадение наоборот - ищем equipment_type в specialization_name
+            # Например: equipment_type="Электрика" содержится в specialization_name="Ремонт электрики"
+            for rate in rates:
+                spec_name_lower = rate.specialization_name.lower()
+                if equipment_lower in spec_name_lower:
                     return (rate.master_percentage, rate.company_percentage)
 
         return None
@@ -1701,3 +1697,77 @@ class ORMDatabase:
                 logger.error(f"Ошибка при восстановлении заявки #{order_id}: {e}")
                 await session.rollback()
                 return False, f"Ошибка при восстановлении заявки: {e!s}"
+
+    async def get_city_settings(self, city_key: str) -> "CitySettings | None":
+        """
+        Получение настроек для конкретного города
+
+        Args:
+            city_key: Ключ города (обычно из ENV_FILE, например "city1", "city2")
+
+        Returns:
+            CitySettings или None, если не найдено
+        """
+        from app.database.orm_models import CitySettings
+
+        async with self.get_session() as session:
+            stmt = select(CitySettings).where(CitySettings.city_key == city_key)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def create_or_update_city_settings(
+        self, city_key: str, profit_rate_threshold: float | None = None
+    ) -> "CitySettings":
+        """
+        Создание или обновление настроек города
+
+        Args:
+            city_key: Ключ города
+            profit_rate_threshold: Порог для процентной ставки 50/50 (если None, используется текущее значение)
+
+        Returns:
+            CitySettings
+        """
+        from app.database.orm_models import CitySettings
+
+        async with self.get_session() as session:
+            # Пытаемся найти существующие настройки
+            stmt = select(CitySettings).where(CitySettings.city_key == city_key)
+            result = await session.execute(stmt)
+            settings = result.scalar_one_or_none()
+
+            if settings:
+                # Обновляем существующие настройки
+                if profit_rate_threshold is not None:
+                    settings.profit_rate_threshold = profit_rate_threshold
+                settings.updated_at = get_now()
+            else:
+                # Создаем новые настройки
+                settings = CitySettings(
+                    city_key=city_key,
+                    profit_rate_threshold=profit_rate_threshold
+                    if profit_rate_threshold is not None
+                    else 7000.0,
+                )
+                session.add(settings)
+
+            await session.commit()
+            await session.refresh(settings)
+            return settings
+
+    async def get_profit_rate_threshold(self, city_key: str) -> float:
+        """
+        Получение порога процентной ставки для города
+
+        Args:
+            city_key: Ключ города
+
+        Returns:
+            float: Порог процентной ставки (по умолчанию 7000.0)
+        """
+        settings = await self.get_city_settings(city_key)
+        if settings:
+            return settings.profit_rate_threshold
+        # Если настройки не найдены, создаем их с дефолтным значением
+        settings = await self.create_or_update_city_settings(city_key)
+        return settings.profit_rate_threshold

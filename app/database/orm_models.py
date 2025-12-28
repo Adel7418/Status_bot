@@ -574,3 +574,35 @@ class ParserAnalytics(Base):
         Index("idx_parser_analytics_confirmed", "confirmed"),
         Index("idx_parser_analytics_group", "group_id", "created_at"),
     )
+
+
+
+class CitySettings(Base):
+    """Модель настроек для конкретного города/инстанса бота"""
+
+    __tablename__ = "city_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    city_key: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, comment="Ключ города (из ENV_FILE)"
+    )
+    profit_rate_threshold: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=7000.0,
+        server_default="7000.0",
+        comment="Порог суммы для процентной ставки 50/50 (в рублях)",
+    )
+
+    # Системные поля
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_city_settings_city_key", "city_key"),
+        CheckConstraint(
+            "profit_rate_threshold >= 0", name="chk_city_settings_profit_threshold"
+        ),
+    )

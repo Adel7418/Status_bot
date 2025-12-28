@@ -146,3 +146,15 @@ class EditParsedOrderStates(StatesGroup):
 
     select_field = State()  # Выбор поля для редактирования
     enter_value = State()  # Ввод нового значения
+
+
+class SettingsStates(StatesGroup):
+    """Состояния для настройки параметров бота"""
+
+    enter_profit_rate_threshold = State()  # Ввод порога процентной ставки
+
+    # Управление ставками по типам техники
+    enter_equipment_type = State()  # Ввод типа техники
+    enter_master_percentage = State()  # Ввод процента мастера
+    enter_company_percentage = State()  # Ввод процента компании (опционально)
+    confirm_specialization_rate = State()  # Подтверждение добавления ставки

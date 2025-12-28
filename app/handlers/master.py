@@ -2274,7 +2274,7 @@ async def process_out_of_city_confirmation_callback(
                 master_roles = user.get_roles()
 
         # Рассчитываем распределение прибыли с учетом отзыва и выезда за город
-        from app.utils.helpers import calculate_profit_split
+        from app.utils.helpers import calculate_profit_split, get_city_key
 
         # Получаем ставку для расчета по типу техники
         specialization_rate = None
@@ -2286,6 +2286,14 @@ async def process_out_of_city_confirmation_callback(
                     equipment_type=order.equipment_type,
                 )
 
+        # Получаем порог процентной ставки из настроек города
+        profit_rate_threshold = 7000.0  # Значение по умолчанию
+        from app.database.orm_database import ORMDatabase
+
+        if isinstance(db, ORMDatabase):
+            city_key = get_city_key()
+            profit_rate_threshold = await db.get_profit_rate_threshold(city_key)
+
         master_profit, company_profit = calculate_profit_split(
             float(total_amount) if total_amount is not None else 0.0,
             float(materials_cost) if materials_cost is not None else 0.0,
@@ -2294,6 +2302,7 @@ async def process_out_of_city_confirmation_callback(
             equipment_type=order.equipment_type,
             specialization_rate=specialization_rate,
             master_roles=master_roles,
+            profit_rate_threshold=profit_rate_threshold,
         )
         net_profit = (float(total_amount) if total_amount is not None else 0.0) - (
             float(materials_cost) if materials_cost is not None else 0.0
@@ -2308,8 +2317,8 @@ async def process_out_of_city_confirmation_callback(
             company_pct_display = int(round(base_company_pct))
             profit_rate = f"{master_pct_display}/{company_pct_display}"
         else:
-            # Стандартная логика: 50/50 если >= 7000, иначе 40/60
-            profit_rate = "50/50" if net_profit >= 7000 else "40/60"
+            # Стандартная логика с использованием порога из настроек
+            profit_rate = "50/50" if net_profit >= profit_rate_threshold else "40/60"
 
         bonus_text = ""
         if out_of_city:
