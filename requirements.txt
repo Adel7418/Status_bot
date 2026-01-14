@@ -3,20 +3,23 @@
 # ========================================
 
 # Telegram Bot Framework
-aiogram==3.16.0  # Updated from 3.14.0
+aiogram==3.16.0
 
-# Async SQLite
-aiosqlite==0.20.0
+# Async Database Drivers
+aiosqlite==0.20.0              # SQLite (для локальной разработки)
+asyncpg==0.29.0                # PostgreSQL (для production, опционально локально)
 
 # Async File I/O
 aiofiles==24.1.0
 
 # SQLAlchemy ORM
 sqlalchemy[asyncio]==2.0.39
-asyncpg==0.29.0  # PostgreSQL async driver
+
+# Database Migrations
+alembic==1.16.5
 
 # Task Scheduler
-APScheduler==3.11.0  # Stable version (4.x имеет breaking changes)
+APScheduler==3.11.0            # Stable version (4.x имеет breaking changes)
 
 # Environment Variables
 python-dotenv==1.0.1
@@ -25,37 +28,32 @@ python-dotenv==1.0.1
 openpyxl==3.1.5
 
 # Data Validation
-pydantic==2.10.3  # Updated from 2.9.2, fixed compatibility
+pydantic==2.10.3
 
 # Date/Time Utilities
 python-dateutil==2.9.0.post0
-dateparser==1.2.0  # Парсинг дат из естественного языка (русский)
+dateparser==1.2.0              # Парсинг дат из естественного языка (русский)
 
 # Encryption
-cryptography==43.0.3  # Для шифрования персональных данных
+cryptography==43.0.3
 
-# Telegram MTProto Client (для парсера заявок из группы)
+# Telegram MTProto Client (для парсера заявок из группы, опционально)
 telethon==1.34.0
 
-alembic==1.16.5
-
-# ========================================
 # Redis для production FSM storage
-# ========================================
-
 redis==5.2.1
-# Примечание: aiogram[redis] не нужен отдельно, используем redis напрямую
 
 # ========================================
 # OPTIONAL: Мониторинг и отладка
 # Раскомментируйте при необходимости
 # ========================================
 
-# sentry-sdk==2.19.2  # Error tracking
-# prometheus-client==0.21.0  # Metrics
+# sentry-sdk==2.19.2           # Error tracking
+# prometheus-client==0.21.0     # Metrics
 
 # ========================================
-# DEVELOPMENT DEPENDENCIES
-# Установите отдельно: pip install -e ".[dev]"
-# или используйте: pip install -r requirements-dev.txt
+# Примечание:
+# - Для локальной разработки достаточно установить все зависимости
+# - asyncpg и telethon можно не устанавливать, если используете только SQLite и не тестируете парсер
+# - Для разработки используйте: pip install -r requirements-dev.txt
 # ========================================

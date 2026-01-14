@@ -7,6 +7,7 @@ Telethon Client для мониторинга Telegram-группы
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 
 from telethon import TelegramClient, events
@@ -32,6 +33,7 @@ class TelethonClient:
         api_hash: str,
         phone: str,
         session_name: str = "parser_session",
+        session_dir: str = "",
         on_message_callback: Callable[[str, int, int | None], Awaitable[None]] | None = None,
     ) -> None:
         """
@@ -42,6 +44,7 @@ class TelethonClient:
             api_hash: API Hash от my.telegram.org
             phone: Номер телефона для авторизации
             session_name: Имя session файла (default: "parser_session")
+            session_dir: Директория для session файла (для Docker persistence)
             on_message_callback: Callback для обработки новых сообщений
                                 Сигнатура: async def callback(text: str, message_id: int, sender_id: int | None)
         """
@@ -49,11 +52,19 @@ class TelethonClient:
         self.api_hash = api_hash
         self.phone = phone
         self.session_name = session_name
+        self.session_dir = session_dir
         self.on_message_callback = on_message_callback
+
+        # Определяем полный путь к session файлу
+        if self.session_dir:
+            os.makedirs(self.session_dir, exist_ok=True)
+            self.session_path = os.path.join(self.session_dir, self.session_name)
+        else:
+            self.session_path = self.session_name
 
         # Создаём клиент
         self.client = TelegramClient(
-            session=self.session_name,
+            session=self.session_path,
             api_id=self.api_id,
             api_hash=self.api_hash,
         )
@@ -63,22 +74,19 @@ class TelethonClient:
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    async def start(
-        self,
-        group_id: int | None = None,
-        code_callback: Callable[[], Awaitable[str]] | None = None,
-        password_callback: Callable[[], Awaitable[str]] | None = None,
-    ) -> None:
+    async def start(self, group_id: int | None = None) -> None:
         """
         Запускает Telethon клиент и начинает мониторинг группы.
 
+        Требует предварительной аутентификации через auth_parser.py.
+        Session файл должен быть скопирован в TELETHON_SESSION_DIR.
+
         Args:
             group_id: ID Telegram-группы для мониторинга (опционально)
-            code_callback: Callback для получения кода авторизации (если требуется)
-            password_callback: Callback для получения пароля 2FA (если требуется)
 
         Raises:
             ValueError: Если group_id не указан и не был установлен ранее
+            RuntimeError: Если session файл не найден или невалиден
         """
         if group_id is not None:
             self.group_id = group_id
@@ -87,29 +95,19 @@ class TelethonClient:
             raise ValueError("group_id должен быть установлен перед запуском")
 
         self.logger.info(
-            f"Запуск Telethon клиента для группы {self.group_id} (сессия: {self.session_name})"
+            f"Запуск Telethon клиента для группы {self.group_id} (сессия: {self.session_path})"
         )
 
         # Подключаемся к Telegram
-        if code_callback:
-            # Интерактивный режим (аутентификация)
-            await self.client.start(
-                phone=self.phone,
-                code_callback=code_callback,
-                password=password_callback
+        await self.client.connect()
+
+        if not await self.client.is_user_authorized():
+            await self.client.disconnect()
+            raise RuntimeError(
+                f"Session файл не найден или невалиден: {self.session_path}.session\n"
+                "Выполните аутентификацию локально: python auth_parser.py"
             )
-        else:
-            # Фоновый режим: проверяем авторизацию перед стартом
-            await self.client.connect()
-            if not await self.client.is_user_authorized():
-                await self.client.disconnect()
-                raise RuntimeError(
-                    "Требуется аутентификация! Используйте команду /parser_auth"
-                )
-            
-            # Если авторизованы - просто стартуем (это не вызовет запрос кода)
-            await self.client.start(phone=self.phone)
-            
+
         self.logger.info("✅ Telethon клиент авторизован")
 
         # Регистрируем обработчик новых сообщений (слушаем все чаты, фильтруем внутри)
@@ -233,5 +231,6 @@ class TelethonClient:
             api_hash=Config.TELETHON_API_HASH,
             phone=Config.TELETHON_PHONE,
             session_name=Config.TELETHON_SESSION_NAME,
+            session_dir=Config.TELETHON_SESSION_DIR,
             on_message_callback=on_message_callback,
         )

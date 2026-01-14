@@ -40,10 +40,12 @@ services:
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
       - DEV_MODE=true
+      - TELETHON_SESSION_DIR=/app/data/telethon
     volumes:
       - ./data/city1:/app/data
       - ./logs/city1:/app/logs
       - ./backups/city1:/app/backups
+      - telethon_sessions_dev:/app/data/telethon
       # Для hot reload (опционально):
       # - ./app:/app/app:ro
       # - ./bot.py:/app/bot.py:ro
@@ -67,3 +69,7 @@ services:
 networks:
   bot_network:
     driver: bridge
+
+volumes:
+  telethon_sessions_dev:
+    name: telethon_sessions_dev

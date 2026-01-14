@@ -56,198 +56,10 @@ class ParserIntegration:
         self.group_id: int | None = None  # ID группы для парсера
 
         self.is_running = False
-        self.waiting_for_auth = False  # Флаг ожидания аутентификации
         self.telethon_task: asyncio.Task | None = None
-        
-        # Для аутентификации
-        self.auth_future: asyncio.Future[str] | None = None
-        self.password_future: asyncio.Future[str] | None = None
-        self._pending_password: str | None = None  # Для хранения пароля, если он пришел раньше запроса
-        self.auth_user_id: int | None = None
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self.logger.info(f"ParserIntegration initialized. Attributes: {list(self.__dict__.keys())}")
-
-    async def authenticate_user(self, user_id: int) -> None:
-        """
-        Запускает процесс интерактивной аутентификации.
-        Блокирует выполнение до завершения аутентификации.
-        """
-        if self.is_running:
-            self.logger.info("Парсер уже запущен, аутентификация не требуется")
-            return
-
-        self.auth_user_id = user_id
-        self._pending_password = None
-        self.waiting_for_auth = False
-        
-        # Инициализация клиента если нужно
-        if not self.telethon_client:
-            self.telethon_client = TelethonClient.from_config(
-                on_message_callback=self._on_new_message,
-            )
-
-        # Получаем group_id
-        if not self.group_id:
-            async with self.db.session_factory() as session:
-                repo = ParserConfigRepository(session)
-                config = await repo.get_config()
-                if config and config.group_id:
-                    self.group_id = config.group_id
-        
-        if not self.group_id:
-            raise ValueError("ID группы не установлен. Используйте /set_group.")
-
-        async def code_callback() -> str:
-            """Callback для запроса кода у пользователя"""
-            self.auth_future = asyncio.Future()
-            
-            # Отправляем сообщение пользователю
-            await self.bot.send_message(
-                user_id,
-                "🔐 <b>Требуется код подтверждения!</b>\n\n"
-                "Введите код, который пришел вам в Telegram (в этом чате).\n"
-                "Формат: просто цифры (например: 12345)",
-                parse_mode="HTML"
-            )
-            
-            # Ждем код от пользователя
-            return await self.auth_future
-
-        async def password_callback() -> str:
-            """Callback для запроса пароля 2FA у пользователя"""
-            # Если пароль уже был получен ранее (race condition), используем его
-            if self._pending_password:
-                self.logger.info("Используем ранее полученный пароль")
-                password = self._pending_password
-                self._pending_password = None
-                return password
-
-            self.password_future = asyncio.Future()
-            
-            # Отправляем сообщение пользователю
-            await self.bot.send_message(
-                user_id,
-                "🔐 <b>Требуется облачный пароль (2FA)!</b>\n\n"
-                "Ваш аккаунт защищен паролем. Пожалуйста, введите его.",
-                parse_mode="HTML"
-            )
-            
-            # Ждем пароль от пользователя
-            return await self.password_future
-
-        try:
-            # Запускаем клиент с callback-ами
-            await self.telethon_client.start(
-                group_id=self.group_id,
-                code_callback=code_callback,
-                password_callback=password_callback
-            )
-            
-            # Если успешно - запускаем мониторинг
-            self.is_running = True
-            self.waiting_for_auth = False
-            self.telethon_task = asyncio.create_task(
-                self.telethon_client.run_until_disconnected()
-            )
-            self.logger.info("🟢 Парсер успешно аутентифицирован и запущен")
-            
-        except Exception as e:
-            # Обрабатываем ошибки аутентификации
-            error_message = self._format_auth_error(e)
-            self.logger.error(f"Ошибка аутентификации: {error_message}")
-            
-            # Отправляем понятное сообщение пользователю
-            await self.bot.send_message(
-                user_id,
-                f"❌ <b>Ошибка аутентификации:</b>\n\n{error_message}\n\n"
-                f"💡 Попробуйте снова: /parser_auth",
-                parse_mode="HTML"
-            )
-            raise
-            
-        finally:
-            self.auth_future = None
-            self.password_future = None
-            self._pending_password = None
-            self.auth_user_id = None
-    
-    def _format_auth_error(self, error: Exception) -> str:
-        """
-        Форматирует ошибку аутентификации в понятное сообщение для пользователя.
-        
-        Args:
-            error: Исключение от Telethon
-            
-        Returns:
-            Понятное описание ошибки
-        """
-        error_str = str(error)
-        error_type = type(error).__name__
-        
-        # Telethon errors
-        if "PhoneCodeInvalid" in error_type or "PHONE_CODE_INVALID" in error_str:
-            return (
-                "🔢 <b>Неверный код подтверждения</b>\n\n"
-                "Проверьте код в Telegram и попробуйте снова.\n"
-                "Код действителен только несколько минут."
-            )
-        elif "PasswordHashInvalid" in error_type or "PASSWORD_HASH_INVALID" in error_str:
-            return (
-                "🔐 <b>Неверный пароль 2FA</b>\n\n"
-                "Проверьте пароль облачной аутентификации и попробуйте снова."
-            )
-        elif "PhoneCodeExpired" in error_type or "PHONE_CODE_EXPIRED" in error_str:
-            return (
-                "⏰ <b>Код подтверждения истек</b>\n\n"
-                "Запросите новый код и попробуйте снова."
-            )
-        elif "SessionPasswordNeeded" in error_type:
-            return (
-                "🔐 <b>Требуется пароль 2FA</b>\n\n"
-                "Ваш аккаунт защищен двухфакторной аутентификацией."
-            )
-        elif "FloodWait" in error_type or "FLOOD_WAIT" in error_str:
-            # Извлекаем время ожидания если есть
-            import re
-            match = re.search(r'(\d+)', error_str)
-            seconds = int(match.group(1)) if match else 60
-            minutes = seconds // 60
-            if minutes > 0:
-                return (
-                    f"⏳ <b>Слишком много попыток</b>\n\n"
-                    f"Подождите {minutes} минут и попробуйте снова."
-                )
-            else:
-                return (
-                    f"⏳ <b>Слишком много попыток</b>\n\n"
-                    f"Подождите {seconds} секунд и попробуйте снова."
-                )
-        elif "AuthRestart" in error_type:
-            return (
-                "🔄 <b>Процесс аутентификации сброшен</b>\n\n"
-                "Начните процесс заново с /parser_reset и /parser_auth"
-            )
-        else:
-            # Общая ошибка
-            return f"⚠️ {error_type}: {error_str}"
-
-
-    def submit_auth_code(self, code: str) -> None:
-        """Передает код подтверждения в ожидающий процесс аутентификации"""
-        if self.auth_future and not self.auth_future.done():
-            self.auth_future.set_result(code)
-        else:
-            self.logger.warning("Получен код подтверждения, но никто его не ждет")
-
-    def submit_password(self, password: str) -> None:
-        """Передает пароль 2FA в ожидающий процесс аутентификации"""
-        if self.password_future and not self.password_future.done():
-            self.password_future.set_result(password)
-        else:
-            # Сохраняем пароль, если он пришел раньше запроса
-            self.logger.info("Получен пароль раньше запроса, сохраняем")
-            self._pending_password = password
+        self.logger.info("ParserIntegration initialized")
 
     async def start(self) -> None:
         """
@@ -319,20 +131,17 @@ class ParserIntegration:
                     self.telethon_client.run_until_disconnected()
                 )
                 self.is_running = True
-                self.waiting_for_auth = False
                 self.logger.info("🟢 Парсер заявок успешно запущен!")
             except RuntimeError as e:
-                # Если требуется аутентификация - не падаем, а ждем команды
-                if "Требуется аутентификация" in str(e):
-                    self.logger.warning(f"⚠️ {e}")
-                    self.logger.info("Парсер ожидает аутентификации. Команда: /parser_auth")
-                    # Не ставим is_running=True, но и не рейзим ошибку
-                    self.waiting_for_auth = True
-                else:
-                    raise e
+                # Session файл не найден или невалиден
+                self.logger.warning(f"⚠️ {e}")
+                self.logger.info(
+                    "Выполните аутентификацию локально: python auth_parser.py\n"
+                    "Затем скопируйте session файл в TELETHON_SESSION_DIR"
+                )
 
         except Exception as e:
-            self.logger.exception(f"Ошибка при запуске парсера: {e}")
+            self.logger.error(f"Ошибка при запуске парсера: {e}")
             await self.stop()
             raise
 
@@ -357,7 +166,6 @@ class ParserIntegration:
             with contextlib.suppress(asyncio.CancelledError):
                 await self.telethon_task
 
-        self.is_running = False
         self.is_running = False
         self.logger.info("🛑 Парсер заявок остановлен")
 

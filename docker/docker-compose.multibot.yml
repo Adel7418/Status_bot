@@ -23,10 +23,12 @@ services:
       - PYTHONIOENCODING=utf-8
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
+      - TELETHON_SESSION_DIR=/app/data/telethon
     volumes:
       - ../data/city1:/app/data
       - ../logs/city1:/app/logs1
       - ../backups/city1:/app/backups
+      - telethon_sessions_city1:/app/data/telethon
     depends_on:
       redis:
         condition: service_healthy
@@ -59,10 +61,12 @@ services:
       - PYTHONIOENCODING=utf-8
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
+      - TELETHON_SESSION_DIR=/app/data/telethon
     volumes:
       - ../data/city2:/app/data
       - ../logs/city2:/app/logs2
       - ../backups/city2:/app/backups
+      - telethon_sessions_city2:/app/data/telethon
     depends_on:
       redis:
         condition: service_healthy
@@ -103,3 +107,9 @@ services:
 networks:
   bot_network:
     driver: bridge
+
+volumes:
+  telethon_sessions_city1:
+    name: telethon_sessions_city1
+  telethon_sessions_city2:
+    name: telethon_sessions_city2

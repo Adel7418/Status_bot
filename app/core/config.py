@@ -97,6 +97,8 @@ class Config:
     TELETHON_API_HASH: str = os.getenv("TELETHON_API_HASH", "")
     TELETHON_PHONE: str = os.getenv("TELETHON_PHONE", "")
     TELETHON_SESSION_NAME: str = os.getenv("TELETHON_SESSION_NAME", "parser_session")
+    # Directory for persistent Telethon session files (Docker: /app/data/telethon)
+    TELETHON_SESSION_DIR: str = os.getenv("TELETHON_SESSION_DIR", "")
 
     # Включение парсера (можно отключить если не нужен)
     PARSER_ENABLED: bool = os.getenv("PARSER_ENABLED", "false").lower() in ("true", "1", "yes")
